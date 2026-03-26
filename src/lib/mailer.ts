@@ -1,23 +1,23 @@
 /**
- * Mailer — wrapper Resend
+ * Mailer — transport sendmail (binaire système)
+ *
+ * Sur YunoHost, Postfix est installé et /usr/sbin/sendmail est disponible.
+ * Aucune clé API externe requise.
  *
  * Config via env vars :
- *   RESEND_API_KEY  — clé API Resend (obligatoire pour l'envoi réel)
- *   EMAIL_FROM      — adresse expéditeur (ex: "Studio N Tasks <onboarding@resend.dev>")
- *   NEXT_PUBLIC_APP_URL — URL de base de l'app (ex: http://localhost:3000)
- *
- * Sans RESEND_API_KEY, les emails sont loggués en console (mode dev).
+ *   EMAIL_FROM — adresse expéditeur (ex: "Task App <noreply@domain.tld>")
  */
 
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-const FROM =
-  process.env.EMAIL_FROM ?? "Task App <onboarding@resend.dev>";
+const FROM = process.env.EMAIL_FROM ?? "Task App <noreply@localhost>";
 
-function getResend(): Resend | null {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) return null;
-  return new Resend(key);
+function createTransport() {
+  return nodemailer.createTransport({
+    sendmail: true,
+    newline: "unix",
+    path: "/usr/sbin/sendmail",
+  });
 }
 
 export async function sendMail(opts: {
@@ -26,9 +26,7 @@ export async function sendMail(opts: {
   html: string;
   text?: string;
 }): Promise<void> {
-  const resend = getResend();
-
-  if (!resend) {
+  if (process.env.NODE_ENV !== "production") {
     // Dev fallback — afficher dans la console
     console.log("📧  [MAIL — dev mode, non envoyé]");
     console.log("   To     :", opts.to);
@@ -39,18 +37,15 @@ export async function sendMail(opts: {
     return;
   }
 
-  const { error } = await resend.emails.send({
+  const transporter = createTransport();
+
+  await transporter.sendMail({
     from: FROM,
     to: opts.to,
     subject: opts.subject,
     html: opts.html,
     text: opts.text,
   });
-
-  if (error) {
-    console.error("❌  Resend error:", error);
-    throw new Error(`Resend: ${error.message}`);
-  }
 }
 
 export function invitationEmailHtml({

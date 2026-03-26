@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#6366f1"/>
+  <!-- Checklist icon -->
+  <!-- Line 1 - checked -->
+  <rect x="160" y="148" width="192" height="20" rx="10" fill="white" opacity="0.3"/>
+  <circle cx="136" cy="158" r="16" fill="white" opacity="0.9"/>
+  <polyline points="127,158 133,164 145,152" stroke="#6366f1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Line 2 - checked -->
+  <rect x="160" y="208" width="160" height="20" rx="10" fill="white" opacity="0.3"/>
+  <circle cx="136" cy="218" r="16" fill="white" opacity="0.9"/>
+  <polyline points="127,218 133,224 145,212" stroke="#6366f1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Line 3 - unchecked -->
+  <rect x="160" y="268" width="180" height="20" rx="10" fill="white" opacity="0.5"/>
+  <circle cx="136" cy="278" r="16" fill="white" opacity="0.2" stroke="white" stroke-width="2"/>
+  <!-- Line 4 - unchecked -->
+  <rect x="160" y="328" width="130" height="20" rx="10" fill="white" opacity="0.5"/>
+  <circle cx="136" cy="338" r="16" fill="white" opacity="0.2" stroke="white" stroke-width="2"/>
+</svg>
