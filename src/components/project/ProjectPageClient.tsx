@@ -1592,7 +1592,7 @@ export function ProjectPageClient({
           <ProjectGanttView project={project} />
         )}
         {activeTab === "timeline" && (
-          <ProjectTimelineView project={project} />
+          <ProjectTimelineView project={project} allColumns={allColumns} />
         )}
         {activeTab === "dashboard" && (
           <ProjectDashboard project={project} />

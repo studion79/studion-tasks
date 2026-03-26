@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useCallback, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import type { ProjectWithRelations, TaskWithFields } from "@/lib/types";
+import type { ProjectWithRelations, TaskWithFields, ProjectColumn } from "@/lib/types";
 import { upsertTaskField, updateTaskTitle } from "@/lib/actions";
 import { TaskDetailPanel } from "./TaskDetailPanel";
 import { useProjectContext } from "./ProjectContext";
@@ -130,7 +130,13 @@ const PERIOD_OPTIONS = [
 ];
 
 // ---- Main component ----
-export function ProjectTimelineView({ project }: { project: ProjectWithRelations }) {
+export function ProjectTimelineView({
+  project,
+  allColumns,
+}: {
+  project: ProjectWithRelations;
+  allColumns: ProjectColumn[];
+}) {
   const { memberAvatars } = useProjectContext();
   const [selectedTask, setSelectedTask] = useState<{
     task: TaskWithFields;
@@ -166,10 +172,12 @@ export function ProjectTimelineView({ project }: { project: ProjectWithRelations
     return 0;
   };
 
-  const timelineCol = project.columns.find((c) => c.type === "TIMELINE");
-  const dueDateCol = project.columns.find((c) => c.type === "DUE_DATE");
-  const ownerCol = project.columns.find((c) => c.type === "OWNER");
-  const statusCol = project.columns.find((c) => c.type === "STATUS");
+  // Use allColumns (includes inactive) so timeline/due-date bars appear
+  // even when those columns are hidden from the spreadsheet view.
+  const timelineCol = allColumns.find((c) => c.type === "TIMELINE");
+  const dueDateCol = allColumns.find((c) => c.type === "DUE_DATE");
+  const ownerCol = allColumns.find((c) => c.type === "OWNER");
+  const statusCol = allColumns.find((c) => c.type === "STATUS");
 
   const fv = useCallback(
     (task: TaskWithFields, colId: string | undefined): string | null => {
