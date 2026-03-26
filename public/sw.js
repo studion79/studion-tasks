@@ -1,14 +1,14 @@
-const CACHE_NAME = "task-app-v1";
+// ⚠️ Mettre à jour ce numéro à chaque release pour invalider le cache SW
+const CACHE_NAME = "task-app-v1.5";
 
-// Assets statiques à mettre en cache immédiatement
+// Assets statiques immuables à précacher (hors HTML)
 const PRECACHE_URLS = [
-  "/",
   "/manifest.webmanifest",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
 ];
 
-// Install — précache les assets essentiels
+// Install — précache uniquement les assets non-HTML
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
@@ -16,7 +16,7 @@ self.addEventListener("install", (event) => {
   );
 });
 
-// Activate — nettoie les anciens caches
+// Activate — nettoie tous les anciens caches (autre nom = ancienne version)
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
@@ -30,10 +30,12 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Fetch — stratégie hybride :
-//   - API / auth / _next/data  →  network-first (toujours frais)
-//   - assets statiques (_next/static, images) →  cache-first
-//   - pages   →  network-first avec fallback cache
+// Fetch — stratégie :
+//   - Pages HTML (navigation) → network only — JAMAIS en cache
+//     (les pages contiennent les hashes de server actions qui changent à chaque build)
+//   - Assets _next/static/ → cache-first (ces fichiers sont immuables, hash dans l'URL)
+//   - API / auth → network only
+//   - Icônes / manifest → cache-first
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -41,24 +43,28 @@ self.addEventListener("fetch", (event) => {
   // Ne pas intercepter les requêtes cross-origin
   if (url.origin !== self.location.origin) return;
 
-  // API / auth → network only
+  // API / auth / server actions → network only (jamais intercepté)
   if (
     url.pathname.startsWith("/api/") ||
     url.pathname.startsWith("/auth/") ||
-    url.pathname.includes("_next/data")
+    url.pathname.includes("_next/data") ||
+    request.method !== "GET"
   ) {
-    return; // let the browser handle it normally
+    return;
   }
 
-  // Assets statiques compilés → cache-first
+  // Assets JS/CSS Next.js → cache-first
+  // Ces fichiers ont un hash dans leur nom et sont immuables
   if (url.pathname.startsWith("/_next/static/")) {
     event.respondWith(
       caches.match(request).then(
         (cached) =>
           cached ||
           fetch(request).then((res) => {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+            if (res.ok) {
+              const clone = res.clone();
+              caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+            }
             return res;
           })
       )
@@ -66,16 +72,29 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Pages et autres → network-first, fallback cache
-  event.respondWith(
-    fetch(request)
-      .then((res) => {
-        if (res.ok) {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((c) => c.put(request, clone));
-        }
-        return res;
-      })
-      .catch(() => caches.match(request))
-  );
+  // Icônes et manifest → cache-first
+  if (
+    url.pathname.startsWith("/icons/") ||
+    url.pathname === "/manifest.webmanifest"
+  ) {
+    event.respondWith(
+      caches.match(request).then(
+        (cached) =>
+          cached ||
+          fetch(request).then((res) => {
+            if (res.ok) {
+              const clone = res.clone();
+              caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+            }
+            return res;
+          })
+      )
+    );
+    return;
+  }
+
+  // Pages HTML → network only, SANS mise en cache
+  // Raison : les pages contiennent les hashes de server actions Next.js.
+  // Les mettre en cache provoque des erreurs "Server Action not found" après upgrade.
+  // Le service worker ne gère pas le fallback offline pour les pages.
 });
