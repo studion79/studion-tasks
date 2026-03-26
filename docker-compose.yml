@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - LIBSQL_DATABASE_URL=file:/data/app.db
+      - AUTH_SECRET=${AUTH_SECRET}
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - NODE_ENV=production
+    volumes:
+      - ./data/db:/data
+      - ./data/uploads:/app/public/uploads
+    restart: unless-stopped
