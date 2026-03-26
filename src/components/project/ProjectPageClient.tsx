@@ -722,6 +722,7 @@ export function ProjectPageClient({
     <ProjectProvider
       memberNames={members.map((m) => m.user.name)}
       memberAvatars={Object.fromEntries(members.map((m) => [m.user.name, m.user.avatar]))}
+      allColumns={allColumns}
     >
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* ── Top bar ── */}
@@ -1650,7 +1651,7 @@ export function ProjectPageClient({
       {cmdPaletteTask && (
         <TaskDetailPanel
           task={cmdPaletteTask.task}
-          columns={project.columns}
+          columns={allColumns}
           groupName={cmdPaletteTask.groupName}
           groupColor={cmdPaletteTask.groupColor}
           projectId={project.id}

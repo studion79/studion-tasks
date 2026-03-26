@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ProjectWithRelations, TaskWithFields } from "@/lib/types";
 import { upsertTaskField, updateTaskTitle } from "@/lib/actions";
 import { TaskDetailPanel } from "./TaskDetailPanel";
+import { useProjectContext } from "./ProjectContext";
 
 const DAY_PX = 32; // pixels per day
 const ROW_H = 36; // px per task row
@@ -131,6 +132,7 @@ const PERIOD_OPTIONS = [
 // ---- Main component ----
 
 export function ProjectGanttView({ project }: { project: ProjectWithRelations }) {
+  const { allColumns } = useProjectContext();
   const [selectedTask, setSelectedTask] = useState<{ task: TaskWithFields; groupName: string; groupColor: string } | null>(null);
   const [, startTransition] = useTransition();
   const router = useRouter();
@@ -161,9 +163,10 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
     return 0;
   };
 
-  // Find relevant columns
-  const timelineCol = project.columns.find((c) => c.type === "TIMELINE");
-  const dueDateCol = project.columns.find((c) => c.type === "DUE_DATE");
+  // Find relevant columns — use allColumns (includes inactive) so bars appear
+  // even when TIMELINE/DUE_DATE are hidden in the spreadsheet view
+  const timelineCol = allColumns.find((c) => c.type === "TIMELINE");
+  const dueDateCol = allColumns.find((c) => c.type === "DUE_DATE");
 
   // Flatten all tasks
   const allTasks = useMemo(
@@ -721,7 +724,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
           task={selectedTask.task}
           groupName={selectedTask.groupName}
           groupColor={selectedTask.groupColor}
-          columns={project.columns}
+          columns={allColumns}
           projectId={project.id}
           onClose={() => setSelectedTask(null)}
           onFieldUpdate={handleFieldUpdate}

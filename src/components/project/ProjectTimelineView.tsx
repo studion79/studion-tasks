@@ -795,7 +795,7 @@ export function ProjectTimelineView({
       {selectedTask && (
         <TaskDetailPanel
           task={selectedTask.task}
-          columns={project.columns}
+          columns={allColumns}
           groupName={selectedTask.groupName}
           groupColor={selectedTask.groupColor}
           projectId={project.id}

@@ -19,6 +19,7 @@ import type {
 import { COLUMN_WIDTHS } from "@/lib/constants";
 import { CellRenderer, RecurrenceIcon } from "./cells";
 import { TaskDetailPanel } from "./TaskDetailPanel";
+import { useProjectContext } from "./ProjectContext";
 import {
   createGroup as createGroupAction,
   updateGroupName as updateGroupNameAction,
@@ -566,6 +567,7 @@ export function ProjectSpreadsheet({
 }) {
   type ArchivedTaskEntry = Awaited<ReturnType<typeof getArchivedTasks>>[number];
 
+  const { allColumns } = useProjectContext();
   const columns = visibleColumns ?? project.columns;
   const [groups, setGroups] = useState<GroupWithTasks[]>(project.groups);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
@@ -1325,7 +1327,7 @@ export function ProjectSpreadsheet({
           task={openTask}
           groupName={openGroup.name}
           groupColor={openGroup.color}
-          columns={project.columns}
+          columns={allColumns}
           projectId={project.id}
           onClose={() => setOpenTaskId(null)}
           onTitleUpdate={(title) => handleTitleUpdate(openTask.id, title)}
