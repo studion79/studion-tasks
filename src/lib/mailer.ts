@@ -6,17 +6,47 @@
  *
  * Config via env vars :
  *   EMAIL_FROM — adresse expéditeur (ex: "Task App <noreply@domain.tld>")
+ *
+ * ⚠️ L'envoi est non-fatal dans inviteMember (voir actions.ts).
+ *    En cas d'échec, le log contient le détail de l'erreur.
  */
 
 import nodemailer from "nodemailer";
+import { execSync } from "child_process";
+import fs from "fs";
 
 const FROM = process.env.EMAIL_FROM ?? "Task App <noreply@localhost>";
 
+/** Trouve le chemin du binaire sendmail, ou null s'il est absent. */
+function findSendmail(): string | null {
+  const candidates = [
+    "/usr/sbin/sendmail",
+    "/usr/lib/sendmail",
+    "/usr/bin/sendmail",
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  try {
+    const found = execSync("which sendmail 2>/dev/null", { encoding: "utf8" }).trim();
+    if (found) return found;
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 function createTransport() {
+  const sendmailPath = findSendmail();
+  if (!sendmailPath) {
+    throw new Error(
+      "Sendmail introuvable. Assurez-vous que Postfix est installé sur le serveur."
+    );
+  }
   return nodemailer.createTransport({
     sendmail: true,
     newline: "unix",
-    path: "/usr/sbin/sendmail",
+    path: sendmailPath,
   });
 }
 

@@ -728,17 +728,22 @@ export async function inviteMember(
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
   const inviteUrl = `${baseUrl}/invite/${invitation.token}`;
 
-  await sendMail({
-    to: normalizedEmail,
-    subject: `Invitation à rejoindre « ${project.name} »`,
-    html: invitationEmailHtml({
-      projectName: project.name,
-      inviterName,
-      inviteUrl,
-      hasAccount: !!existingUser,
-    }),
-    text: `${inviterName} vous invite à rejoindre le projet « ${project.name} ».\n\nAccédez à l'invitation : ${inviteUrl}\n\nCe lien est valable 7 jours.`,
-  });
+  // L'envoi d'email est non-fatal : l'invitation est créée même si le mail échoue
+  try {
+    await sendMail({
+      to: normalizedEmail,
+      subject: `Invitation à rejoindre « ${project.name} »`,
+      html: invitationEmailHtml({
+        projectName: project.name,
+        inviterName,
+        inviteUrl,
+        hasAccount: !!existingUser,
+      }),
+      text: `${inviterName} vous invite à rejoindre le projet « ${project.name} ».\n\nAccédez à l'invitation : ${inviteUrl}\n\nCe lien est valable 7 jours.`,
+    });
+  } catch (mailError) {
+    console.error("⚠️  Échec envoi email invitation (invitation créée quand même) :", mailError);
+  }
 
   // Si l'utilisateur a déjà un compte : lui envoyer aussi une notification in-app
   if (existingUser) {
