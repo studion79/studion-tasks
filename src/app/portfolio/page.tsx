@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { listProjects } from "@/lib/actions";
 import { auth } from "@/auth";
 import Link from "next/link";

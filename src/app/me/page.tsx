@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { getMyTasks, getMyProjects } from "@/lib/actions";
 import { auth, signOut } from "@/auth";
 import { redirect } from "next/navigation";

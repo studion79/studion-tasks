@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { listProjects, getPendingInvitations } from "@/lib/actions";
 import { auth, signOut } from "@/auth";
 import Link from "next/link";

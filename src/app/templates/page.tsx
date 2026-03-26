@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { listProjectTemplates } from "@/lib/actions";
 import { TemplatesPageClient } from "@/components/TemplatesPageClient";
 
