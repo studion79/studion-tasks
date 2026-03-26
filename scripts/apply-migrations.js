@@ -22,7 +22,8 @@ async function run() {
       try {
         await prisma.$executeRawUnsafe(stmt + ";");
       } catch (e) {
-        if (!e.message.includes("already exists")) throw e;
+        const harmless = ["already exists", "duplicate column", "table already exists"];
+        if (!harmless.some((msg) => e.message.includes(msg))) throw e;
       }
     }
     console.log("Applied:", migration);
