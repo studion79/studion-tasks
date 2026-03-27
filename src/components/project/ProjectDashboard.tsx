@@ -34,7 +34,7 @@ function Widget({
 }) {
   return (
     <div
-      className={`bg-white rounded-xl border border-gray-200 p-5 shadow-sm ${
+      className={`bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm ${
         span === 2 ? "col-span-2" : ""
       }`}
     >
@@ -49,7 +49,7 @@ function Widget({
 // --- Progress bar ---
 function Bar({ pct, className }: { pct: number; className: string }) {
   return (
-    <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+    <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
       <div
         className={`h-full rounded-full transition-all ${className}`}
         style={{ width: `${Math.min(pct, 100)}%` }}
@@ -568,7 +568,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
                   </span>
                 </span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+              <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all"
                   style={{

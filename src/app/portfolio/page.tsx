@@ -41,17 +41,17 @@ export default async function PortfolioPage() {
   const globalPct = globalTotal > 0 ? Math.round((globalDone / globalTotal) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 h-14 flex items-center justify-between">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 h-14 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link href="/" className="text-gray-400 hover:text-gray-600 transition-colors text-sm flex items-center gap-1">
+          <Link href="/" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors text-sm flex items-center gap-1">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M15 19l-7-7 7-7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             Projets
           </Link>
-          <span className="text-gray-200">/</span>
-          <h1 className="text-base font-semibold text-gray-900">Portefeuille</h1>
+          <span className="text-gray-200 dark:text-gray-700">/</span>
+          <h1 className="text-base font-semibold text-gray-900 dark:text-gray-50">Portefeuille</h1>
         </div>
       </header>
 
@@ -64,18 +64,18 @@ export default async function PortfolioPage() {
             { label: "Terminées", value: `${globalDone} (${globalPct}%)`, color: "text-emerald-600 bg-emerald-50" },
             { label: "En retard", value: globalOverdue, color: globalOverdue > 0 ? "text-red-600 bg-red-50" : "text-gray-400 bg-gray-50" },
           ].map((stat) => (
-            <div key={stat.label} className="bg-white rounded-xl border border-gray-200 px-5 py-4">
-              <p className="text-xs text-gray-400 mb-1">{stat.label}</p>
+            <div key={stat.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 px-5 py-4">
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{stat.label}</p>
               <p className={`text-2xl font-bold ${stat.color.split(" ")[0]}`}>{stat.value}</p>
             </div>
           ))}
         </div>
 
         {/* Project table */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
             <thead>
-              <tr className="border-b border-gray-100 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+              <tr className="border-b border-gray-100 dark:border-gray-700 text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                 <th className="text-left px-5 py-3">Projet</th>
                 <th className="text-center px-4 py-3 w-16">Tâches</th>
                 <th className="text-center px-4 py-3 w-16">En cours</th>
@@ -87,20 +87,20 @@ export default async function PortfolioPage() {
             </thead>
             <tbody>
               {rows.map(({ project, total, done, inProgress, overdue, pct, lastUpdated }) => (
-                <tr key={project.id} className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors">
+                <tr key={project.id} className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50/60 dark:hover:bg-gray-700/30 transition-colors">
                   <td className="px-5 py-3">
-                    <Link href={`/projects/${project.id}`} className="font-medium text-gray-800 hover:text-indigo-600 transition-colors">
+                    <Link href={`/projects/${project.id}`} className="font-medium text-gray-800 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
                       {project.name}
                     </Link>
                   </td>
-                  <td className="text-center px-4 py-3 text-gray-500">{total}</td>
+                  <td className="text-center px-4 py-3 text-gray-500 dark:text-gray-400">{total}</td>
                   <td className="text-center px-4 py-3">
                     {inProgress > 0 ? (
                       <span className="inline-flex items-center justify-center min-w-[20px] h-5 bg-amber-100 text-amber-600 text-[11px] font-semibold rounded-full px-1.5">
                         {inProgress}
                       </span>
                     ) : (
-                      <span className="text-gray-300">—</span>
+                      <span className="text-gray-300 dark:text-gray-600">—</span>
                     )}
                   </td>
                   <td className="text-center px-4 py-3 text-emerald-600 font-medium">{done > 0 ? done : <span className="text-gray-300">—</span>}</td>
@@ -110,28 +110,28 @@ export default async function PortfolioPage() {
                         {overdue}
                       </span>
                     ) : (
-                      <span className="text-gray-300">—</span>
+                      <span className="text-gray-300 dark:text-gray-600">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="flex-1 h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-emerald-400 rounded-full transition-all"
                           style={{ width: `${pct}%` }}
                         />
                       </div>
-                      <span className="text-[11px] text-gray-400 w-8 text-right">{pct}%</span>
+                      <span className="text-[11px] text-gray-400 dark:text-gray-500 w-8 text-right">{pct}%</span>
                     </div>
                   </td>
-                  <td className="text-right px-5 py-3 text-[11px] text-gray-400">
+                  <td className="text-right px-5 py-3 text-[11px] text-gray-400 dark:text-gray-500">
                     {new Date(lastUpdated).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
                   </td>
                 </tr>
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-sm text-gray-400">
+                  <td colSpan={7} className="text-center py-12 text-sm text-gray-400 dark:text-gray-500">
                     Aucun projet
                   </td>
                 </tr>

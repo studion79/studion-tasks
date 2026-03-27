@@ -203,7 +203,7 @@ export function ProjectActivityFeed({
               <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">
                 {group.label}
               </span>
-              <div className="flex-1 h-px bg-gray-100" />
+              <div className="flex-1 h-px bg-gray-100 dark:bg-gray-700" />
             </div>
 
             {/* Entries */}
@@ -213,7 +213,7 @@ export function ProjectActivityFeed({
                 return (
                   <div
                     key={entry.id}
-                    className="flex items-start gap-3 py-2.5 px-3 rounded-lg hover:bg-gray-50 transition-colors group"
+                    className="flex items-start gap-3 py-2.5 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors group"
                   >
                     {/* Icon */}
                     <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${meta.color}`}>
@@ -226,7 +226,7 @@ export function ProjectActivityFeed({
                         {/* Task name */}
                         <button
                           onClick={() => onOpenTask?.(entry.task.id)}
-                          className="text-sm font-medium text-gray-800 hover:text-indigo-600 transition-colors cursor-pointer truncate text-left"
+                          className="text-sm font-medium text-gray-800 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer truncate text-left"
                         >
                           {entry.task.title}
                         </button>
@@ -243,8 +243,8 @@ export function ProjectActivityFeed({
                       </div>
 
                       {/* Action */}
-                      <p className="text-xs text-gray-500 mt-0.5 truncate">
-                        <span className="font-medium text-gray-600">{entry.actor}</span>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+                        <span className="font-medium text-gray-600 dark:text-gray-300">{entry.actor}</span>
                         {" — "}
                         {meta.label}
                       </p>

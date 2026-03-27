@@ -93,7 +93,7 @@ function TitleCell({
         style={{ backgroundColor: groupColor }}
       />
       <div
-        className="w-3.5 h-3.5 rounded-sm border border-gray-300 flex-shrink-0 cursor-pointer group-hover/title:border-indigo-400 transition-colors"
+        className="w-3.5 h-3.5 rounded-sm border border-gray-300 dark:border-gray-600 flex-shrink-0 cursor-pointer group-hover/title:border-indigo-400 transition-colors"
         onClick={onDelete}
         title="Supprimer la tâche"
       />
@@ -107,12 +107,12 @@ function TitleCell({
             if (e.key === "Enter") save();
             if (e.key === "Escape") setEditing(false);
           }}
-          className="flex-1 min-w-0 bg-white border border-indigo-400 rounded px-2 py-0.5 text-sm text-gray-800 outline-none focus:ring-1 focus:ring-indigo-200"
+          className="flex-1 min-w-0 bg-white dark:bg-gray-700 border border-indigo-400 rounded px-2 py-0.5 text-sm text-gray-800 dark:text-gray-100 outline-none focus:ring-1 focus:ring-indigo-200"
         />
       ) : (
         <span
           onClick={() => setEditing(true)}
-          className="flex-1 min-w-0 text-sm text-gray-800 cursor-text hover:text-gray-900 truncate"
+          className="flex-1 min-w-0 text-sm text-gray-800 dark:text-gray-100 cursor-text hover:text-gray-900 dark:hover:text-white truncate"
         >
           {task.title}
         </span>
@@ -122,7 +122,7 @@ function TitleCell({
       <div className="opacity-0 group-hover/row:opacity-100 flex items-center gap-0.5 flex-shrink-0 transition-opacity">
         <button
           onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
-          className="p-0.5 rounded text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 transition-all cursor-pointer"
+          className="p-0.5 rounded text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all cursor-pointer"
           title="Dupliquer la tâche"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -141,7 +141,7 @@ function TitleCell({
         </button>
         <button
           onClick={(e) => { e.stopPropagation(); onOpen(); }}
-          className="p-0.5 rounded text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 transition-all cursor-pointer"
+          className="p-0.5 rounded text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all cursor-pointer"
           title="Ouvrir la fiche"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -198,12 +198,12 @@ function BulkActionBar({
             </svg>
           </button>
           {openMenu === "status" && (
-            <div className="absolute bottom-full mb-1.5 left-0 bg-white text-gray-800 rounded-lg shadow-xl border border-gray-200 py-1 min-w-[140px] z-50">
+            <div className="absolute bottom-full mb-1.5 left-0 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[140px] z-50">
               {STATUS_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
                   onClick={() => { onStatusChange(opt.value); setOpenMenu(null); }}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors cursor-pointer flex items-center gap-2"
+                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer flex items-center gap-2"
                 >
                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${opt.color}`}>{opt.label}</span>
                 </button>
@@ -225,12 +225,12 @@ function BulkActionBar({
             </svg>
           </button>
           {openMenu === "priority" && (
-            <div className="absolute bottom-full mb-1.5 left-0 bg-white text-gray-800 rounded-lg shadow-xl border border-gray-200 py-1 min-w-[120px] z-50">
+            <div className="absolute bottom-full mb-1.5 left-0 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[120px] z-50">
               {PRIORITY_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
                   onClick={() => { onPriorityChange(opt.value); setOpenMenu(null); }}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors cursor-pointer flex items-center gap-2"
+                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer flex items-center gap-2"
                 >
                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${opt.color}`}>{opt.label}</span>
                 </button>
@@ -252,12 +252,12 @@ function BulkActionBar({
             </svg>
           </button>
           {openMenu === "owner" && (
-            <div className="absolute bottom-full mb-1.5 left-0 bg-white text-gray-800 rounded-lg shadow-xl border border-gray-200 py-1 min-w-[140px] z-50">
+            <div className="absolute bottom-full mb-1.5 left-0 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[140px] z-50">
               {memberNames.map((name) => (
                 <button
                   key={name}
                   onClick={() => { onOwnerChange(name); setOpenMenu(null); }}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors cursor-pointer"
+                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
                 >
                   {name}
                 </button>
@@ -403,7 +403,7 @@ function GroupHeader({
             style={{ backgroundColor: group.color }}
           />
           {colorPickerOpen && (
-            <div className="absolute left-0 top-5 z-50 bg-white border border-gray-200 rounded-xl shadow-xl p-2 grid grid-cols-6 gap-1" style={{ width: 140 }}>
+            <div className="absolute left-0 top-5 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-2 grid grid-cols-6 gap-1" style={{ width: 140 }}>
               {GROUP_COLOR_PALETTE.map((c) => (
                 <button
                   key={c}
@@ -426,27 +426,27 @@ function GroupHeader({
               if (e.key === "Enter") save();
               if (e.key === "Escape") setEditing(false);
             }}
-            className="bg-transparent border-b border-indigo-400 text-xs font-semibold text-gray-700 uppercase tracking-wide outline-none px-0.5"
+            className="bg-transparent border-b border-indigo-400 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide outline-none px-0.5"
             style={{ width: `${Math.max(draft.length * 7.5 + 16, 80)}px` }}
           />
         ) : (
           <button
             onClick={() => setEditing(true)}
-            className="text-xs font-semibold text-gray-700 uppercase tracking-wide hover:text-indigo-600 transition-colors cursor-pointer"
+            className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
           >
             {group.name}
           </button>
         )}
-        <span className="text-[11px] text-gray-400 tabular-nums font-normal">{taskCount}</span>
+        <span className="text-[11px] text-gray-400 dark:text-gray-500 tabular-nums font-normal">{taskCount}</span>
 
         {/* Aggregated stats */}
         {donePct !== null && taskCount > 0 && (
-          <span className="text-[11px] text-gray-400 tabular-nums">
+          <span className="text-[11px] text-gray-400 dark:text-gray-500 tabular-nums">
             · {donePct}% terminé
           </span>
         )}
         {totalBudget !== null && totalBudget > 0 && (
-          <span className="text-[11px] text-gray-400 tabular-nums">
+          <span className="text-[11px] text-gray-400 dark:text-gray-500 tabular-nums">
             · €{totalBudget.toLocaleString("fr-FR")}
           </span>
         )}
@@ -963,7 +963,7 @@ export function ProjectSpreadsheet({
     <div className="overflow-x-auto">
       <div style={{ minWidth: totalMinWidth }}>
         {/* ── Column headers ── */}
-        <div className="flex items-center bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+        <div className="flex items-center bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
           {/* Select-all checkbox */}
           <div
             style={{ width: CHECK_COL, minWidth: CHECK_COL }}
@@ -993,7 +993,7 @@ export function ProjectSpreadsheet({
           </div>
           <div
             style={{ width: TASK_COL, minWidth: TASK_COL }}
-            className="px-4 py-2.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider"
+            className="px-4 py-2.5 text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider"
           >
             Tâche
           </div>
@@ -1001,7 +1001,7 @@ export function ProjectSpreadsheet({
             <div
               key={col.id}
               style={{ width: colW(col.type), minWidth: colW(col.type) }}
-              className="px-3 py-2.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider"
+              className="px-3 py-2.5 text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider"
             >
               {col.label}
             </div>
@@ -1050,7 +1050,7 @@ export function ProjectSpreadsheet({
             : null;
 
           return (
-            <div key={group.id} className="border-b border-gray-100">
+            <div key={group.id} className="border-b border-gray-100 dark:border-gray-700">
               <GroupHeader
                 group={group}
                 taskCount={displayTasks.length}
@@ -1085,7 +1085,7 @@ export function ProjectSpreadsheet({
                         onDrop={() => handleDropAt(group.id, taskIdx)}
                       />
                     <div
-                      className={`flex items-center border-t border-gray-100 hover:bg-gray-50/60 transition-colors group/row ${selectedTaskIds.has(task.id) ? "bg-indigo-50/40" : ""}`}
+                      className={`flex items-center border-t border-gray-100 dark:border-gray-700/50 hover:bg-gray-50/60 dark:hover:bg-gray-700/40 transition-colors group/row ${selectedTaskIds.has(task.id) ? "bg-indigo-50/40 dark:bg-indigo-900/20" : ""}`}
                       draggable
                       onDragStart={() => handleDragStart(task.id, group.id)}
                       onDragEnd={handleDragEnd}
@@ -1112,7 +1112,7 @@ export function ProjectSpreadsheet({
                       </div>
                       {/* Drag handle */}
                       <div className="opacity-0 group-hover/row:opacity-100 pl-0 pr-0 flex-shrink-0 cursor-grab active:cursor-grabbing transition-opacity">
-                        <svg className="w-3 h-3 text-gray-300" fill="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-3 h-3 text-gray-300 dark:text-gray-600" fill="currentColor" viewBox="0 0 24 24">
                           <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
                           <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
                           <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
@@ -1171,7 +1171,7 @@ export function ProjectSpreadsheet({
                   {hiddenCount > 0 && (
                     <button
                       onClick={() => setGroupPageSizes((prev) => ({ ...prev, [group.id]: pageSize + GROUP_PAGE_SIZE }))}
-                      className="w-full text-left px-4 py-2 text-xs text-gray-400 hover:text-indigo-500 hover:bg-indigo-50/50 transition-colors cursor-pointer border-t border-gray-100"
+                      className="w-full text-left px-4 py-2 text-xs text-gray-400 dark:text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer border-t border-gray-100 dark:border-gray-700"
                     >
                       Voir {hiddenCount} tâche{hiddenCount > 1 ? "s" : ""} de plus…
                     </button>
@@ -1179,9 +1179,9 @@ export function ProjectSpreadsheet({
 
                   {/* Add task row */}
                   {addingTaskIn === group.id ? (
-                    <div className="flex items-center border-t border-gray-100 px-4 py-2">
+                    <div className="flex items-center border-t border-gray-100 dark:border-gray-700 px-4 py-2">
                       <div className="w-0.5 self-stretch mr-3 rounded-full bg-transparent flex-shrink-0" />
-                      <div className="w-3.5 h-3.5 rounded-sm border border-gray-300 flex-shrink-0 mr-2" />
+                      <div className="w-3.5 h-3.5 rounded-sm border border-gray-300 dark:border-gray-600 flex-shrink-0 mr-2" />
                       <input
                         ref={taskInputRef}
                         value={newTaskTitle}
@@ -1192,22 +1192,22 @@ export function ProjectSpreadsheet({
                         }}
                         onBlur={() => submitAddTask(group.id)}
                         placeholder="Nom de la tâche…"
-                        className="flex-1 text-sm text-gray-800 outline-none placeholder-gray-400 bg-transparent"
+                        className="flex-1 text-sm text-gray-800 dark:text-gray-100 outline-none placeholder-gray-400 dark:placeholder-gray-600 bg-transparent"
                       />
-                      <span className="text-[11px] text-gray-400 ml-2">
+                      <span className="text-[11px] text-gray-400 dark:text-gray-500 ml-2">
                         Entrée pour valider · Échap pour annuler
                       </span>
                     </div>
                   ) : (
-                    <div className="border-t border-gray-100 px-4 py-1.5">
+                    <div className="border-t border-gray-100 dark:border-gray-700 px-4 py-1.5">
                       <button
                         onClick={() => {
                           setNewTaskTitle("");
                           setAddingTaskIn(group.id);
                         }}
-                        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-indigo-500 transition-colors cursor-pointer"
+                        className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors cursor-pointer"
                       >
-                        <span className="w-4 h-4 flex items-center justify-center rounded border border-dashed border-gray-300 hover:border-indigo-400">
+                        <span className="w-4 h-4 flex items-center justify-center rounded border border-dashed border-gray-300 dark:border-gray-600 hover:border-indigo-400">
                           +
                         </span>
                         Ajouter une tâche
@@ -1221,10 +1221,10 @@ export function ProjectSpreadsheet({
         })}
 
         {/* ── Archives ── */}
-        <div className="border-t border-gray-100">
+        <div className="border-t border-gray-100 dark:border-gray-700">
           <button
             onClick={handleToggleArchives}
-            className="flex items-center gap-2 px-4 py-3 text-xs text-gray-400 hover:text-gray-600 transition-colors cursor-pointer w-full text-left"
+            className="flex items-center gap-2 px-4 py-3 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer w-full text-left"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" strokeWidth="1.5" strokeLinecap="round" />
@@ -1241,16 +1241,16 @@ export function ProjectSpreadsheet({
           {showArchives && (
             <div className="px-4 pb-4">
               {!archivesLoaded ? (
-                <p className="text-xs text-gray-400 italic py-2">Chargement…</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 italic py-2">Chargement…</p>
               ) : archivedTasks.length === 0 ? (
-                <p className="text-xs text-gray-400 italic py-2">Aucune tâche archivée.</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 italic py-2">Aucune tâche archivée.</p>
               ) : (
                 <div className="space-y-1">
                   {archivedTasks.map((task) => (
                     <div key={task.id} className="flex items-center gap-2.5 py-1.5 text-xs group/arch">
                       <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: task.group.color }} />
-                      <span className="text-gray-400 flex-1 truncate">{task.title}</span>
-                      <span className="text-gray-300 text-[10px]">{task.group.name}</span>
+                      <span className="text-gray-400 dark:text-gray-500 flex-1 truncate">{task.title}</span>
+                      <span className="text-gray-300 dark:text-gray-600 text-[10px]">{task.group.name}</span>
                       <button
                         onClick={() => handleRestore(task.id)}
                         className="opacity-0 group-hover/arch:opacity-100 text-[10px] text-indigo-500 hover:text-indigo-700 transition-all cursor-pointer ml-2 flex-shrink-0"
@@ -1280,7 +1280,7 @@ export function ProjectSpreadsheet({
                 }}
                 onBlur={submitAddGroup}
                 placeholder="Nom du groupe…"
-                className="text-xs font-semibold uppercase tracking-wide text-gray-700 outline-none bg-transparent placeholder-gray-400 border-b border-indigo-400 px-0.5"
+                className="text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-300 outline-none bg-transparent placeholder-gray-400 dark:placeholder-gray-600 border-b border-indigo-400 px-0.5"
               />
             </div>
           ) : (
@@ -1289,9 +1289,9 @@ export function ProjectSpreadsheet({
                 setNewGroupName("");
                 setAddingGroup(true);
               }}
-              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-indigo-500 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors cursor-pointer"
             >
-              <span className="w-4 h-4 flex items-center justify-center rounded border border-dashed border-gray-300 hover:border-indigo-400">
+              <span className="w-4 h-4 flex items-center justify-center rounded border border-dashed border-gray-300 dark:border-gray-600 hover:border-indigo-400">
                 +
               </span>
               Ajouter un groupe

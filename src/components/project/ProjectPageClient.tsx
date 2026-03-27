@@ -125,10 +125,10 @@ function InviteModal({
     <>
       <div className="fixed inset-0 z-50 bg-black/20" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-xl p-6 w-full max-w-sm pointer-events-auto max-h-[90vh] overflow-y-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl p-6 w-full max-w-sm pointer-events-auto max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-gray-900">Membres du projet</h2>
-            <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 cursor-pointer">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Membres du projet</h2>
+            <button onClick={onClose} className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M6 18L18 6M6 6l12 12" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
@@ -144,14 +144,14 @@ function InviteModal({
                     {m.user.avatar ? (
                       <img src={m.user.avatar} alt={m.user.name} className="w-full h-full object-cover rounded-full" />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
-                        <span className="text-xs font-bold text-indigo-600">{m.user.name.charAt(0).toUpperCase()}</span>
+                      <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
+                        <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{m.user.name.charAt(0).toUpperCase()}</span>
                       </div>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">{m.user.name}</p>
-                    <p className="text-xs text-gray-400 truncate">{m.user.email}</p>
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{m.user.name}</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{m.user.email}</p>
                   </div>
                   {isAdmin ? (
                     <button
@@ -159,8 +159,8 @@ function InviteModal({
                       title={m.role === "ADMIN" ? "Rétrograder en membre" : "Promouvoir admin"}
                       className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
                         m.role === "ADMIN"
-                          ? "border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
-                          : "border-gray-200 text-gray-400 hover:border-indigo-200 hover:text-indigo-500"
+                          ? "border-indigo-200 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
+                          : "border-gray-200 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:border-indigo-200 hover:text-indigo-500"
                       }`}
                     >
                       {m.role === "ADMIN" ? "Admin" : "Membre"}
@@ -168,8 +168,8 @@ function InviteModal({
                   ) : (
                     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
                       m.role === "ADMIN"
-                        ? "border-indigo-200 bg-indigo-50 text-indigo-600"
-                        : "border-gray-200 text-gray-400"
+                        ? "border-indigo-200 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600"
+                        : "border-gray-200 dark:border-gray-600 text-gray-400 dark:text-gray-500"
                     }`}>
                       {m.role === "ADMIN" ? "Admin" : "Membre"}
                     </span>
@@ -190,18 +190,18 @@ function InviteModal({
           {/* Pending invitations */}
           {pendingInvitations.length > 0 && (
             <div className="mb-4">
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">En attente</p>
+              <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">En attente</p>
               <div className="space-y-1.5">
                 {pendingInvitations.map((inv) => (
                   <div key={inv.id} className="flex items-center gap-2.5 group py-1">
-                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" strokeWidth="1.5" strokeLinecap="round" />
                       </svg>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-600 truncate">{inv.email}</p>
-                      <p className="text-[10px] text-gray-400">Invitation envoyée</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-300 truncate">{inv.email}</p>
+                      <p className="text-[10px] text-gray-400 dark:text-gray-500">Invitation envoyée</p>
                     </div>
                     {isAdmin && (
                       <button
@@ -220,9 +220,9 @@ function InviteModal({
 
           {/* Groups section — visible for all, actions for admins only */}
           {userGroups.length > 0 && (
-            <div className="mb-4 border-t border-gray-100 pt-4">
+            <div className="mb-4 border-t border-gray-100 dark:border-gray-700 pt-4">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Groupes</p>
+                <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Groupes</p>
                 {isAdmin && (
                   <button
                     onClick={() => setShowGroupsManager(true)}
@@ -239,8 +239,8 @@ function InviteModal({
                   return (
                     <div key={g.id} className="flex items-center justify-between gap-2 py-1">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-800">{g.name}</p>
-                        <p className="text-[11px] text-gray-400">
+                        <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{g.name}</p>
+                        <p className="text-[11px] text-gray-400 dark:text-gray-500">
                           {emails.length} membre{emails.length > 1 ? "s" : ""}
                         </p>
                       </div>
@@ -252,7 +252,7 @@ function InviteModal({
                         ) : (
                           <button
                             onClick={() => handleInviteGroup(g)}
-                            className="text-[11px] font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex-shrink-0"
+                            className="text-[11px] font-medium text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-100 dark:border-indigo-700 px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex-shrink-0"
                           >
                             Inviter le groupe
                           </button>
@@ -267,7 +267,7 @@ function InviteModal({
 
           {/* "Gérer les groupes" shortcut when no group exists yet — admin only */}
           {isAdmin && userGroups.length === 0 && (
-            <div className="mb-4 border-t border-gray-100 pt-4">
+            <div className="mb-4 border-t border-gray-100 dark:border-gray-700 pt-4">
               <button
                 onClick={() => setShowGroupsManager(true)}
                 className="w-full flex items-center justify-center gap-1.5 text-[12px] text-gray-400 hover:text-indigo-500 transition-colors cursor-pointer py-1"
@@ -281,11 +281,11 @@ function InviteModal({
           )}
 
           {isAdmin && (
-            <div className="border-t border-gray-100 pt-4">
+            <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
               {/* Invite form */}
               <form onSubmit={handleInvite} className="space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Inviter par email</label>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Inviter par email</label>
                   <input
                     type="email"
                     value={email}
@@ -293,7 +293,7 @@ function InviteModal({
                     required
                     autoFocus
                     placeholder="user@exemple.com"
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors"
+                    className="w-full px-3 py-2 text-sm text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors placeholder-gray-400 dark:placeholder-gray-500"
                   />
                 </div>
                 {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
@@ -313,7 +313,7 @@ function InviteModal({
                   {isPending ? "Envoi…" : "Envoyer l'invitation"}
                 </button>
               </form>
-              <p className="mt-3 text-[11px] text-gray-400 text-center">
+              <p className="mt-3 text-[11px] text-gray-400 dark:text-gray-500 text-center">
                 Un email avec un lien d&apos;invitation sera envoyé. Sans compte, un lien de création sera proposé.
               </p>
             </div>
@@ -359,10 +359,10 @@ function SaveTemplateModal({
     <>
       <div className="fixed inset-0 z-50 bg-black/20" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-xl p-6 w-full max-w-sm pointer-events-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl p-6 w-full max-w-sm pointer-events-auto">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-gray-900">Sauvegarder comme template</h2>
-            <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 cursor-pointer">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Sauvegarder comme template</h2>
+            <button onClick={onClose} className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M6 18L18 6M6 6l12 12" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
@@ -375,9 +375,9 @@ function SaveTemplateModal({
                   <path d="M5 13l4 4L19 7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-              <p className="text-sm font-medium text-gray-700">Template sauvegardé !</p>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Template sauvegardé !</p>
               <div className="flex gap-2 w-full">
-                <button onClick={onClose} className="flex-1 border border-gray-200 text-sm text-gray-600 rounded-lg py-2 hover:bg-gray-50 cursor-pointer">
+                <button onClick={onClose} className="flex-1 border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 rounded-lg py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
                   Fermer
                 </button>
                 <a href="/templates" className="flex-1 text-center bg-indigo-600 text-white text-sm font-medium rounded-lg py-2 hover:bg-indigo-700 transition-colors">
@@ -387,25 +387,25 @@ function SaveTemplateModal({
             </div>
           ) : (
             <form onSubmit={handleSubmit}>
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Nom du template</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1.5">Nom du template</label>
               <input
                 autoFocus
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 mb-4"
+                className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 mb-4 placeholder-gray-400 dark:placeholder-gray-500"
                 placeholder="Nom du template"
               />
               <label className="flex items-center gap-2.5 py-2 mb-3 cursor-pointer select-none">
                 <div
                   onClick={() => setIncludeTasks((v) => !v)}
-                  className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${includeTasks ? "bg-indigo-500" : "bg-gray-200"}`}
+                  className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${includeTasks ? "bg-indigo-500" : "bg-gray-200 dark:bg-gray-600"}`}
                 >
                   <span
                     className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${includeTasks ? "translate-x-4" : ""}`}
                   />
                 </div>
-                <span className="text-sm text-gray-700">Inclure les tâches</span>
+                <span className="text-sm text-gray-700 dark:text-gray-200">Inclure les tâches</span>
               </label>
               <button
                 type="submit"
@@ -724,14 +724,14 @@ export function ProjectPageClient({
       memberAvatars={Object.fromEntries(members.map((m) => [m.user.name, m.user.avatar]))}
       allColumns={allColumns}
     >
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* ── Top bar ── */}
-      <header className="bg-white border-b border-gray-200 px-4 sm:px-6 flex-shrink-0">
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 flex-shrink-0">
         <div className="flex items-center justify-between h-14">
           <div className="flex items-center gap-2.5 min-w-0">
             <a
               href="/"
-              className="text-gray-400 hover:text-gray-600 transition-colors text-sm flex items-center gap-1 flex-shrink-0"
+              className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors text-sm flex items-center gap-1 flex-shrink-0"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M15 19l-7-7 7-7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -740,7 +740,7 @@ export function ProjectPageClient({
             </a>
             <a
               href="/me"
-              className="hidden sm:flex items-center gap-1 text-gray-400 hover:text-indigo-500 transition-colors text-xs border border-gray-200 hover:border-indigo-200 rounded-md px-2 py-1 flex-shrink-0"
+              className="hidden sm:flex items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-indigo-500 transition-colors text-xs border border-gray-200 dark:border-gray-700 hover:border-indigo-200 rounded-md px-2 py-1 flex-shrink-0"
               title="Mon espace"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -748,10 +748,10 @@ export function ProjectPageClient({
               </svg>
               Mon espace
             </a>
-            <span className="text-gray-200">/</span>
-            <h1 className="text-sm font-semibold text-gray-900">{project.name}</h1>
+            <span className="text-gray-200 dark:text-gray-700">/</span>
+            <h1 className="text-sm font-semibold text-gray-900 dark:text-gray-50">{project.name}</h1>
             {/* Description inline */}
-            <span className="text-gray-200 hidden sm:block">·</span>
+            <span className="text-gray-200 dark:text-gray-700 hidden sm:block">·</span>
             {editingDesc ? (
               <input
                 autoFocus
@@ -768,18 +768,18 @@ export function ProjectPageClient({
                   if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                   if (e.key === "Escape") { setDescription(project.description ?? ""); setEditingDesc(false); }
                 }}
-                className="hidden sm:block text-xs text-gray-500 bg-transparent border-b border-indigo-400 outline-none w-48"
+                className="hidden sm:block text-xs text-gray-500 dark:text-gray-400 bg-transparent border-b border-indigo-400 outline-none w-48"
                 placeholder="Ajouter une description…"
               />
             ) : isAdmin ? (
               <button
                 onClick={() => setEditingDesc(true)}
-                className="hidden sm:block text-xs text-gray-400 hover:text-gray-600 transition-colors cursor-pointer truncate max-w-[200px]"
+                className="hidden sm:block text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer truncate max-w-[200px]"
               >
-                {description || <span className="italic text-gray-300">Ajouter une description…</span>}
+                {description || <span className="italic text-gray-300 dark:text-gray-600">Ajouter une description…</span>}
               </button>
             ) : (
-              <span className="hidden sm:block text-xs text-gray-400 truncate max-w-[200px]">
+              <span className="hidden sm:block text-xs text-gray-400 dark:text-gray-500 truncate max-w-[200px]">
                 {description}
               </span>
             )}
@@ -796,7 +796,7 @@ export function ProjectPageClient({
                       getNotifPreferences().then(setNotifPrefs);
                     }
                   }}
-                  className="relative p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+                  className="relative p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
                   title="Notifications"
                 >
                   <svg className="w-4.5 h-4.5 w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -810,9 +810,9 @@ export function ProjectPageClient({
                 </button>
 
                 {showNotifPanel && (
-                  <div className="absolute top-full mt-1.5 right-0 bg-white border border-gray-200 rounded-xl shadow-xl z-30 w-80 overflow-hidden">
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                      <h3 className="text-sm font-semibold text-gray-800">Notifications</h3>
+                  <div className="absolute top-full mt-1.5 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-30 w-80 overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+                      <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Notifications</h3>
                       <div className="flex items-center gap-2">
                         {unreadCount > 0 && !showNotifPrefs && (
                           <button
@@ -829,7 +829,7 @@ export function ProjectPageClient({
                         <button
                           onClick={() => setShowNotifPrefs((v) => !v)}
                           title="Préférences de notifications"
-                          className={`p-1 rounded-md transition-colors cursor-pointer ${showNotifPrefs ? "bg-gray-100 text-gray-700" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"}`}
+                          className={`p-1 rounded-md transition-colors cursor-pointer ${showNotifPrefs ? "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200" : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" strokeWidth="1.5" />
@@ -841,13 +841,13 @@ export function ProjectPageClient({
 
                     {showNotifPrefs ? (
                       <div className="px-4 py-3 space-y-3">
-                        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Recevoir des notifications pour</p>
+                        <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Recevoir des notifications pour</p>
                         {NOTIF_TYPES.map(({ type, label }) => {
                           const pref = notifPrefs.find((p) => p.type === type);
                           const enabled = pref?.enabled ?? true;
                           return (
                             <label key={type} className="flex items-center justify-between gap-3 cursor-pointer">
-                              <span className="text-sm text-gray-700">{label}</span>
+                              <span className="text-sm text-gray-700 dark:text-gray-200">{label}</span>
                               <button
                                 role="switch"
                                 aria-checked={enabled}
@@ -860,7 +860,7 @@ export function ProjectPageClient({
                                   );
                                   await setNotifPreference(type as NotifType, next);
                                 }}
-                                className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer flex-shrink-0 ${enabled ? "bg-indigo-500" : "bg-gray-200"}`}
+                                className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer flex-shrink-0 ${enabled ? "bg-indigo-500" : "bg-gray-200 dark:bg-gray-600"}`}
                               >
                                 <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${enabled ? "translate-x-4" : "translate-x-0"}`} />
                               </button>
@@ -881,7 +881,7 @@ export function ProjectPageClient({
                         notifications.map((notif) => (
                           <div
                             key={notif.id}
-                            className={`flex items-start gap-3 px-4 py-3 border-b border-gray-50 hover:bg-gray-50/60 transition-colors cursor-pointer ${!notif.isRead ? "bg-indigo-50/40" : ""}`}
+                            className={`flex items-start gap-3 px-4 py-3 border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50/60 dark:hover:bg-gray-700/40 transition-colors cursor-pointer ${!notif.isRead ? "bg-indigo-50/40 dark:bg-indigo-900/20" : ""}`}
                             onClick={async () => {
                               if (!notif.isRead) {
                                 setNotifications((prev) =>
@@ -905,8 +905,8 @@ export function ProjectPageClient({
                           >
                             <div className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${!notif.isRead ? "bg-indigo-500" : "bg-transparent"}`} />
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs text-gray-700 leading-relaxed">{notif.message}</p>
-                              <p className="text-[11px] text-gray-400 mt-0.5">
+                              <p className="text-xs text-gray-700 dark:text-gray-200 leading-relaxed">{notif.message}</p>
+                              <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
                                 {new Date(notif.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                               </p>
                             </div>
@@ -927,7 +927,7 @@ export function ProjectPageClient({
                   <div
                     key={m.userId}
                     title={m.user.name}
-                    className="w-7 h-7 rounded-full border-2 border-white flex-shrink-0 overflow-hidden"
+                    className="w-7 h-7 rounded-full border-2 border-white dark:border-gray-800 flex-shrink-0 overflow-hidden"
                   >
                     {m.user.avatar ? (
                       <img src={m.user.avatar} alt={m.user.name} className="w-full h-full object-cover rounded-full" />
@@ -939,8 +939,8 @@ export function ProjectPageClient({
                   </div>
                 ))}
                 {members.length > 5 && (
-                  <div className="w-7 h-7 rounded-full bg-gray-100 border-2 border-white flex items-center justify-center flex-shrink-0">
-                    <span className="text-[10px] font-bold text-gray-500">+{members.length - 5}</span>
+                  <div className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-700 border-2 border-white dark:border-gray-800 flex items-center justify-center flex-shrink-0">
+                    <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400">+{members.length - 5}</span>
                   </div>
                 )}
               </div>
@@ -948,7 +948,7 @@ export function ProjectPageClient({
             {isAdmin && (
               <button
                 onClick={() => setShowAutomationsPanel(true)}
-                className="flex items-center gap-1.5 text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-2.5 sm:px-3 py-1.5 hover:bg-gray-50 transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 sm:px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
                 title="Automatisations"
               >
                 <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -959,7 +959,7 @@ export function ProjectPageClient({
             )}
             <button
               onClick={() => setShowInviteModal(true)}
-              className="flex items-center gap-1.5 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg px-2.5 sm:px-3 py-1.5 hover:bg-gray-50 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 sm:px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
               title={isAdmin ? "Inviter des membres" : "Voir les membres"}
             >
               <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -970,7 +970,7 @@ export function ProjectPageClient({
             {isAdmin && (
               <button
                 onClick={() => setShowSaveTemplate(true)}
-                className="flex items-center gap-1.5 text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-2.5 sm:px-3 py-1.5 hover:bg-gray-50 transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 sm:px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
                 title="Sauvegarder comme template"
               >
                 <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -995,7 +995,7 @@ export function ProjectPageClient({
                     setLinksLoaded(true);
                   }
                 }}
-                className="flex items-center gap-1.5 text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-2.5 sm:px-3 py-1.5 hover:bg-gray-50 transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 sm:px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
                 title="Lier des projets"
               >
                 <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1003,23 +1003,23 @@ export function ProjectPageClient({
                 </svg>
                 <span className="hidden sm:inline">Lier</span>
                 {linkedProjects.length > 0 && (
-                  <span className="ml-0.5 text-[10px] bg-indigo-100 text-indigo-600 rounded-full px-1.5 py-0.5 leading-none">
+                  <span className="ml-0.5 text-[10px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-full px-1.5 py-0.5 leading-none">
                     {linkedProjects.length}
                   </span>
                 )}
               </button>
 
               {showLinksPanel && (
-                <div className="absolute top-full mt-1.5 right-0 bg-white border border-gray-200 rounded-xl shadow-xl z-30 w-72 overflow-hidden">
-                  <div className="px-4 py-3 border-b border-gray-100">
-                    <h3 className="text-sm font-semibold text-gray-800">Projets liés</h3>
+                <div className="absolute top-full mt-1.5 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-30 w-72 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+                    <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Projets liés</h3>
                   </div>
                   <div className="max-h-64 overflow-y-auto">
                     {linkedProjects.length === 0 ? (
-                      <p className="text-xs text-gray-400 text-center py-6">Aucun projet lié</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-6">Aucun projet lié</p>
                     ) : (
                       linkedProjects.map((lp) => (
-                        <div key={lp.id} className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50 hover:bg-gray-50/50">
+                        <div key={lp.id} className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50/50 dark:hover:bg-gray-700/40">
                           <a href={`/projects/${lp.project.id}`} className="text-sm text-indigo-600 hover:text-indigo-800 font-medium truncate">
                             {lp.project.name}
                           </a>
@@ -1028,7 +1028,7 @@ export function ProjectPageClient({
                               await removeProjectLink(lp.id, project.id);
                               setLinkedProjects((prev) => prev.filter((x) => x.id !== lp.id));
                             }}
-                            className="ml-2 text-gray-300 hover:text-red-400 transition-colors cursor-pointer flex-shrink-0"
+                            className="ml-2 text-gray-300 dark:text-gray-600 hover:text-red-400 transition-colors cursor-pointer flex-shrink-0"
                             title="Dissocier"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1040,8 +1040,8 @@ export function ProjectPageClient({
                     )}
                   </div>
                   {allProjects.filter((p) => !linkedProjects.some((lp) => lp.project.id === p.id)).length > 0 && (
-                    <div className="px-4 py-3 border-t border-gray-100">
-                      <p className="text-[11px] text-gray-400 mb-2 font-medium uppercase tracking-wider">Lier un projet</p>
+                    <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700">
+                      <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-2 font-medium uppercase tracking-wider">Lier un projet</p>
                       <div className="space-y-1 max-h-40 overflow-y-auto">
                         {allProjects
                           .filter((p) => !linkedProjects.some((lp) => lp.project.id === p.id))
@@ -1053,7 +1053,7 @@ export function ProjectPageClient({
                                 const updated = await getProjectLinks(project.id);
                                 setLinkedProjects(updated);
                               }}
-                              className="w-full text-left text-sm text-gray-700 hover:text-indigo-600 hover:bg-indigo-50/50 px-2 py-1.5 rounded-lg transition-colors cursor-pointer"
+                              className="w-full text-left text-sm text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 px-2 py-1.5 rounded-lg transition-colors cursor-pointer"
                             >
                               {p.name}
                             </button>
@@ -1117,7 +1117,7 @@ export function ProjectPageClient({
             Échéancier
           </TabButton>
 
-          <div className="mx-2 h-4 w-px bg-gray-200" />
+          <div className="mx-2 h-4 w-px bg-gray-200 dark:bg-gray-700" />
 
           <TabButton
             active={activeTab === "dashboard"}
@@ -1150,7 +1150,7 @@ export function ProjectPageClient({
 
       {/* ── Toolbar (spreadsheet only) ── */}
       {activeTab === "spreadsheet" && (
-        <div ref={toolbarRef} className="bg-white border-b border-gray-100 flex-shrink-0">
+        <div ref={toolbarRef} className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
           {/* Scrollable button row */}
           <div className="px-4 sm:px-6 py-1.5 flex items-center gap-1 overflow-x-auto scrollbar-none">
           {/* Search input */}
@@ -1164,7 +1164,7 @@ export function ProjectPageClient({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Rechercher… (/)"
-              className="pl-8 pr-3 py-1.5 text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-indigo-400 focus:bg-white transition-colors w-28 sm:w-44"
+              className="pl-8 pr-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:border-indigo-400 focus:bg-white dark:focus:bg-gray-600 transition-colors w-28 sm:w-44"
             />
             {search && (
               <button
@@ -1178,7 +1178,7 @@ export function ProjectPageClient({
             )}
           </div>
 
-          <div className="w-px h-4 bg-gray-200 mx-1 flex-shrink-0" />
+          <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1 flex-shrink-0" />
 
           {/* Filter button */}
           <div ref={filterBtnRef} className="flex-shrink-0">
@@ -1194,8 +1194,8 @@ export function ProjectPageClient({
               className={[
                 "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md transition-colors cursor-pointer",
                 activeFilterCount > 0
-                  ? "text-indigo-600 bg-indigo-50 hover:bg-indigo-100"
-                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-100",
+                  ? "text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700",
               ].join(" ")}
             >
               <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1225,8 +1225,8 @@ export function ProjectPageClient({
               className={[
                 "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md transition-colors cursor-pointer",
                 sort
-                  ? "text-indigo-600 bg-indigo-50 hover:bg-indigo-100"
-                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-100",
+                  ? "text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700",
               ].join(" ")}
             >
               <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1264,8 +1264,8 @@ export function ProjectPageClient({
               className={[
                 "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md transition-colors cursor-pointer",
                 hiddenColumnIds.length > 0
-                  ? "text-indigo-600 bg-indigo-50 hover:bg-indigo-100"
-                  : "text-gray-500 hover:text-gray-700 hover:bg-gray-100",
+                  ? "text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700",
               ].join(" ")}
             >
               <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1298,14 +1298,14 @@ export function ProjectPageClient({
                   });
                 }
               }}
-              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md transition-colors cursor-pointer ${showViewsPanel ? "bg-indigo-50 text-indigo-600" : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"}`}
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md transition-colors cursor-pointer ${showViewsPanel ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600" : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
             >
               <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <span className="hidden sm:inline">Vues</span>
               {savedViews.length > 0 && (
-                <span className="ml-0.5 text-[10px] bg-indigo-100 text-indigo-600 rounded-full px-1.5 py-0.5 font-medium">
+                <span className="ml-0.5 text-[10px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-full px-1.5 py-0.5 font-medium">
                   {savedViews.length}
                 </span>
               )}
@@ -1317,7 +1317,7 @@ export function ProjectPageClient({
           <div className="ml-auto flex items-center gap-1 flex-shrink-0">
             <button
               onClick={exportCSV}
-              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 px-2.5 py-1.5 rounded-md transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 px-2.5 py-1.5 rounded-md transition-colors cursor-pointer"
               title="Exporter en CSV"
             >
               <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1327,10 +1327,10 @@ export function ProjectPageClient({
             </button>
             <button
               onClick={() => setShowCommandPalette(true)}
-              className="hidden sm:flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-100 px-2 py-1.5 rounded-md transition-colors cursor-pointer"
+              className="hidden sm:flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 px-2 py-1.5 rounded-md transition-colors cursor-pointer"
               title="Command palette (⌘K)"
             >
-              <kbd className="text-[10px] border border-gray-200 rounded px-1 font-mono">⌘K</kbd>
+              <kbd className="text-[10px] border border-gray-200 dark:border-gray-600 rounded px-1 font-mono">⌘K</kbd>
             </button>
           </div>
 
@@ -1342,7 +1342,7 @@ export function ProjectPageClient({
                 return (
                   <span
                     key={v}
-                    className="inline-flex items-center gap-1 text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2 py-0.5"
+                    className="inline-flex items-center gap-1 text-[11px] bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700 rounded-full px-2 py-0.5"
                   >
                     {opt?.label ?? v}
                     <button
@@ -1359,7 +1359,7 @@ export function ProjectPageClient({
                 return (
                   <span
                     key={v}
-                    className="inline-flex items-center gap-1 text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2 py-0.5"
+                    className="inline-flex items-center gap-1 text-[11px] bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700 rounded-full px-2 py-0.5"
                   >
                     {opt?.label ?? v}
                     <button
@@ -1374,7 +1374,7 @@ export function ProjectPageClient({
               {filters.owner.map((v) => (
                 <span
                   key={v}
-                  className="inline-flex items-center gap-1 text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2 py-0.5"
+                  className="inline-flex items-center gap-1 text-[11px] bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700 rounded-full px-2 py-0.5"
                 >
                   {v}
                   <button
@@ -1391,30 +1391,30 @@ export function ProjectPageClient({
 
           {/* ── Dropdown panels — hors du div overflow pour éviter le clipping ── */}
           {showFilterPanel && (
-            <div style={{ position: "fixed", top: panelPos.top, left: panelPos.left, zIndex: 50 }} className="bg-white border border-gray-200 rounded-xl shadow-lg p-4 w-72">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Status</p>
+            <div style={{ position: "fixed", top: panelPos.top, left: panelPos.left, zIndex: 50 }} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-4 w-72">
+              <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Status</p>
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {STATUS_OPTIONS.map((opt) => (
                   <button key={opt.value} onClick={() => toggleFilter("status", opt.value)}
-                    className={["text-xs px-2 py-0.5 rounded-full border transition-colors cursor-pointer", filters.status.includes(opt.value) ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-gray-200 text-gray-600 hover:border-gray-300"].join(" ")}
+                    className={["text-xs px-2 py-0.5 rounded-full border transition-colors cursor-pointer", filters.status.includes(opt.value) ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400" : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500"].join(" ")}
                   >{opt.label}</button>
                 ))}
               </div>
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Priorité</p>
+              <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Priorité</p>
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {PRIORITY_OPTIONS.map((opt) => (
                   <button key={opt.value} onClick={() => toggleFilter("priority", opt.value)}
-                    className={["text-xs px-2 py-0.5 rounded-full border transition-colors cursor-pointer", filters.priority.includes(opt.value) ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-gray-200 text-gray-600 hover:border-gray-300"].join(" ")}
+                    className={["text-xs px-2 py-0.5 rounded-full border transition-colors cursor-pointer", filters.priority.includes(opt.value) ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400" : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500"].join(" ")}
                   >{opt.label}</button>
                 ))}
               </div>
               {uniqueOwners.length > 0 && (
                 <>
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Responsable</p>
+                  <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Responsable</p>
                   <div className="flex flex-wrap gap-1.5 mb-3">
                     {uniqueOwners.map((name) => (
                       <button key={name} onClick={() => toggleFilter("owner", name)}
-                        className={["text-xs px-2 py-0.5 rounded-full border transition-colors cursor-pointer", filters.owner.includes(name) ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-gray-200 text-gray-600 hover:border-gray-300"].join(" ")}
+                        className={["text-xs px-2 py-0.5 rounded-full border transition-colors cursor-pointer", filters.owner.includes(name) ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400" : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500"].join(" ")}
                       >{name}</button>
                     ))}
                   </div>
@@ -1427,12 +1427,12 @@ export function ProjectPageClient({
           )}
 
           {showSortPanel && (
-            <div style={{ position: "fixed", top: panelPos.top, left: panelPos.left, zIndex: 50 }} className="bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-48">
+            <div style={{ position: "fixed", top: panelPos.top, left: panelPos.left, zIndex: 50 }} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 w-48">
               {SORT_OPTIONS.map((opt) => {
                 const active = sort?.columnType === opt.key;
                 return (
                   <button key={opt.key} onClick={() => handleSortPick(opt.key)}
-                    className={["w-full text-left flex items-center justify-between px-3 py-2 text-sm transition-colors cursor-pointer", active ? "text-indigo-600 bg-indigo-50" : "text-gray-700 hover:bg-gray-50"].join(" ")}
+                    className={["w-full text-left flex items-center justify-between px-3 py-2 text-sm transition-colors cursor-pointer", active ? "text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30" : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"].join(" ")}
                   >
                     {opt.label}
                     {active && <span className="text-indigo-500 text-xs">{sort?.dir === "asc" ? "↑" : "↓"}</span>}
@@ -1443,19 +1443,19 @@ export function ProjectPageClient({
           )}
 
           {showColumnsPanel && (
-            <div style={{ position: "fixed", top: panelPos.top, left: panelPos.left, zIndex: 50 }} className="bg-white border border-gray-200 rounded-xl shadow-lg p-4 w-60">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Colonnes actives</p>
+            <div style={{ position: "fixed", top: panelPos.top, left: panelPos.left, zIndex: 50 }} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-4 w-60">
+              <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Colonnes actives</p>
               <div className="space-y-0.5 mb-3">
                 {effectiveColumns.map((col) => {
                   const visible = !hiddenColumnIds.includes(col.id);
                   return (
                     <button key={col.id} onClick={() => toggleColumn(col.id)}
-                      className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer text-left"
+                      className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer text-left"
                     >
-                      <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${visible ? "bg-indigo-500 border-indigo-500" : "border-gray-300"}`}>
+                      <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${visible ? "bg-indigo-500 border-indigo-500" : "border-gray-300 dark:border-gray-600"}`}>
                         {visible && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>}
                       </div>
-                      <span className="text-sm text-gray-700">{col.label}</span>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{col.label}</span>
                     </button>
                   );
                 })}
@@ -1467,27 +1467,27 @@ export function ProjectPageClient({
                 if (inactiveDbCols.length === 0 && missingMeta.length === 0) return null;
                 return (
                   <>
-                    <div className="border-t border-gray-100 my-2" />
-                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Ajouter une colonne</p>
+                    <div className="border-t border-gray-100 dark:border-gray-700 my-2" />
+                    <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Ajouter une colonne</p>
                     <div className="space-y-0.5">
                       {inactiveDbCols.map((col) => (
                         <button key={col.id} onClick={() => toggleColumnActive(col.id)}
-                          className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer text-left group"
+                          className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer text-left group"
                         >
-                          <div className="w-4 h-4 rounded border border-dashed border-gray-300 flex items-center justify-center flex-shrink-0 group-hover:border-indigo-400">
-                            <svg className="w-2.5 h-2.5 text-gray-300 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2" strokeLinecap="round" /></svg>
+                          <div className="w-4 h-4 rounded border border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center flex-shrink-0 group-hover:border-indigo-400">
+                            <svg className="w-2.5 h-2.5 text-gray-300 dark:text-gray-600 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2" strokeLinecap="round" /></svg>
                           </div>
-                          <span className="text-sm text-gray-400 group-hover:text-indigo-600">{col.label}</span>
+                          <span className="text-sm text-gray-400 dark:text-gray-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{col.label}</span>
                         </button>
                       ))}
                       {missingMeta.map((meta) => (
                         <button key={meta.type} onClick={() => handleAddMissingColumn(meta.type, meta.label)}
-                          className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer text-left group"
+                          className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer text-left group"
                         >
-                          <div className="w-4 h-4 rounded border border-dashed border-gray-300 flex items-center justify-center flex-shrink-0 group-hover:border-indigo-400">
-                            <svg className="w-2.5 h-2.5 text-gray-300 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2" strokeLinecap="round" /></svg>
+                          <div className="w-4 h-4 rounded border border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center flex-shrink-0 group-hover:border-indigo-400">
+                            <svg className="w-2.5 h-2.5 text-gray-300 dark:text-gray-600 group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="2" strokeLinecap="round" /></svg>
                           </div>
-                          <span className="text-sm text-gray-400 group-hover:text-indigo-600">{meta.label}</span>
+                          <span className="text-sm text-gray-400 dark:text-gray-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{meta.label}</span>
                         </button>
                       ))}
                     </div>
@@ -1501,12 +1501,12 @@ export function ProjectPageClient({
           )}
 
           {showViewsPanel && (
-            <div style={{ position: "fixed", top: panelPos.top, left: panelPos.left, zIndex: 50 }} className="bg-white border border-gray-200 rounded-xl shadow-xl w-72 py-2">
-              <div className="px-3 pb-2 border-b border-gray-100">
-                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Sauvegarder la vue actuelle</p>
+            <div style={{ position: "fixed", top: panelPos.top, left: panelPos.left, zIndex: 50 }} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl w-72 py-2">
+              <div className="px-3 pb-2 border-b border-gray-100 dark:border-gray-700">
+                <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Sauvegarder la vue actuelle</p>
                 <div className="flex gap-2">
                   <input type="text" value={saveViewName} onChange={(e) => setSaveViewName(e.target.value)} placeholder="Nom de la vue…"
-                    className="flex-1 text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200"
+                    className="flex-1 text-xs text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 placeholder-gray-400 dark:placeholder-gray-500"
                     onKeyDown={(e) => { if (e.key === "Enter") document.getElementById("save-view-btn")?.click(); }}
                   />
                   <button id="save-view-btn" disabled={savingView || !saveViewName.trim()}
@@ -1526,9 +1526,9 @@ export function ProjectPageClient({
               </div>
               <div className="px-3 pt-2">
                 {!viewsLoaded ? (
-                  <p className="text-xs text-gray-400 py-1">Chargement…</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 py-1">Chargement…</p>
                 ) : savedViews.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic py-1">Aucune vue sauvegardée.</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 italic py-1">Aucune vue sauvegardée.</p>
                 ) : (
                   <div className="space-y-0.5">
                     {savedViews.map((sv) => {
@@ -1545,10 +1545,10 @@ export function ProjectPageClient({
                               setHiddenColumnIds(project.columns.filter((c) => !visIds.has(c.id)).map((c) => c.id));
                               setShowViewsPanel(false);
                             }}
-                            className="flex-1 text-left text-xs text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer"
+                            className="flex-1 text-left text-xs text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer"
                           >
                             {sv.name}
-                            <span className="ml-1.5 text-[10px] text-gray-400">{snap.tab}</span>
+                            <span className="ml-1.5 text-[10px] text-gray-400 dark:text-gray-500">{snap.tab}</span>
                           </button>
                           <button
                             onClick={async () => { setSavedViews((prev) => prev.filter((v) => v.id !== sv.id)); await deleteSavedView(sv.id); }}
@@ -1569,7 +1569,7 @@ export function ProjectPageClient({
       )}
 
       {/* ── Content ── */}
-      <main className="flex-1 bg-white mx-6 mt-4 mb-6 rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <main className="flex-1 bg-white dark:bg-gray-800 mx-6 mt-4 mb-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
         {activeTab === "spreadsheet" && (
           <ProjectSpreadsheet
             project={project}
@@ -1693,14 +1693,14 @@ function TabButton({
       className={[
         "flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors",
         disabled
-          ? "border-transparent text-gray-300 cursor-default"
+          ? "border-transparent text-gray-300 dark:text-gray-600 cursor-default"
           : active
           ? "border-indigo-600 text-indigo-600 cursor-pointer"
-          : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 cursor-pointer",
+          : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600 cursor-pointer",
       ].join(" ")}
     >
       {icon}
-      {children}
+      <span className="hidden sm:inline">{children}</span>
     </button>
   );
 }

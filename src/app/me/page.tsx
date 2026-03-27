@@ -20,22 +20,22 @@ export default async function MePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-4 sm:px-6 h-14 flex items-center justify-between sticky top-0 z-10">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 h-14 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <Link
             href="/"
-            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M15 19l-7-7 7-7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             Projets
           </Link>
-          <span className="text-gray-200">|</span>
-          <span className="text-sm font-semibold text-gray-900">Mon espace</span>
+          <span className="text-gray-200 dark:text-gray-700">|</span>
+          <span className="text-sm font-semibold text-gray-900 dark:text-gray-50">Mon espace</span>
         </div>
-        <div className="flex items-center gap-2 border-l border-gray-200 pl-3">
+        <div className="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-3">
           {user.avatar ? (
             <img src={user.avatar} alt={user.name} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
           ) : (
@@ -43,9 +43,9 @@ export default async function MePage() {
               {user.name.charAt(0).toUpperCase() || "?"}
             </div>
           )}
-          <span className="hidden sm:block text-sm text-gray-700 max-w-[140px] truncate">{user.name}</span>
+          <span className="hidden sm:block text-sm text-gray-700 dark:text-gray-200 max-w-[140px] truncate">{user.name}</span>
           <form action={async () => { "use server"; await signOut({ redirectTo: "/login" }); }}>
-            <button type="submit" className="text-xs text-gray-400 hover:text-gray-600 transition-colors cursor-pointer ml-1">
+            <button type="submit" className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer ml-1">
               <span className="hidden sm:inline">Déconnexion</span>
               <svg className="sm:hidden w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

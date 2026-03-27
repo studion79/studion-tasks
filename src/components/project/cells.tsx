@@ -84,7 +84,7 @@ export function SelectCell({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center px-1 py-0.5 rounded hover:bg-gray-100 transition-colors cursor-pointer min-h-[24px]"
+        className="w-full flex items-center px-1 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer min-h-[24px]"
       >
         {current ? (
           <Badge label={current.label} className={current.color} />
@@ -93,7 +93,7 @@ export function SelectCell({
         )}
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[160px] py-1">
+        <div className="absolute top-full left-0 mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg min-w-[160px] py-1">
           {options.map((opt) => (
             <button
               key={opt.value}
@@ -101,8 +101,8 @@ export function SelectCell({
                 onSave(opt.value);
                 setOpen(false);
               }}
-              className={`w-full flex items-center px-3 py-1.5 hover:bg-gray-50 cursor-pointer ${
-                value === opt.value ? "bg-gray-50" : ""
+              className={`w-full flex items-center px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer ${
+                value === opt.value ? "bg-gray-50 dark:bg-gray-700" : ""
               }`}
             >
               <Badge label={opt.label} className={opt.color} />
@@ -114,7 +114,7 @@ export function SelectCell({
                 onSave(null);
                 setOpen(false);
               }}
-              className="w-full flex items-center px-3 py-1.5 hover:bg-gray-50 text-xs text-gray-400 border-t border-gray-100 mt-1 pt-1.5 cursor-pointer"
+              className="w-full flex items-center px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 text-xs text-gray-400 dark:text-gray-500 border-t border-gray-100 dark:border-gray-700 mt-1 pt-1.5 cursor-pointer"
             >
               Effacer
             </button>
@@ -168,7 +168,7 @@ export function TextCell({
           if (e.key === "Enter") save();
           if (e.key === "Escape") setEditing(false);
         }}
-        className="w-full bg-white border border-indigo-400 rounded px-2 py-0.5 text-xs text-gray-800 outline-none focus:ring-1 focus:ring-indigo-200"
+        className="w-full bg-white dark:bg-gray-700 border border-indigo-400 rounded px-2 py-0.5 text-xs text-gray-800 dark:text-gray-100 outline-none focus:ring-1 focus:ring-indigo-200"
       />
     );
   }
@@ -176,10 +176,10 @@ export function TextCell({
   return (
     <button
       onClick={() => setEditing(true)}
-      className="w-full text-left px-1 py-0.5 rounded hover:bg-gray-100 transition-colors cursor-pointer min-h-[24px] flex items-center"
+      className="w-full text-left px-1 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer min-h-[24px] flex items-center"
     >
       {value ? (
-        <span className="text-xs text-gray-800 truncate">
+        <span className="text-xs text-gray-800 dark:text-gray-100 truncate">
           {prefix}
           {value}
         </span>
@@ -226,7 +226,7 @@ export function DateCell({
             setEditing(false);
           }
         }}
-        className="bg-white border border-indigo-400 rounded px-2 py-0.5 text-xs outline-none w-full"
+        className="bg-white dark:bg-gray-700 dark:text-gray-100 border border-indigo-400 rounded px-2 py-0.5 text-xs outline-none w-full"
       />
     );
   }
@@ -234,12 +234,12 @@ export function DateCell({
   return (
     <button
       onClick={() => setEditing(true)}
-      className="w-full px-1 py-0.5 rounded hover:bg-gray-100 transition-colors cursor-pointer min-h-[24px] flex items-center"
+      className="w-full px-1 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer min-h-[24px] flex items-center"
     >
       {value ? (
         <span
           className={`text-xs ${
-            isOverdue ? "text-red-500 font-medium" : "text-gray-700"
+            isOverdue ? "text-red-500 font-medium" : "text-gray-700 dark:text-gray-300"
           }`}
         >
           {new Date(value + "T12:00:00").toLocaleDateString("fr-FR", {
@@ -321,10 +321,10 @@ export function TimelineCell({
         setEnd(parsed?.end ?? "");
         setEditing(true);
       }}
-      className="w-full px-1 py-0.5 rounded hover:bg-gray-100 transition-colors cursor-pointer min-h-[24px] flex items-center"
+      className="w-full px-1 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer min-h-[24px] flex items-center"
     >
       {parsed?.start || parsed?.end ? (
-        <span className="text-xs text-gray-700 whitespace-nowrap">
+        <span className="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
           {parsed.start &&
             new Date(parsed.start + "T12:00:00").toLocaleDateString("fr-FR", {
               day: "numeric",
@@ -391,7 +391,7 @@ export function OwnerCell({
     <div ref={ref} className="relative w-full">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full text-left text-xs text-gray-700 hover:bg-gray-50 rounded px-1 py-1 truncate transition-colors cursor-pointer"
+        className="w-full text-left text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded px-1 py-1 truncate transition-colors cursor-pointer"
       >
         {value ? (
           <span className="flex items-center gap-1.5">
@@ -412,8 +412,8 @@ export function OwnerCell({
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44 overflow-hidden">
-          <div className="p-2 border-b border-gray-100">
+        <div className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-50 w-44 overflow-hidden">
+          <div className="p-2 border-b border-gray-100 dark:border-gray-700">
             <input
               ref={inputRef}
               type="text"
@@ -424,7 +424,7 @@ export function OwnerCell({
                 if (e.key === "Escape") { setOpen(false); setDraft(value ?? ""); }
               }}
               placeholder="Nom…"
-              className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded-lg outline-none focus:border-indigo-400 transition-colors"
+              className="w-full text-xs px-2 py-1.5 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-50 dark:placeholder-gray-400 rounded-lg outline-none focus:border-indigo-400 transition-colors"
             />
           </div>
           <div className="max-h-40 overflow-y-auto py-1">
@@ -440,7 +440,7 @@ export function OwnerCell({
               <button
                 key={name}
                 onClick={() => commit(name)}
-                className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 hover:bg-indigo-50 transition-colors cursor-pointer ${value === name ? "text-indigo-600 font-medium" : "text-gray-700"}`}
+                className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors cursor-pointer ${value === name ? "text-indigo-600 dark:text-indigo-400 font-medium" : "text-gray-700 dark:text-gray-200"}`}
               >
                 <span className="w-5 h-5 rounded-full flex-shrink-0 overflow-hidden">
                   {memberAvatars[name] ? (
@@ -457,7 +457,7 @@ export function OwnerCell({
             {filtered.length === 0 && draft && (
               <button
                 onClick={() => commit(draft.trim())}
-                className="w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50 transition-colors cursor-pointer"
+                className="w-full text-left px-3 py-1.5 text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
               >
                 Utiliser «{draft}»
               </button>

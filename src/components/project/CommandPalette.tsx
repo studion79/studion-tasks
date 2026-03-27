@@ -213,9 +213,9 @@ export function CommandPalette({ project, onClose, onOpenTask, onSwitchTab, onAd
 
       {/* Palette */}
       <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] pointer-events-none px-4">
-        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-xl pointer-events-auto overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-xl pointer-events-auto overflow-hidden">
           {/* Search input */}
-          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-gray-100">
+          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-gray-100 dark:border-gray-700">
             <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M21 21l-4.35-4.35M17 11A6 6 0 111 11a6 6 0 0116 0z" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
@@ -226,21 +226,21 @@ export function CommandPalette({ project, onClose, onOpenTask, onSwitchTab, onAd
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Rechercher une tâche, une action…"
-              className="flex-1 text-sm text-gray-900 outline-none placeholder-gray-400"
+              className="flex-1 text-sm text-gray-900 dark:text-gray-50 bg-transparent outline-none placeholder-gray-400 dark:placeholder-gray-500"
             />
-            <kbd className="text-[10px] text-gray-400 border border-gray-200 rounded px-1.5 py-0.5 font-mono">Échap</kbd>
+            <kbd className="text-[10px] text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-600 rounded px-1.5 py-0.5 font-mono">Échap</kbd>
           </div>
 
           {/* Results */}
           <div ref={listRef} className="max-h-[60vh] overflow-y-auto py-1.5">
             {flatItems.length === 0 && (
-              <p className="text-sm text-gray-400 text-center py-8 italic">Aucun résultat</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8 italic">Aucun résultat</p>
             )}
 
             {/* Task results */}
             {taskResults.length > 0 && (
               <div>
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 py-1.5 pt-2">
+                <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-4 py-1.5 pt-2">
                   Tâches
                 </p>
                 {taskResults.map((r, i) => (
@@ -248,12 +248,12 @@ export function CommandPalette({ project, onClose, onOpenTask, onSwitchTab, onAd
                     key={r.task.id}
                     data-idx={i}
                     onClick={() => { onOpenTask(r.task, r.groupName, r.groupColor); onClose(); }}
-                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors cursor-pointer ${i === selectedIdx ? "bg-indigo-50" : "hover:bg-gray-50"}`}
+                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors cursor-pointer ${i === selectedIdx ? "bg-indigo-50 dark:bg-indigo-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-700"}`}
                   >
                     <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: r.groupColor }} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-800 truncate">{r.task.title}</p>
-                      <p className="text-[10px] text-gray-400">{r.groupName}</p>
+                      <p className="text-sm text-gray-800 dark:text-gray-100 truncate">{r.task.title}</p>
+                      <p className="text-[10px] text-gray-400 dark:text-gray-500">{r.groupName}</p>
                     </div>
                     <svg className="w-3.5 h-3.5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path d="M9 5l7 7-7 7" strokeWidth="1.5" strokeLinecap="round" />
@@ -266,7 +266,7 @@ export function CommandPalette({ project, onClose, onOpenTask, onSwitchTab, onAd
             {/* Action groups */}
             {Array.from(groupedActions.entries()).map(([groupLabel, groupActions]) => (
               <div key={groupLabel}>
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-4 py-1.5 pt-2">
+                <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-4 py-1.5 pt-2">
                   {groupLabel}
                 </p>
                 {groupActions.map((action) => {
@@ -276,12 +276,12 @@ export function CommandPalette({ project, onClose, onOpenTask, onSwitchTab, onAd
                       key={action.id}
                       data-idx={idx}
                       onClick={action.onSelect}
-                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors cursor-pointer ${idx === selectedIdx ? "bg-indigo-50" : "hover:bg-gray-50"}`}
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors cursor-pointer ${idx === selectedIdx ? "bg-indigo-50 dark:bg-indigo-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-700"}`}
                     >
-                      <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 ${idx === selectedIdx ? "bg-indigo-100 text-indigo-600" : "bg-gray-100 text-gray-500"}`}>
+                      <div className={`w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 ${idx === selectedIdx ? "bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}`}>
                         {action.icon}
                       </div>
-                      <span className="text-sm text-gray-700 flex-1 truncate">{action.label}</span>
+                      <span className="text-sm text-gray-700 dark:text-gray-200 flex-1 truncate">{action.label}</span>
                     </button>
                   );
                 })}
@@ -290,10 +290,10 @@ export function CommandPalette({ project, onClose, onOpenTask, onSwitchTab, onAd
           </div>
 
           {/* Footer hint */}
-          <div className="border-t border-gray-100 px-4 py-2 flex items-center gap-4 text-[10px] text-gray-400">
-            <span><kbd className="font-mono border border-gray-200 rounded px-1">↑↓</kbd> Naviguer</span>
-            <span><kbd className="font-mono border border-gray-200 rounded px-1">↵</kbd> Sélectionner</span>
-            <span><kbd className="font-mono border border-gray-200 rounded px-1">Échap</kbd> Fermer</span>
+          <div className="border-t border-gray-100 dark:border-gray-700 px-4 py-2 flex items-center gap-4 text-[10px] text-gray-400 dark:text-gray-500">
+            <span><kbd className="font-mono border border-gray-200 dark:border-gray-600 rounded px-1">↑↓</kbd> Naviguer</span>
+            <span><kbd className="font-mono border border-gray-200 dark:border-gray-600 rounded px-1">↵</kbd> Sélectionner</span>
+            <span><kbd className="font-mono border border-gray-200 dark:border-gray-600 rounded px-1">Échap</kbd> Fermer</span>
           </div>
         </div>
       </div>

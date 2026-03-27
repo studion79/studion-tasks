@@ -60,14 +60,14 @@ function KanbanCard({
       }}
       onClick={onOpen}
       className={[
-        "bg-white border rounded-xl p-3.5 cursor-grab active:cursor-grabbing",
-        "hover:shadow-md hover:border-gray-300 transition-all group/kcard select-none",
-        isDragging ? "opacity-40 border-indigo-300 shadow-none" : "border-gray-200",
+        "bg-white dark:bg-gray-800 border rounded-xl p-3.5 cursor-grab active:cursor-grabbing",
+        "hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 transition-all group/kcard select-none",
+        isDragging ? "opacity-40 border-indigo-300 shadow-none" : "border-gray-200 dark:border-gray-700",
       ].join(" ")}
     >
       {/* Title + delete */}
       <div className="flex items-start justify-between gap-2 mb-2.5">
-        <p className="text-sm font-medium text-gray-900 leading-snug flex-1 flex items-center gap-1 min-w-0">
+        <p className="text-sm font-medium text-gray-900 dark:text-gray-50 leading-snug flex-1 flex items-center gap-1 min-w-0">
           <span className="truncate min-w-0">{task.title}</span>
           <RecurrenceIcon recurrence={task.recurrence ?? null} />
         </p>
@@ -143,7 +143,7 @@ function AddTaskInline({
 
   if (active) {
     return (
-      <div className="bg-white border border-indigo-300 rounded-xl p-3">
+      <div className="bg-white dark:bg-gray-800 border border-indigo-300 rounded-xl p-3">
         <input
           ref={inputRef}
           value={draft}
@@ -154,7 +154,7 @@ function AddTaskInline({
           }}
           onBlur={submit}
           placeholder="Nom de la tâche…"
-          className="w-full text-sm text-gray-800 outline-none placeholder-gray-400"
+          className="w-full text-sm text-gray-800 dark:text-gray-100 outline-none placeholder-gray-400 dark:placeholder-gray-500 bg-transparent"
         />
       </div>
     );
@@ -334,7 +334,7 @@ export function ProjectKanbanView({ project }: { project: ProjectWithRelations }
               <div
                 className={[
                   "flex flex-col gap-2 min-h-[80px] rounded-xl p-2 transition-colors",
-                  isOver ? "bg-indigo-50 border border-dashed border-indigo-300" : "bg-gray-50/60",
+                  isOver ? "bg-indigo-50 dark:bg-indigo-900/20 border border-dashed border-indigo-300" : "bg-gray-50/60 dark:bg-gray-800/40",
                 ].join(" ")}
               >
                 {colTasks.map((task) => (

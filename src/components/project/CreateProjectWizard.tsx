@@ -74,8 +74,8 @@ function StepIndicator({ current }: { current: number }) {
                 step.id < current
                   ? "bg-indigo-600 text-white"
                   : step.id === current
-                  ? "bg-indigo-600 text-white ring-4 ring-indigo-100"
-                  : "bg-gray-100 text-gray-400",
+                  ? "bg-indigo-600 text-white ring-4 ring-indigo-100 dark:ring-indigo-900"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500",
               ].join(" ")}
             >
               {step.id < current ? (
@@ -99,7 +99,7 @@ function StepIndicator({ current }: { current: number }) {
             <div
               className={[
                 "h-0.5 w-8 sm:w-16 mx-1 -mt-5 transition-all",
-                step.id < current ? "bg-indigo-600" : "bg-gray-200",
+                step.id < current ? "bg-indigo-600" : "bg-gray-200 dark:bg-gray-700",
               ].join(" ")}
             />
           )}
@@ -120,11 +120,11 @@ function Step1({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">Informations de base</h2>
-        <p className="text-sm text-gray-500 mt-1">Donnez un nom à votre projet.</p>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">Informations de base</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Donnez un nom à votre projet.</p>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
           Nom du projet <span className="text-red-500">*</span>
         </label>
         <input
@@ -133,7 +133,7 @@ function Step1({
           onChange={(e) => onChange(e.target.value)}
           placeholder="Ex : Campagne Q2, Refonte site, Lancement produit…"
           autoFocus
-          className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 placeholder-gray-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all"
+          className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2.5 text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900 transition-all"
         />
       </div>
     </div>
@@ -159,8 +159,8 @@ function Step2({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">Colonnes du tableau</h2>
-        <p className="text-sm text-gray-500 mt-1">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">Colonnes du tableau</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           Choisissez les informations à afficher pour chaque tâche.
         </p>
       </div>
@@ -175,14 +175,14 @@ function Step2({
               className={[
                 "flex items-start gap-3 rounded-lg border p-4 text-left transition-all cursor-pointer",
                 isSelected
-                  ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200"
-                  : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50",
+                  ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 ring-1 ring-indigo-200 dark:ring-indigo-700"
+                  : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700",
               ].join(" ")}
             >
               <div
                 className={[
                   "mt-0.5 w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-all",
-                  isSelected ? "bg-indigo-600 border-indigo-600" : "border-gray-300",
+                  isSelected ? "bg-indigo-600 border-indigo-600" : "border-gray-300 dark:border-gray-600",
                 ].join(" ")}
               >
                 {isSelected && (
@@ -192,10 +192,10 @@ function Step2({
                 )}
               </div>
               <div>
-                <p className={["text-sm font-medium", isSelected ? "text-indigo-700" : "text-gray-800"].join(" ")}>
+                <p className={["text-sm font-medium", isSelected ? "text-indigo-700 dark:text-indigo-300" : "text-gray-800 dark:text-gray-100"].join(" ")}>
                   {col.label}
                 </p>
-                <p className="text-xs text-gray-500 mt-0.5">{col.description}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{col.description}</p>
               </div>
             </button>
           );
@@ -221,8 +221,8 @@ function Step3({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">Vue principale</h2>
-        <p className="text-sm text-gray-500 mt-1">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">Vue principale</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           Choisissez comment vous voulez visualiser vos tâches par défaut.
         </p>
       </div>
@@ -238,23 +238,23 @@ function Step3({
               className={[
                 "flex flex-col items-center gap-3 rounded-xl border p-5 text-center transition-all cursor-pointer",
                 isSelected
-                  ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200"
-                  : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50",
+                  ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 ring-1 ring-indigo-200 dark:ring-indigo-700"
+                  : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700",
               ].join(" ")}
             >
               <div
                 className={[
                   "w-10 h-10 rounded-lg flex items-center justify-center",
-                  isSelected ? "bg-indigo-100 text-indigo-600" : "bg-gray-100 text-gray-500",
+                  isSelected ? "bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400",
                 ].join(" ")}
               >
                 <Icon />
               </div>
               <div>
-                <p className={["text-sm font-semibold", isSelected ? "text-indigo-700" : "text-gray-800"].join(" ")}>
+                <p className={["text-sm font-semibold", isSelected ? "text-indigo-700 dark:text-indigo-300" : "text-gray-800 dark:text-gray-100"].join(" ")}>
                   {view.label}
                 </p>
-                <p className="text-xs text-gray-500 mt-0.5">{view.description}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{view.description}</p>
               </div>
               {isSelected && (
                 <span className="text-xs font-medium text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full">
@@ -288,8 +288,8 @@ function Step4({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900">Dashboard initial</h2>
-        <p className="text-sm text-gray-500 mt-1">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">Dashboard initial</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
           Sélectionnez les indicateurs à afficher dans le dashboard du projet.
         </p>
       </div>
@@ -304,14 +304,14 @@ function Step4({
               className={[
                 "w-full flex items-center gap-4 rounded-lg border p-4 text-left transition-all cursor-pointer",
                 isSelected
-                  ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-200"
-                  : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50",
+                  ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 ring-1 ring-indigo-200 dark:ring-indigo-700"
+                  : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700",
               ].join(" ")}
             >
               <div
                 className={[
                   "w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-all",
-                  isSelected ? "bg-indigo-600 border-indigo-600" : "border-gray-300",
+                  isSelected ? "bg-indigo-600 border-indigo-600" : "border-gray-300 dark:border-gray-600",
                 ].join(" ")}
               >
                 {isSelected && (
@@ -321,10 +321,10 @@ function Step4({
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className={["text-sm font-medium", isSelected ? "text-indigo-700" : "text-gray-800"].join(" ")}>
+                <p className={["text-sm font-medium", isSelected ? "text-indigo-700 dark:text-indigo-300" : "text-gray-800 dark:text-gray-100"].join(" ")}>
                   {widget.label}
                 </p>
-                <p className="text-xs text-gray-500 mt-0.5">{widget.description}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{widget.description}</p>
               </div>
             </button>
           );
@@ -371,17 +371,17 @@ export function CreateProjectWizard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 sm:p-6">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-2xl">
         {/* Header */}
         <div className="mb-6 sm:mb-8 text-center">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Créer un projet</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-50">Créer un projet</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Configurez votre espace de travail en quelques étapes.
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 sm:p-8">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-5 sm:p-8">
           <div className="flex justify-center">
             <StepIndicator current={step} />
           </div>
@@ -399,7 +399,7 @@ export function CreateProjectWizard() {
           )}
 
           {/* Navigation */}
-          <div className="mt-6 sm:mt-8 flex items-center justify-between border-t border-gray-100 pt-5 sm:pt-6">
+          <div className="mt-6 sm:mt-8 flex items-center justify-between border-t border-gray-100 dark:border-gray-700 pt-5 sm:pt-6">
             <Button
               variant="ghost"
               onClick={() => setStep((s) => s - 1)}
@@ -408,7 +408,7 @@ export function CreateProjectWizard() {
               ← Retour
             </Button>
             <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-400">{step} / {STEPS.length}</span>
+              <span className="text-xs text-gray-400 dark:text-gray-500">{step} / {STEPS.length}</span>
               <Button onClick={handleNext} disabled={!canNext} loading={isPending}>
                 {step === 4 ? "Créer le projet" : "Suivant →"}
               </Button>

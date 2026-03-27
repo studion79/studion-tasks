@@ -28,7 +28,7 @@ type Comment = { id: string; author: string; content: string; createdAt: Date };
 // --- Render comment content with @mention highlights ---
 function CommentContent({ content, memberNames }: { content: string; memberNames: string[] }) {
   if (memberNames.length === 0) {
-    return <p className="text-sm text-gray-700 leading-snug whitespace-pre-wrap">{content}</p>;
+    return <p className="text-sm text-gray-700 dark:text-gray-300 leading-snug whitespace-pre-wrap">{content}</p>;
   }
   // Build a regex from actual member names (longest first to avoid partial matches)
   const sorted = [...memberNames].sort((a, b) => b.length - a.length);
@@ -36,13 +36,13 @@ function CommentContent({ content, memberNames }: { content: string; memberNames
   const pattern = new RegExp(`(@(?:${escaped.join("|")}))`, "gi");
   const parts = content.split(pattern);
   return (
-    <p className="text-sm text-gray-700 leading-snug whitespace-pre-wrap">
+    <p className="text-sm text-gray-700 dark:text-gray-300 leading-snug whitespace-pre-wrap">
       {parts.map((part, i) => {
         const isMention =
           part.startsWith("@") &&
           memberNames.some((m) => m.toLowerCase() === part.slice(1).toLowerCase());
         return isMention ? (
-          <span key={i} className="inline-flex items-center bg-indigo-50 text-indigo-600 font-medium rounded px-1 text-xs py-0.5 mx-0.5">
+          <span key={i} className="inline-flex items-center bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-medium rounded px-1 text-xs py-0.5 mx-0.5">
             {part}
           </span>
         ) : (
@@ -98,17 +98,17 @@ function RecurrenceSection({ taskId, initialRecurrence }: { taskId: string; init
   };
 
   return (
-    <div className="border-t border-gray-100">
+    <div className="border-t border-gray-100 dark:border-gray-700">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 w-full px-5 py-3 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50/60 transition-colors cursor-pointer"
+        className="flex items-center gap-2 w-full px-5 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50/60 dark:hover:bg-gray-700/40 transition-colors cursor-pointer"
       >
-        <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
         Récurrence
         {config && (
-          <span className="ml-1 text-[10px] bg-indigo-100 text-indigo-600 rounded-full px-2 py-0.5">
+          <span className="ml-1 text-[10px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-full px-2 py-0.5">
             Tous les {config.interval} {FREQ_LABELS[config.frequency]}
           </span>
         )}
@@ -122,19 +122,19 @@ function RecurrenceSection({ taskId, initialRecurrence }: { taskId: string; init
           {config ? (
             <>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-gray-600">Répéter tous les</span>
+                <span className="text-xs text-gray-600 dark:text-gray-400">Répéter tous les</span>
                 <input
                   type="number"
                   min={1}
                   max={99}
                   value={config.interval}
                   onChange={(e) => handleChange({ ...config, interval: Math.max(1, parseInt(e.target.value) || 1) })}
-                  className="w-14 text-xs border border-gray-200 rounded-lg px-2 py-1 outline-none focus:border-indigo-400 text-center"
+                  className="w-14 text-xs text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 outline-none focus:border-indigo-400 text-center"
                 />
                 <select
                   value={config.frequency}
                   onChange={(e) => handleChange({ ...config, frequency: e.target.value as RecurrenceConfig["frequency"] })}
-                  className="text-xs border border-gray-200 rounded-lg px-2 py-1 outline-none focus:border-indigo-400 cursor-pointer bg-white"
+                  className="text-xs text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 outline-none focus:border-indigo-400 cursor-pointer"
                 >
                   <option value="daily">Jour(s)</option>
                   <option value="weekly">Semaine(s)</option>
@@ -147,7 +147,7 @@ function RecurrenceSection({ taskId, initialRecurrence }: { taskId: string; init
                   Supprimer
                 </button>
               </div>
-              <p className="text-[10px] text-gray-400">
+              <p className="text-[10px] text-gray-400 dark:text-gray-500">
                 {status === "saving" && "Sauvegarde…"}
                 {status === "saved" && "✓ Sauvegardé"}
                 {status === "error" && "Erreur lors de la sauvegarde"}
@@ -216,17 +216,17 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
   const isImage = (mime: string) => mime.startsWith("image/");
 
   return (
-    <div className="border-t border-gray-100">
+    <div className="border-t border-gray-100 dark:border-gray-700">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 w-full px-5 py-3 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50/60 transition-colors cursor-pointer"
+        className="flex items-center gap-2 w-full px-5 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50/60 dark:hover:bg-gray-700/40 transition-colors cursor-pointer"
       >
-        <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
         Pièces jointes
         {loaded && attachments.length > 0 && (
-          <span className="ml-1 text-[10px] bg-gray-100 text-gray-500 rounded-full px-2 py-0.5 leading-none">
+          <span className="ml-1 text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-full px-2 py-0.5 leading-none">
             {attachments.length}
           </span>
         )}
@@ -240,10 +240,10 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
           {attachments.map((a) => (
             <div key={a.id} className="flex items-center gap-2.5 group">
               {isImage(a.mimetype) ? (
-                <img src={a.path} alt={a.filename} className="w-8 h-8 rounded object-cover flex-shrink-0 border border-gray-100" />
+                <img src={a.path} alt={a.filename} className="w-8 h-8 rounded object-cover flex-shrink-0 border border-gray-100 dark:border-gray-700" />
               ) : (
-                <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-8 h-8 rounded bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" strokeWidth="1.5" strokeLinecap="round" />
                   </svg>
                 </div>
@@ -252,11 +252,11 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
                 <a href={a.path} download={a.filename} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium truncate block">
                   {a.filename}
                 </a>
-                <p className="text-[10px] text-gray-400">{formatSize(a.filesize)}</p>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500">{formatSize(a.filesize)}</p>
               </div>
               <button
                 onClick={() => handleDelete(a.id)}
-                className="opacity-0 group-hover:opacity-100 p-1 text-gray-300 hover:text-red-400 transition-all cursor-pointer"
+                className="opacity-0 group-hover:opacity-100 p-1 text-gray-300 dark:text-gray-600 hover:text-red-400 transition-all cursor-pointer"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" strokeWidth="1.5" strokeLinecap="round" />
@@ -367,17 +367,17 @@ function DependenciesSection({ taskId, projectId }: { taskId: string; projectId:
   };
 
   return (
-    <div className="mt-2 pt-2 border-t border-gray-100">
+    <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2 hover:text-gray-600 transition-colors cursor-pointer"
+        className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
       >
         <svg className={`w-3 h-3 transition-transform ${expanded ? "rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="M9 18l6-6-6-6" strokeWidth="2" strokeLinecap="round" />
         </svg>
         Dépendances
         {(blockedBy.length > 0 || blocking.length > 0) && (
-          <span className="ml-1 bg-indigo-100 text-indigo-600 text-[10px] font-bold rounded-full px-1.5">
+          <span className="ml-1 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold rounded-full px-1.5">
             {blockedBy.length + blocking.length}
           </span>
         )}
@@ -388,7 +388,7 @@ function DependenciesSection({ taskId, projectId }: { taskId: string; projectId:
           {/* Bloqué par */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Bloqué par</span>
+              <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Bloqué par</span>
               <button
                 onClick={() => { setAddingMode("blockedBy"); setShowAddBlockedBy((v) => !v); setShowAddBlocking(false); setQuery(""); }}
                 className="text-[10px] text-indigo-500 hover:text-indigo-700 cursor-pointer"
@@ -397,19 +397,19 @@ function DependenciesSection({ taskId, projectId }: { taskId: string; projectId:
               </button>
             </div>
             {blockedBy.length === 0 && !showAddBlockedBy && (
-              <p className="text-xs text-gray-300 italic">Aucun bloquant</p>
+              <p className="text-xs text-gray-300 dark:text-gray-600 italic">Aucun bloquant</p>
             )}
             {blockedBy.map((dep) => (
               <div key={dep.id} className="flex items-center gap-1.5 py-0.5 group">
-                <div className="w-4 h-4 rounded-sm bg-red-100 flex items-center justify-center flex-shrink-0">
+                <div className="w-4 h-4 rounded-sm bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
                   <svg className="w-2.5 h-2.5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path d="M12 15V9m0 0l-3 3m3-3l3 3" strokeWidth="2" strokeLinecap="round" />
                   </svg>
                 </div>
-                <span className="text-xs text-gray-600 flex-1 truncate">{dep.title}</span>
+                <span className="text-xs text-gray-600 dark:text-gray-400 flex-1 truncate">{dep.title}</span>
                 <button
                   onClick={() => handleRemoveBlockedBy(dep.id)}
-                  className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all cursor-pointer"
+                  className="opacity-0 group-hover:opacity-100 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-all cursor-pointer"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path d="M6 18L18 6M6 6l12 12" strokeWidth="2" strokeLinecap="round" />
@@ -431,7 +431,7 @@ function DependenciesSection({ taskId, projectId }: { taskId: string; projectId:
           {/* Bloque */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Bloque</span>
+              <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Bloque</span>
               <button
                 onClick={() => { setAddingMode("blocking"); setShowAddBlocking((v) => !v); setShowAddBlockedBy(false); setQuery(""); }}
                 className="text-[10px] text-indigo-500 hover:text-indigo-700 cursor-pointer"
@@ -440,19 +440,19 @@ function DependenciesSection({ taskId, projectId }: { taskId: string; projectId:
               </button>
             </div>
             {blocking.length === 0 && !showAddBlocking && (
-              <p className="text-xs text-gray-300 italic">Ne bloque aucune tâche</p>
+              <p className="text-xs text-gray-300 dark:text-gray-600 italic">Ne bloque aucune tâche</p>
             )}
             {blocking.map((dep) => (
               <div key={dep.id} className="flex items-center gap-1.5 py-0.5 group">
-                <div className="w-4 h-4 rounded-sm bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <div className="w-4 h-4 rounded-sm bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
                   <svg className="w-2.5 h-2.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path d="M12 9v6m0 0l-3-3m3 3l3-3" strokeWidth="2" strokeLinecap="round" />
                   </svg>
                 </div>
-                <span className="text-xs text-gray-600 flex-1 truncate">{dep.title}</span>
+                <span className="text-xs text-gray-600 dark:text-gray-400 flex-1 truncate">{dep.title}</span>
                 <button
                   onClick={() => handleRemoveBlocking(dep.id)}
-                  className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all cursor-pointer"
+                  className="opacity-0 group-hover:opacity-100 text-gray-300 dark:text-gray-600 hover:text-red-500 transition-all cursor-pointer"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path d="M6 18L18 6M6 6l12 12" strokeWidth="2" strokeLinecap="round" />
@@ -490,7 +490,7 @@ function DepSearchBox({
   onCancel: () => void;
 }) {
   return (
-    <div className="mt-1.5 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+    <div className="mt-1.5 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden shadow-sm">
       <input
         autoFocus
         type="text"
@@ -498,17 +498,17 @@ function DepSearchBox({
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}
         placeholder="Chercher une tâche…"
-        className="w-full px-3 py-1.5 text-xs border-b border-gray-100 outline-none"
+        className="w-full px-3 py-1.5 text-xs text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 outline-none placeholder-gray-400 dark:placeholder-gray-500"
       />
-      <div className="max-h-32 overflow-y-auto">
+      <div className="max-h-32 overflow-y-auto bg-white dark:bg-gray-800">
         {tasks.length === 0 ? (
-          <p className="text-xs text-gray-400 italic px-3 py-2">Aucune tâche correspondante</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 italic px-3 py-2">Aucune tâche correspondante</p>
         ) : (
           tasks.slice(0, 8).map((t) => (
             <button
               key={t.id}
               onMouseDown={() => onSelect(t.id)}
-              className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors cursor-pointer"
+              className="w-full text-left px-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:text-indigo-700 dark:hover:text-indigo-400 transition-colors cursor-pointer"
             >
               {t.title}
             </button>
@@ -560,10 +560,10 @@ function ActivitySection({ taskId }: { taskId: string }) {
   };
 
   return (
-    <div className="mt-2 pt-2 border-t border-gray-100">
+    <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2 hover:text-gray-600 transition-colors cursor-pointer"
+        className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
       >
         <svg className={`w-3 h-3 transition-transform ${expanded ? "rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="M9 18l6-6-6-6" strokeWidth="2" strokeLinecap="round" />
@@ -574,20 +574,20 @@ function ActivitySection({ taskId }: { taskId: string }) {
       {expanded && (
         <div className="space-y-2">
           {!loaded ? (
-            <p className="text-xs text-gray-300 italic">Chargement…</p>
+            <p className="text-xs text-gray-300 dark:text-gray-600 italic">Chargement…</p>
           ) : logs.length === 0 ? (
-            <p className="text-xs text-gray-400 italic">Aucune activité enregistrée.</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 italic">Aucune activité enregistrée.</p>
           ) : (
             logs.map((log) => (
-              <div key={log.id} className="flex items-start gap-2 text-xs text-gray-500">
-                <div className="w-4 h-4 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-[8px] font-bold text-gray-400">{log.actor.charAt(0).toUpperCase()}</span>
+              <div key={log.id} className="flex items-start gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <div className="w-4 h-4 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-[8px] font-bold text-gray-400 dark:text-gray-500">{log.actor.charAt(0).toUpperCase()}</span>
                 </div>
                 <span className="flex-1 min-w-0">
-                  <span className="font-medium text-gray-600">{log.actor}</span>
+                  <span className="font-medium text-gray-600 dark:text-gray-300">{log.actor}</span>
                   {" "}{describe(log)}
                 </span>
-                <span className="text-gray-300 flex-shrink-0">{fmt(log.createdAt)}</span>
+                <span className="text-gray-300 dark:text-gray-600 flex-shrink-0">{fmt(log.createdAt)}</span>
               </div>
             ))
           )}
@@ -691,14 +691,14 @@ function CommentsSection({ taskId }: { taskId: string }) {
   const authorAvatar = session?.user?.image ?? null;
 
   return (
-    <div className="mt-4 pt-4 border-t border-gray-100">
-      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">
+    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+      <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
         Commentaires
       </p>
 
       {/* Comment list */}
       {loaded && comments.length === 0 && (
-        <p className="text-xs text-gray-400 italic mb-3">Aucun commentaire pour l'instant.</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 italic mb-3">Aucun commentaire pour l'instant.</p>
       )}
       <div className="space-y-3 mb-3">
         {comments.map((c) => (
@@ -707,15 +707,15 @@ function CommentsSection({ taskId }: { taskId: string }) {
               {memberAvatars[c.author] ? (
                 <img src={memberAvatars[c.author]!} alt={c.author} className="w-full h-full object-cover rounded-full" />
               ) : (
-                <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center">
-                  <span className="text-[10px] font-bold text-indigo-600 uppercase">{c.author.charAt(0)}</span>
+                <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
+                  <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">{c.author.charAt(0)}</span>
                 </div>
               )}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-2 mb-0.5">
-                <span className="text-xs font-semibold text-gray-800">{c.author}</span>
-                <span className="text-[10px] text-gray-400">{formatTime(c.createdAt)}</span>
+                <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{c.author}</span>
+                <span className="text-[10px] text-gray-400 dark:text-gray-500">{formatTime(c.createdAt)}</span>
               </div>
               <CommentContent content={c.content} memberNames={memberNames} />
             </div>
@@ -755,23 +755,23 @@ function CommentsSection({ taskId }: { taskId: string }) {
             }}
             placeholder={memberNames.length > 0 ? "Écrire un commentaire… (@nom pour mentionner)" : "Écrire un commentaire… (Entrée pour envoyer)"}
             rows={2}
-            className="w-full text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-indigo-400 focus:bg-white transition-colors resize-none placeholder-gray-300"
+            className="w-full text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 outline-none focus:border-indigo-400 focus:bg-white dark:focus:bg-gray-600 transition-colors resize-none placeholder-gray-300 dark:placeholder-gray-500"
           />
 
           {/* @mention dropdown */}
           {mentionQuery !== null && filteredMembers.length > 0 && (
-            <div className="absolute bottom-full left-0 mb-1 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-50 w-48">
+            <div className="absolute bottom-full left-0 mb-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 z-50 w-48">
               {filteredMembers.slice(0, 6).map((name) => (
                 <button
                   key={name}
                   onMouseDown={(e) => { e.preventDefault(); insertMention(name); }}
-                  className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-indigo-50 flex items-center gap-2 transition-colors cursor-pointer"
+                  className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 flex items-center gap-2 transition-colors cursor-pointer"
                 >
                   <span className="w-5 h-5 rounded-full flex-shrink-0 overflow-hidden">
                     {memberAvatars[name] ? (
                       <img src={memberAvatars[name]!} alt={name} className="w-full h-full object-cover rounded-full" />
                     ) : (
-                      <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 font-bold text-[10px] flex items-center justify-center">
+                      <span className="w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 font-bold text-[10px] flex items-center justify-center">
                         {name.charAt(0).toUpperCase()}
                       </span>
                     )}
@@ -813,7 +813,7 @@ function NotesField({
       onBlur={save}
       placeholder="Ajouter des notes…"
       rows={4}
-      className="w-full text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-indigo-400 focus:bg-white transition-colors resize-none placeholder-gray-300"
+      className="w-full text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 outline-none focus:border-indigo-400 focus:bg-white dark:focus:bg-gray-600 transition-colors resize-none placeholder-gray-300 dark:placeholder-gray-500"
     />
   );
 }
@@ -894,8 +894,8 @@ function SubtasksSection({
   return (
     <div className="mt-5 mb-2">
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-          Sous-tâches {subtasks.length > 0 && <span className="font-normal normal-case text-gray-400">({doneCount}/{subtasks.length})</span>}
+        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+          Sous-tâches {subtasks.length > 0 && <span className="font-normal normal-case text-gray-400 dark:text-gray-500">({doneCount}/{subtasks.length})</span>}
         </p>
         <button
           onClick={() => setAddingNew(true)}
@@ -916,7 +916,7 @@ function SubtasksSection({
               <div key={sub.id} className="flex items-center gap-2 group/sub py-0.5">
                 <button
                   onClick={() => handleToggle(sub.id)}
-                  className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors cursor-pointer ${done ? "bg-indigo-500 border-indigo-500" : "border-gray-300 hover:border-indigo-400"}`}
+                  className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors cursor-pointer ${done ? "bg-indigo-500 border-indigo-500" : "border-gray-300 dark:border-gray-600 hover:border-indigo-400"}`}
                 >
                   {done && (
                     <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -924,7 +924,7 @@ function SubtasksSection({
                     </svg>
                   )}
                 </button>
-                <span className={`flex-1 text-sm ${done ? "line-through text-gray-400" : "text-gray-700"}`}>
+                <span className={`flex-1 text-sm ${done ? "line-through text-gray-400 dark:text-gray-500" : "text-gray-700 dark:text-gray-300"}`}>
                   {sub.title}
                 </span>
                 <button
@@ -943,7 +943,7 @@ function SubtasksSection({
 
       {addingNew && (
         <div className="flex items-center gap-2 mt-1">
-          <div className="w-4 h-4 rounded border border-gray-200 flex-shrink-0" />
+          <div className="w-4 h-4 rounded border border-gray-200 dark:border-gray-600 flex-shrink-0" />
           <input
             ref={inputRef}
             value={draft}
@@ -954,7 +954,7 @@ function SubtasksSection({
             }}
             onBlur={handleAdd}
             placeholder="Titre de la sous-tâche…"
-            className="flex-1 text-sm text-gray-700 outline-none border-b border-indigo-300 pb-0.5 bg-transparent placeholder-gray-300 focus:placeholder-gray-200"
+            className="flex-1 text-sm text-gray-700 dark:text-gray-300 outline-none border-b border-indigo-300 pb-0.5 bg-transparent placeholder-gray-300 dark:placeholder-gray-600 focus:placeholder-gray-200"
           />
         </div>
       )}
@@ -962,7 +962,7 @@ function SubtasksSection({
       {subtasks.length === 0 && !addingNew && (
         <button
           onClick={() => setAddingNew(true)}
-          className="w-full border border-dashed border-gray-200 rounded-lg py-2 text-xs text-gray-400 hover:text-indigo-500 hover:border-indigo-300 transition-colors cursor-pointer"
+          className="w-full border border-dashed border-gray-200 dark:border-gray-700 rounded-lg py-2 text-xs text-gray-400 dark:text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors cursor-pointer"
         >
           + Ajouter une sous-tâche
         </button>
@@ -1011,8 +1011,8 @@ function FieldRow({
   };
 
   return (
-    <div className="flex items-start gap-4 py-2.5 px-2 rounded-lg hover:bg-gray-50 -mx-2 transition-colors group/field">
-      <div className="w-24 flex-shrink-0 text-[11px] font-semibold text-gray-400 uppercase tracking-wider pt-1.5">
+    <div className="flex items-start gap-4 py-2.5 px-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/40 -mx-2 transition-colors group/field">
+      <div className="w-24 flex-shrink-0 text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider pt-1.5">
         {label}
       </div>
       <div className="flex-1 min-w-0">{renderField()}</div>
@@ -1102,13 +1102,13 @@ export function TaskDetailPanel({
       <div
         className={[
           "fixed right-0 top-0 bottom-0 w-full sm:w-[480px] z-50",
-          "bg-white shadow-2xl sm:border-l border-gray-200 flex flex-col",
+          "bg-white dark:bg-gray-800 shadow-2xl sm:border-l border-gray-200 dark:border-gray-700 flex flex-col",
           "transition-transform duration-200 ease-out",
           visible ? "translate-x-0" : "translate-x-full",
         ].join(" ")}
       >
         {/* Header */}
-        <div className="px-6 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
+        <div className="px-6 pt-5 pb-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0">
               <input
@@ -1126,7 +1126,7 @@ export function TaskDetailPanel({
                     titleRef.current?.blur();
                   }
                 }}
-                className="w-full text-[17px] font-semibold text-gray-900 outline-none bg-transparent leading-snug border-b border-transparent hover:border-gray-200 focus:border-indigo-400 transition-colors pb-0.5 placeholder-gray-300"
+                className="w-full text-[17px] font-semibold text-gray-900 dark:text-gray-50 outline-none bg-transparent leading-snug border-b border-transparent hover:border-gray-200 dark:hover:border-gray-600 focus:border-indigo-400 transition-colors pb-0.5 placeholder-gray-300 dark:placeholder-gray-600"
                 placeholder="Titre de la tâche"
               />
               <div className="flex items-center gap-1.5 mt-2">
@@ -1134,12 +1134,12 @@ export function TaskDetailPanel({
                   className="w-2 h-2 rounded-full flex-shrink-0"
                   style={{ backgroundColor: groupColor }}
                 />
-                <span className="text-xs text-gray-400">{groupName}</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">{groupName}</span>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors cursor-pointer flex-shrink-0 mt-0.5"
+              className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-pointer flex-shrink-0 mt-0.5"
               title="Fermer (Échap)"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1152,7 +1152,7 @@ export function TaskDetailPanel({
         {/* Fields + Comments */}
         <div className="flex-1 overflow-y-auto px-6 py-2">
           {columns.length === 0 ? (
-            <p className="text-sm text-gray-400 py-6 text-center">
+            <p className="text-sm text-gray-400 dark:text-gray-500 py-6 text-center">
               Aucun champ actif dans ce projet.
             </p>
           ) : (
@@ -1184,12 +1184,12 @@ export function TaskDetailPanel({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-between flex-shrink-0">
+        <div className="px-6 py-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
             {onDuplicate && (
               <button
                 onClick={() => { onDuplicate(); onClose(); }}
-                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 px-2.5 py-1.5 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer border border-transparent hover:border-indigo-200"
+                className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 px-2.5 py-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer border border-transparent hover:border-indigo-200 dark:hover:border-indigo-700"
                 title="Dupliquer la tâche"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1202,7 +1202,7 @@ export function TaskDetailPanel({
             {onArchive && (
               <button
                 onClick={() => { onArchive(); onClose(); }}
-                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-amber-600 px-2.5 py-1.5 rounded-lg hover:bg-amber-50 transition-colors cursor-pointer border border-transparent hover:border-amber-200"
+                className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-amber-600 px-2.5 py-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors cursor-pointer border border-transparent hover:border-amber-200 dark:hover:border-amber-700"
                 title="Archiver la tâche"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1213,8 +1213,8 @@ export function TaskDetailPanel({
             )}
           </div>
           <div className="flex flex-col items-end gap-0.5">
-            <span className="text-[11px] text-gray-400">Créé le {fmtDate(task.createdAt)}</span>
-            <span className="text-[11px] text-gray-400">Modifié le {fmtDate(task.updatedAt)}</span>
+            <span className="text-[11px] text-gray-400 dark:text-gray-500">Créé le {fmtDate(task.createdAt)}</span>
+            <span className="text-[11px] text-gray-400 dark:text-gray-500">Modifié le {fmtDate(task.updatedAt)}</span>
           </div>
         </div>
       </div>

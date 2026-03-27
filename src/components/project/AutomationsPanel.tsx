@@ -123,14 +123,14 @@ export function AutomationsPanel({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">Automatisations</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Règles déclenchées automatiquement lors de modifications</p>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Automatisations</h2>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Règles déclenchées automatiquement lors de modifications</p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer">
+          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M6 18L18 6M6 6l12 12" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
@@ -153,17 +153,17 @@ export function AutomationsPanel({
             </div>
           ) : (
             automations?.map((auto) => (
-              <div key={auto.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 group">
+              <div key={auto.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border border-gray-100 dark:border-gray-700 group">
                 <button
                   onClick={() => handleToggle(auto.id, !auto.isActive)}
-                  className={`relative w-8 h-4.5 h-[18px] rounded-full transition-colors cursor-pointer flex-shrink-0 ${auto.isActive ? "bg-indigo-500" : "bg-gray-300"}`}
+                  className={`relative w-8 h-4.5 h-[18px] rounded-full transition-colors cursor-pointer flex-shrink-0 ${auto.isActive ? "bg-indigo-500" : "bg-gray-300 dark:bg-gray-600"}`}
                   title={auto.isActive ? "Désactiver" : "Activer"}
                 >
                   <span className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-all ${auto.isActive ? "left-[18px]" : "left-0.5"}`} />
                 </button>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{auto.name}</p>
-                  <p className="text-xs text-gray-400 truncate">{describeAutomation(auto.trigger, auto.action)}</p>
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{auto.name}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{describeAutomation(auto.trigger, auto.action)}</p>
                 </div>
                 <button
                   onClick={() => handleDelete(auto.id)}
@@ -179,13 +179,13 @@ export function AutomationsPanel({
 
           {/* Create form */}
           {showForm && (
-            <div className="border border-indigo-200 bg-indigo-50/40 rounded-xl p-4 space-y-3 mt-2">
+            <div className="border border-indigo-200 dark:border-indigo-700 bg-indigo-50/40 dark:bg-indigo-900/20 rounded-xl p-4 space-y-3 mt-2">
               <input
                 type="text"
                 placeholder="Nom de la règle (ex. Clôture auto)"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-indigo-400 bg-white"
+                className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 outline-none focus:border-indigo-400 bg-white dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-500"
                 autoFocus
               />
               <div className="flex items-center gap-2 flex-wrap">
@@ -196,7 +196,7 @@ export function AutomationsPanel({
                     setTriggerField(e.target.value);
                     setTriggerValue(getValuesFor(e.target.value)[0]?.value ?? "");
                   }}
-                  className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white outline-none focus:border-indigo-400 cursor-pointer"
+                  className="text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 dark:text-gray-100 outline-none focus:border-indigo-400 cursor-pointer"
                 >
                   {Object.entries(FIELD_LABELS).map(([k, v]) => (
                     <option key={k} value={k}>{v}</option>
@@ -206,7 +206,7 @@ export function AutomationsPanel({
                 <select
                   value={triggerValue}
                   onChange={(e) => setTriggerValue(e.target.value)}
-                  className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white outline-none focus:border-indigo-400 cursor-pointer"
+                  className="text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 dark:text-gray-100 outline-none focus:border-indigo-400 cursor-pointer"
                 >
                   {triggerValues.map((v) => (
                     <option key={v.value} value={v.value}>{v.label}</option>
@@ -218,7 +218,7 @@ export function AutomationsPanel({
                 <select
                   value={actionType}
                   onChange={(e) => setActionType(e.target.value as "SET_FIELD" | "NOTIFY_OWNER")}
-                  className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white outline-none focus:border-indigo-400 cursor-pointer"
+                  className="text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 dark:text-gray-100 outline-none focus:border-indigo-400 cursor-pointer"
                 >
                   <option value="SET_FIELD">Définir un champ</option>
                   <option value="NOTIFY_OWNER">Notifier le responsable</option>
@@ -231,7 +231,7 @@ export function AutomationsPanel({
                         setActionField(e.target.value);
                         setActionValue(getValuesFor(e.target.value)[0]?.value ?? "");
                       }}
-                      className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white outline-none focus:border-indigo-400 cursor-pointer"
+                      className="text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 dark:text-gray-100 outline-none focus:border-indigo-400 cursor-pointer"
                     >
                       {Object.entries(FIELD_LABELS).map(([k, v]) => (
                         <option key={k} value={k}>{v}</option>
@@ -241,7 +241,7 @@ export function AutomationsPanel({
                     <select
                       value={actionValue}
                       onChange={(e) => setActionValue(e.target.value)}
-                      className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white outline-none focus:border-indigo-400 cursor-pointer"
+                      className="text-xs border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1.5 bg-white dark:bg-gray-700 dark:text-gray-100 outline-none focus:border-indigo-400 cursor-pointer"
                     >
                       {actionValues.map((v) => (
                         <option key={v.value} value={v.value}>{v.label}</option>

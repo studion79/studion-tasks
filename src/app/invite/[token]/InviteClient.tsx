@@ -35,8 +35,8 @@ export default function InviteClient({
   // Cas : connecté mais email différent
   if (isLoggedIn && !emailMatch) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 w-full max-w-sm">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center px-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-8 w-full max-w-sm">
           <ProjectBadge name={projectName} />
           <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
             <p className="font-medium mb-1">Email différent</p>
@@ -45,7 +45,7 @@ export default function InviteClient({
               connecté avec <strong>{loggedInEmail}</strong>.
             </p>
           </div>
-          <p className="text-xs text-gray-500 mt-4 text-center">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-4 text-center">
             Déconnectez-vous puis reconnectez-vous avec le bon compte, ou créez un compte pour{" "}
             <strong>{invitedEmail}</strong>.
           </p>
@@ -63,10 +63,10 @@ export default function InviteClient({
   // Mode "choice" : non connecté, choisir login ou register
   if (mode === "choice") {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 w-full max-w-sm">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center px-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-8 w-full max-w-sm">
           <ProjectBadge name={projectName} />
-          <p className="text-sm text-gray-500 mt-4 text-center">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-4 text-center">
             Vous avez été invité à rejoindre ce projet.
           </p>
           <div className="mt-6 space-y-3">
@@ -78,7 +78,7 @@ export default function InviteClient({
             </button>
             <button
               onClick={() => setMode("register")}
-              className="w-full bg-white text-gray-700 text-sm font-medium py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer"
+              className="w-full bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-sm font-medium py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors cursor-pointer"
             >
               Créer un compte
             </button>
@@ -109,30 +109,30 @@ export default function InviteClient({
     };
 
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 w-full max-w-sm">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center px-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-8 w-full max-w-sm">
           <ProjectBadge name={projectName} />
-          <h2 className="text-base font-semibold text-gray-900 mt-5 mb-4">Se connecter</h2>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50 mt-5 mb-4">Se connecter</h2>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1.5">Email</label>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoFocus
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors"
+                className="w-full px-3 py-2.5 text-sm text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1.5">Mot de passe</label>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Mot de passe</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors"
+                className="w-full px-3 py-2.5 text-sm text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors"
               />
             </div>
             {error && (
@@ -150,7 +150,7 @@ export default function InviteClient({
           </form>
           <button
             onClick={() => setMode("choice")}
-            className="mt-4 text-xs text-gray-400 hover:text-gray-600 w-full text-center cursor-pointer"
+            className="mt-4 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 w-full text-center cursor-pointer"
           >
             ← Retour
           </button>
@@ -173,42 +173,42 @@ export default function InviteClient({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 w-full max-w-sm">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center px-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-8 w-full max-w-sm">
         <ProjectBadge name={projectName} />
-        <h2 className="text-base font-semibold text-gray-900 mt-5 mb-4">Créer mon compte</h2>
+        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50 mt-5 mb-4">Créer mon compte</h2>
         <form onSubmit={handleRegister} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1.5">Nom complet</label>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nom complet</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
               autoFocus
-              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors"
+              className="w-full px-3 py-2.5 text-sm text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors"
               placeholder="Jean Dupont"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1.5">Email</label>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors"
+              className="w-full px-3 py-2.5 text-sm text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1.5">Mot de passe</label>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Mot de passe</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors"
+              className="w-full px-3 py-2.5 text-sm text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors"
               placeholder="Minimum 6 caractères"
             />
           </div>
@@ -227,7 +227,7 @@ export default function InviteClient({
         </form>
         <button
           onClick={() => setMode("choice")}
-          className="mt-4 text-xs text-gray-400 hover:text-gray-600 w-full text-center cursor-pointer"
+          className="mt-4 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 w-full text-center cursor-pointer"
         >
           ← Retour
         </button>
@@ -246,8 +246,8 @@ function ProjectBadge({ name }: { name: string }) {
           <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
       </div>
-      <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Projet</p>
-      <h1 className="text-xl font-bold text-gray-900">{name}</h1>
+      <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Projet</p>
+      <h1 className="text-xl font-bold text-gray-900 dark:text-gray-50">{name}</h1>
     </div>
   );
 }

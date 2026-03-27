@@ -93,13 +93,13 @@ export function GroupsManagerModal({ onClose }: { onClose: () => void }) {
     <>
       <div className="fixed inset-0 z-[60] bg-black/20" onClick={onClose} />
       <div className="fixed inset-0 z-[60] flex items-center justify-center pointer-events-none">
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-xl p-6 w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl p-6 w-full max-w-md pointer-events-auto max-h-[90vh] overflow-y-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-base font-semibold text-gray-900">Groupes d&apos;invitation</h2>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Groupes d&apos;invitation</h2>
             <button
               onClick={onClose}
-              className="p-1.5 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 cursor-pointer"
+              className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M6 18L18 6M6 6l12 12" strokeWidth="1.5" strokeLinecap="round" />
@@ -129,11 +129,11 @@ export function GroupsManagerModal({ onClose }: { onClose: () => void }) {
               ) : (
                 <div
                   key={g.id}
-                  className="flex items-start justify-between gap-3 p-3 rounded-xl border border-gray-100 bg-gray-50"
+                  className="flex items-start justify-between gap-3 p-3 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-800">{g.name}</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{g.name}</p>
+                    <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
                       {(JSON.parse(g.emails) as string[]).length} membre
                       {(JSON.parse(g.emails) as string[]).length > 1 ? "s" : ""}
                       {" · "}
@@ -184,7 +184,7 @@ export function GroupsManagerModal({ onClose }: { onClose: () => void }) {
           {!showCreate && editingId === null && (
             <button
               onClick={startCreate}
-              className="w-full flex items-center justify-center gap-2 text-sm text-indigo-600 border border-dashed border-indigo-200 rounded-xl py-2.5 hover:bg-indigo-50 transition-colors cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 text-sm text-indigo-600 dark:text-indigo-400 border border-dashed border-indigo-200 dark:border-indigo-700 rounded-xl py-2.5 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M12 4v16m8-8H4" strokeWidth="1.5" strokeLinecap="round" />
@@ -218,28 +218,28 @@ function GroupForm({
   submitLabel: string;
 }) {
   return (
-    <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-4 space-y-3">
+    <div className="rounded-xl border border-indigo-100 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-900/20 p-4 space-y-3">
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">Nom du groupe</label>
+        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Nom du groupe</label>
         <input
           type="text"
           value={name}
           onChange={(e) => onName(e.target.value)}
           autoFocus
           placeholder="ex : Comité de direction"
-          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors bg-white"
+          className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors bg-white dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-500"
         />
       </div>
       <div>
-        <label className="block text-xs font-medium text-gray-700 mb-1">
-          Emails <span className="font-normal text-gray-400">(un par ligne, ou séparés par virgule)</span>
+        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Emails <span className="font-normal text-gray-400 dark:text-gray-500">(un par ligne, ou séparés par virgule)</span>
         </label>
         <textarea
           value={emails}
           onChange={(e) => onEmails(e.target.value)}
           rows={4}
           placeholder={"alice@exemple.com\nbob@exemple.com\ncharlie@exemple.com"}
-          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors bg-white resize-none font-mono"
+          className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors bg-white dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-500 resize-none font-mono"
         />
       </div>
       {error && (
@@ -254,7 +254,7 @@ function GroupForm({
         </button>
         <button
           onClick={onCancel}
-          className="px-4 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+          className="px-4 text-sm text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
         >
           Annuler
         </button>

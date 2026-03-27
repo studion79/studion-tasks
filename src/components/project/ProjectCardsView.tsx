@@ -64,7 +64,7 @@ function TaskCard({
   return (
     <div
       onClick={onOpen}
-      className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-gray-300 transition-all cursor-pointer group/card relative"
+      className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 transition-all cursor-pointer group/card relative"
     >
       {/* Color accent */}
       <div
@@ -73,7 +73,7 @@ function TaskCard({
       />
 
       {/* Title */}
-      <p className="text-sm font-medium text-gray-900 leading-snug mb-3 pr-5">
+      <p className="text-sm font-medium text-gray-900 dark:text-gray-50 leading-snug mb-3 pr-5">
         {task.title}
       </p>
 
@@ -147,7 +147,7 @@ function AddTaskCard({ onAdd }: { onAdd: (title: string) => void }) {
 
   if (active) {
     return (
-      <div className="border border-indigo-300 bg-indigo-50/30 rounded-xl p-4">
+      <div className="border border-indigo-300 bg-indigo-50/30 dark:bg-indigo-900/20 rounded-xl p-4">
         <input
           ref={inputRef}
           value={draft}
@@ -158,7 +158,7 @@ function AddTaskCard({ onAdd }: { onAdd: (title: string) => void }) {
           }}
           onBlur={submit}
           placeholder="Nom de la tâche…"
-          className="w-full text-sm text-gray-800 outline-none bg-transparent placeholder-gray-400"
+          className="w-full text-sm text-gray-800 dark:text-gray-100 outline-none bg-transparent placeholder-gray-400 dark:placeholder-gray-500"
         />
       </div>
     );
@@ -167,7 +167,7 @@ function AddTaskCard({ onAdd }: { onAdd: (title: string) => void }) {
   return (
     <button
       onClick={() => setActive(true)}
-      className="border border-dashed border-gray-200 rounded-xl p-4 text-sm text-gray-400 hover:text-indigo-500 hover:border-indigo-300 hover:bg-indigo-50/30 transition-all cursor-pointer flex items-center gap-2 w-full"
+      className="border border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-4 text-sm text-gray-400 dark:text-gray-500 hover:text-indigo-500 hover:border-indigo-300 hover:bg-indigo-50/30 dark:hover:bg-indigo-900/20 transition-all cursor-pointer flex items-center gap-2 w-full"
     >
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path d="M12 4v16m8-8H4" strokeWidth="1.5" strokeLinecap="round" />

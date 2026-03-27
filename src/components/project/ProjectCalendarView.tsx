@@ -103,8 +103,8 @@ function TaskChip({
         "w-full text-left text-[11px] font-medium rounded px-1.5 py-0.5 truncate transition-colors cursor-pointer",
         "border border-l-2 hover:bg-indigo-50 hover:text-indigo-700",
         isGhost
-          ? `bg-indigo-50/40 text-gray-400 border-dashed border-gray-200 ${borderColor}`
-          : `bg-white text-gray-700 border-gray-100 ${borderColor}`,
+          ? `bg-indigo-50/40 dark:bg-indigo-900/20 text-gray-400 dark:text-gray-500 border-dashed border-gray-200 dark:border-gray-700 ${borderColor}`
+          : `bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border-gray-100 dark:border-gray-600 ${borderColor}`,
       ].join(" ")}
     >
       {isGhost && <span className="mr-0.5 opacity-60">↻</span>}
@@ -220,22 +220,22 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
     <>
       <div className="flex flex-col h-full">
         {/* Calendar header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
           <div className="flex items-center gap-3">
             <button
               onClick={prevMonth}
-              className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+              className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M15 19l-7-7 7-7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-            <h2 className="text-sm font-semibold text-gray-900 w-36 text-center">
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-50 w-36 text-center">
               {MONTHS_FR[month]} {year}
             </h2>
             <button
               onClick={nextMonth}
-              className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+              className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M9 5l7 7-7 7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -244,14 +244,14 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
           </div>
           <button
             onClick={goToday}
-            className="text-xs text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors cursor-pointer"
+            className="text-xs text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
           >
             Aujourd'hui
           </button>
         </div>
 
         {/* Weekday headers */}
-        <div className="grid grid-cols-7 border-b border-gray-100 flex-shrink-0">
+        <div className="grid grid-cols-7 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
           {WEEKDAYS.map((d) => (
             <div key={d} className="py-2 text-center text-[11px] font-semibold text-gray-400 uppercase tracking-wide">
               {d}
@@ -262,7 +262,7 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
         {/* Calendar grid */}
         <div className="flex-1 overflow-y-auto">
           {weeks.map((week, wi) => (
-            <div key={wi} className={`grid grid-cols-7 ${wi < weeks.length - 1 ? "border-b border-gray-100" : ""}`}>
+            <div key={wi} className={`grid grid-cols-7 ${wi < weeks.length - 1 ? "border-b border-gray-100 dark:border-gray-700" : ""}`}>
               {week.map((day, di) => {
                 const isCurrentMonth = day.getMonth() === month;
                 const dateStr = toLocalDateStr(day);
@@ -276,8 +276,8 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
                     key={di}
                     className={[
                       "min-h-[100px] p-2",
-                      di < 6 ? "border-r border-gray-100" : "",
-                      isCurrentMonth ? "bg-white" : "bg-gray-50/60",
+                      di < 6 ? "border-r border-gray-100 dark:border-gray-700" : "",
+                      isCurrentMonth ? "bg-white dark:bg-gray-800" : "bg-gray-50/60 dark:bg-gray-900/50",
                     ].join(" ")}
                   >
                     {/* Day number */}
@@ -288,8 +288,8 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
                           isToday
                             ? "bg-indigo-600 text-white"
                             : isCurrentMonth
-                            ? "text-gray-700"
-                            : "text-gray-300",
+                            ? "text-gray-700 dark:text-gray-200"
+                            : "text-gray-300 dark:text-gray-600",
                         ].join(" ")}
                       >
                         {day.getDate()}

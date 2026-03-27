@@ -43,6 +43,7 @@ export default function RootLayout({
     <html
       lang="fr"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <head>
         <meta name="theme-color" content="#6366f1" />

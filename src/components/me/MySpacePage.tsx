@@ -158,13 +158,13 @@ export function MySpacePage({ tasks, projects, user }: { tasks: MyTask[]; projec
     <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8">
 
       {/* ── Profile card ──────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm px-6 py-5 flex items-center gap-5">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm px-6 py-5 flex items-center gap-5">
         {/* Avatar */}
         <div className="relative flex-shrink-0">
           {avatarSrc ? (
-            <img src={avatarSrc} alt={user.name} className="w-16 h-16 rounded-full object-cover border-2 border-gray-100" />
+            <img src={avatarSrc} alt={user.name} className="w-16 h-16 rounded-full object-cover border-2 border-gray-100 dark:border-gray-700" />
           ) : (
-            <div className="w-16 h-16 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xl font-bold border-2 border-gray-100">
+            <div className="w-16 h-16 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xl font-bold border-2 border-gray-100 dark:border-gray-700">
               {initials(user.name)}
             </div>
           )}
@@ -172,9 +172,9 @@ export function MySpacePage({ tasks, projects, user }: { tasks: MyTask[]; projec
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <h2 className="text-lg font-bold text-gray-900">{user.name}</h2>
-          <p className="text-sm text-gray-500">{user.email}</p>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-50">{user.name}</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
             {projects.length} projet{projects.length > 1 ? "s" : ""}
             {projects.filter(p => p.role === "ADMIN").length > 0 &&
               ` · admin sur ${projects.filter(p => p.role === "ADMIN").length}`}
@@ -184,7 +184,7 @@ export function MySpacePage({ tasks, projects, user }: { tasks: MyTask[]; projec
         {/* Edit button */}
         <button
           onClick={() => setShowProfile(true)}
-          className="flex items-center gap-1.5 text-sm text-gray-500 border border-gray-200 rounded-lg px-3 py-2 hover:bg-gray-50 hover:text-gray-700 transition-colors cursor-pointer flex-shrink-0"
+          className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer flex-shrink-0"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" strokeWidth="1.5" strokeLinecap="round" />
@@ -203,23 +203,23 @@ export function MySpacePage({ tasks, projects, user }: { tasks: MyTask[]; projec
 
       {/* ── Tasks ─────────────────────────────────────────────────────────── */}
       <section>
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Mes tâches</h3>
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Mes tâches</h3>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
           {/* Toolbar */}
-          <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-gray-100">
+          <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-gray-100 dark:border-gray-700">
             <div className="flex items-center gap-1 overflow-x-auto">
               {filterTabs.map(f => (
                 <button
                   key={f.key}
                   onClick={() => setFilter(f.key)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
-                    filter === f.key ? "bg-indigo-600 text-white" : "text-gray-500 hover:bg-gray-100"
+                    filter === f.key ? "bg-indigo-600 text-white" : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
                   }`}
                 >
                   {f.label}
                   {f.count > 0 && (
                     <span className={`text-[10px] font-semibold rounded-full px-1.5 py-0.5 leading-none ${
-                      filter === f.key ? "bg-white/20 text-white" : f.key === "late" && f.count > 0 ? "bg-red-100 text-red-600" : "bg-gray-100 text-gray-500"
+                      filter === f.key ? "bg-white/20 text-white" : f.key === "late" && f.count > 0 ? "bg-red-100 text-red-600" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
                     }`}>{f.count}</span>
                   )}
                 </button>
@@ -232,7 +232,7 @@ export function MySpacePage({ tasks, projects, user }: { tasks: MyTask[]; projec
               <input
                 value={search} onChange={e => setSearch(e.target.value)}
                 placeholder="Rechercher…"
-                className="pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 w-36 bg-gray-50 transition-all focus:w-48"
+                className="pl-8 pr-3 py-1.5 text-xs text-gray-900 dark:text-gray-50 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 w-36 bg-gray-50 dark:bg-gray-700 transition-all focus:w-48 placeholder-gray-400 dark:placeholder-gray-500"
               />
             </div>
           </div>
@@ -240,10 +240,10 @@ export function MySpacePage({ tasks, projects, user }: { tasks: MyTask[]; projec
           {/* List */}
           {grouped.length === 0 ? (
             <div className="py-14 text-center">
-              <p className="text-sm font-medium text-gray-500 mb-1">
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
                 {filter === "done" ? "Aucune tâche terminée" : filter === "late" ? "Aucune tâche en retard 🎉" : "Aucune tâche ici"}
               </p>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-400 dark:text-gray-500">
                 {filter === "all" ? "Les tâches qui vous sont assignées apparaîtront ici" : "Modifiez le filtre pour voir d'autres tâches"}
               </p>
             </div>
@@ -252,17 +252,17 @@ export function MySpacePage({ tasks, projects, user }: { tasks: MyTask[]; projec
               {grouped.map((g, gi) => {
                 const isCol = collapsed.has(g.projectId);
                 return (
-                  <div key={g.projectId} className={gi > 0 ? "border-t border-gray-100" : ""}>
+                  <div key={g.projectId} className={gi > 0 ? "border-t border-gray-100 dark:border-gray-700" : ""}>
                     <button
                       onClick={() => setCollapsed(p => { const n = new Set(p); n.has(g.projectId) ? n.delete(g.projectId) : n.add(g.projectId); return n; })}
-                      className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors cursor-pointer group"
+                      className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer group"
                     >
                       <div className="flex items-center gap-2.5">
                         <svg className={`w-3 h-3 text-gray-400 transition-transform ${isCol ? "-rotate-90" : ""}`} fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                         </svg>
-                        <span className="text-sm font-semibold text-gray-800">{g.projectName}</span>
-                        <span className="text-xs text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">{g.tasks.length}</span>
+                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{g.projectName}</span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 rounded-full px-2 py-0.5">{g.tasks.length}</span>
                       </div>
                       <Link href={`/projects/${g.projectId}`} onClick={e => e.stopPropagation()}
                         className="opacity-0 group-hover:opacity-100 text-[11px] text-indigo-500 hover:text-indigo-700 flex items-center gap-1 transition-all">
@@ -278,7 +278,7 @@ export function MySpacePage({ tasks, projects, user }: { tasks: MyTask[]; projec
                       const done = isDone(task);
                       return (
                         <div key={task.id}
-                          className={`flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors group/row ${ti < g.tasks.length - 1 ? "border-b border-gray-50" : ""}`}>
+                          className={`flex items-center gap-3 px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group/row ${ti < g.tasks.length - 1 ? "border-b border-gray-50 dark:border-gray-700/50" : ""}`}>
                           {/* Checkbox — stops propagation, toggles */}
                           <button
                             onClick={e => handleToggle(task, e)}
@@ -289,8 +289,8 @@ export function MySpacePage({ tasks, projects, user }: { tasks: MyTask[]; projec
                           {/* Rest of row links to project */}
                           <Link href={`/projects/${task.projectId}`} className="flex-1 min-w-0 flex items-center gap-3">
                             <div className="flex-1 min-w-0">
-                              <p className={`text-sm truncate ${done ? "line-through text-gray-400" : "text-gray-800"}`}>{task.title}</p>
-                              <p className="text-[11px] text-gray-400 mt-0.5 truncate">{task.groupName}</p>
+                              <p className={`text-sm truncate ${done ? "line-through text-gray-400 dark:text-gray-500" : "text-gray-800 dark:text-gray-100"}`}>{task.title}</p>
+                              <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 truncate">{task.groupName}</p>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               {task.priority && <span className={`text-[11px] font-medium ${PRIORITY_COLORS[task.priority] ?? "text-gray-400"}`}>{task.priority}</span>}
@@ -311,34 +311,34 @@ export function MySpacePage({ tasks, projects, user }: { tasks: MyTask[]; projec
 
       {/* ── Projects ──────────────────────────────────────────────────────── */}
       <section>
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Mes projets</h3>
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Mes projets</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {projects.map(p => {
             const pct = p.totalTaskCount > 0 ? Math.round((p.completedCount / p.totalTaskCount) * 100) : 0;
             return (
               <Link key={p.id} href={`/projects/${p.id}`}
-                className="bg-white rounded-xl border border-gray-200 p-4 hover:border-indigo-300 hover:shadow-sm transition-all group"
+                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-sm transition-all group"
               >
                 <div className="flex items-start justify-between mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-sm flex-shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/40 flex items-center justify-center text-indigo-600 font-bold text-sm flex-shrink-0">
                     {p.name.charAt(0).toUpperCase()}
                   </div>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${p.role === "ADMIN" ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-500"}`}>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${p.role === "ADMIN" ? "bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}`}>
                     {p.role === "ADMIN" ? "Admin" : "Membre"}
                   </span>
                 </div>
-                <p className="text-sm font-semibold text-gray-800 truncate mb-1 group-hover:text-indigo-600 transition-colors">{p.name}</p>
-                <div className="flex items-center gap-3 text-[11px] text-gray-400 mb-3">
+                <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{p.name}</p>
+                <div className="flex items-center gap-3 text-[11px] text-gray-400 dark:text-gray-500 mb-3">
                   <span>{p.memberCount} membre{p.memberCount > 1 ? "s" : ""}</span>
                   {p.myTaskCount > 0 && <span className="text-indigo-500 font-medium">{p.myTaskCount} tâche{p.myTaskCount > 1 ? "s" : ""} assignée{p.myTaskCount > 1 ? "s" : ""}</span>}
                 </div>
                 {p.totalTaskCount > 0 && (
                   <div>
-                    <div className="flex justify-between text-[10px] text-gray-400 mb-1">
+                    <div className="flex justify-between text-[10px] text-gray-400 dark:text-gray-500 mb-1">
                       <span>{p.completedCount}/{p.totalTaskCount} terminées</span>
                       <span>{pct}%</span>
                     </div>
-                    <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-1 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                       <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
@@ -364,12 +364,12 @@ export function MySpacePage({ tasks, projects, user }: { tasks: MyTask[]; projec
 // ── StatCard ──────────────────────────────────────────────────────────────────
 
 function StatCard({ label, value, color, active, onClick }: { label: string; value: number; color: "indigo"|"red"|"amber"|"green"|"gray"; active: boolean; onClick: () => void }) {
-  const bg = { indigo: active?"bg-indigo-600 text-white":"bg-white hover:bg-indigo-50", red: active?"bg-red-500 text-white":"bg-white hover:bg-red-50", amber: active?"bg-amber-500 text-white":"bg-white hover:bg-amber-50", green: active?"bg-green-600 text-white":"bg-white hover:bg-green-50", gray: active?"bg-gray-500 text-white":"bg-white hover:bg-gray-50" }[color];
+  const bg = { indigo: active?"bg-indigo-600 text-white":"bg-white dark:bg-gray-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20", red: active?"bg-red-500 text-white":"bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20", amber: active?"bg-amber-500 text-white":"bg-white dark:bg-gray-800 hover:bg-amber-50 dark:hover:bg-amber-900/20", green: active?"bg-green-600 text-white":"bg-white dark:bg-gray-800 hover:bg-green-50 dark:hover:bg-green-900/20", gray: active?"bg-gray-500 text-white":"bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700" }[color];
   const val = { indigo: active?"text-white":"text-indigo-600", red: active?"text-white":value>0?"text-red-500":"text-gray-400", amber: active?"text-white":"text-amber-600", green: active?"text-white":"text-green-600", gray: active?"text-white":"text-gray-400" }[color];
   return (
-    <button onClick={onClick} className={`rounded-xl border border-gray-200 p-4 text-left transition-all cursor-pointer ${bg}`}>
+    <button onClick={onClick} className={`rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-left transition-all cursor-pointer ${bg}`}>
       <p className={`text-2xl font-bold mb-1 ${val}`}>{value}</p>
-      <p className={`text-xs font-medium ${active?"text-white/80":"text-gray-500"}`}>{label}</p>
+      <p className={`text-xs font-medium ${active?"text-white/80":"text-gray-500 dark:text-gray-400"}`}>{label}</p>
     </button>
   );
 }
@@ -425,22 +425,22 @@ function ProfileModal({ user, onClose, onAvatarChange }: { user: UserInfo; onClo
     <>
       <div className="fixed inset-0 z-50 bg-black/20" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none px-4">
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-xl w-full max-w-md pointer-events-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl w-full max-w-md pointer-events-auto">
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <h2 className="text-base font-semibold text-gray-900">Mon profil</h2>
-            <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 cursor-pointer">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Mon profil</h2>
+            <button onClick={onClose} className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="1.5" strokeLinecap="round"/></svg>
             </button>
           </div>
 
           {/* Avatar */}
-          <div className="flex flex-col items-center gap-3 px-6 py-5 border-b border-gray-100">
+          <div className="flex flex-col items-center gap-3 px-6 py-5 border-b border-gray-100 dark:border-gray-700">
             <div className="relative group cursor-pointer" onClick={() => fileRef.current?.click()}>
               {avatarPreview ? (
-                <img src={avatarPreview} alt={user.name} className="w-20 h-20 rounded-full object-cover border-2 border-gray-100" />
+                <img src={avatarPreview} alt={user.name} className="w-20 h-20 rounded-full object-cover border-2 border-gray-100 dark:border-gray-700" />
               ) : (
-                <div className="w-20 h-20 rounded-full bg-indigo-600 flex items-center justify-center text-white text-2xl font-bold border-2 border-gray-100">
+                <div className="w-20 h-20 rounded-full bg-indigo-600 flex items-center justify-center text-white text-2xl font-bold border-2 border-gray-100 dark:border-gray-700">
                   {initials(user.name)}
                 </div>
               )}
@@ -452,15 +452,15 @@ function ProfileModal({ user, onClose, onAvatarChange }: { user: UserInfo; onClo
               </div>
             </div>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
-            <p className="text-xs text-gray-400">Cliquez pour changer la photo — toutes tailles acceptées</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">Cliquez pour changer la photo — toutes tailles acceptées</p>
             {avatarError && <p className="text-xs text-red-600">{avatarError}</p>}
           </div>
 
           {/* Tabs */}
-          <div className="flex border-b border-gray-100">
+          <div className="flex border-b border-gray-100 dark:border-gray-700">
             {(["info", "password"] as const).map(t => (
               <button key={t} onClick={() => setTab(t)}
-                className={`flex-1 py-2.5 text-sm font-medium transition-colors cursor-pointer ${tab===t ? "text-indigo-600 border-b-2 border-indigo-600" : "text-gray-500 hover:text-gray-700"}`}>
+                className={`flex-1 py-2.5 text-sm font-medium transition-colors cursor-pointer ${tab===t ? "text-indigo-600 border-b-2 border-indigo-600" : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"}`}>
                 {t === "info" ? "Informations" : "Mot de passe"}
               </button>
             ))}
@@ -470,15 +470,15 @@ function ProfileModal({ user, onClose, onAvatarChange }: { user: UserInfo; onClo
             {tab === "info" ? (
               <>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Nom complet</label>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Nom complet</label>
                   <input value={name} onChange={e => setName(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors" />
+                    className="w-full px-3 py-2 text-sm text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Email</label>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
                   <input value={user.email} readOnly
-                    className="w-full px-3 py-2 text-sm border border-gray-100 rounded-lg bg-gray-50 text-gray-400 cursor-not-allowed" />
-                  <p className="text-[11px] text-gray-400 mt-1">L&apos;email ne peut pas être modifié</p>
+                    className="w-full px-3 py-2 text-sm border border-gray-100 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500 cursor-not-allowed" />
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">L&apos;email ne peut pas être modifié</p>
                 </div>
                 {nameError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{nameError}</p>}
                 {nameSuccess && <p className="text-xs text-green-600 bg-green-50 border border-green-200 rounded-lg px-3 py-2">Profil mis à jour ✓</p>}
@@ -495,9 +495,9 @@ function ProfileModal({ user, onClose, onAvatarChange }: { user: UserInfo; onClo
                   { label: "Confirmer le mot de passe", value: confirmPwd, set: setConfirmPwd },
                 ].map(f => (
                   <div key={f.label}>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">{f.label}</label>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{f.label}</label>
                     <input type="password" value={f.value} onChange={e => f.set(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors" />
+                      className="w-full px-3 py-2 text-sm text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors" />
                   </div>
                 ))}
                 {pwdError && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{pwdError}</p>}

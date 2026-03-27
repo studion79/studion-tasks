@@ -17,13 +17,13 @@ export default async function HomePage() {
   ]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-4 sm:px-6 h-14 flex items-center justify-between">
-        <h1 className="text-base font-semibold text-gray-900">Mes projets</h1>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 h-14 flex items-center justify-between">
+        <h1 className="text-base font-semibold text-gray-900 dark:text-gray-50">Mes projets</h1>
         <div className="flex items-center gap-2 sm:gap-3">
           <Link
             href="/me"
-            className="inline-flex items-center gap-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             title="Mon espace"
           >
             <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -33,7 +33,7 @@ export default async function HomePage() {
           </Link>
           <Link
             href="/portfolio"
-            className="inline-flex items-center gap-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             title="Portefeuille"
           >
             <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -43,7 +43,7 @@ export default async function HomePage() {
           </Link>
           <Link
             href="/templates"
-            className="inline-flex items-center gap-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             title="Templates"
           >
             <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -63,7 +63,7 @@ export default async function HomePage() {
             </svg>
             <span className="hidden sm:inline">Nouveau projet</span>
           </Link>
-          <div className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-gray-200">
+          <div className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-gray-200 dark:border-gray-700">
             <div className="w-7 h-7 rounded-full flex-shrink-0 overflow-hidden">
               {session.user.image ? (
                 <img src={session.user.image} alt={session.user.name ?? ""} className="w-full h-full object-cover rounded-full" />
@@ -73,9 +73,9 @@ export default async function HomePage() {
                 </div>
               )}
             </div>
-            <span className="hidden sm:block text-sm text-gray-700 max-w-[120px] truncate">{session.user.name}</span>
+            <span className="hidden sm:block text-sm text-gray-700 dark:text-gray-200 max-w-[120px] truncate">{session.user.name}</span>
             <form action={async () => { "use server"; await signOut({ redirectTo: "/login" }); }}>
-              <button type="submit" className="text-xs text-gray-400 hover:text-gray-600 transition-colors cursor-pointer">
+              <button type="submit" className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer">
                 <span className="hidden sm:inline">Déconnexion</span>
                 <svg className="sm:hidden w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -94,13 +94,13 @@ export default async function HomePage() {
 
         {projects.length === 0 ? (
           <div className="text-center py-16 sm:py-24">
-            <div className="w-16 h-16 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M19 11H5m14 0l-4-4m4 4l-4 4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Aucun projet pour l&apos;instant</h2>
-            <p className="text-sm text-gray-500 mb-6">Créez votre premier projet pour commencer.</p>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-50 mb-2">Aucun projet pour l&apos;instant</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Créez votre premier projet pour commencer.</p>
             <Link
               href="/projects/new"
               className="inline-flex items-center gap-2 bg-indigo-600 text-white text-sm font-medium rounded-lg px-5 py-2.5 hover:bg-indigo-700 transition-colors"
@@ -115,7 +115,7 @@ export default async function HomePage() {
             ))}
             <Link
               href="/projects/new"
-              className="flex flex-col items-center justify-center bg-white rounded-xl border border-dashed border-gray-300 p-5 hover:border-indigo-400 hover:bg-indigo-50 transition-all text-gray-400 hover:text-indigo-500 group min-h-[120px]"
+              className="flex flex-col items-center justify-center bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 p-5 hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all text-gray-400 dark:text-gray-500 hover:text-indigo-500 group min-h-[120px]"
             >
               <span className="w-8 h-8 rounded-lg border-2 border-current flex items-center justify-center mb-2 text-lg leading-none group-hover:scale-110 transition-transform">+</span>
               <span className="text-sm font-medium">Nouveau projet</span>
