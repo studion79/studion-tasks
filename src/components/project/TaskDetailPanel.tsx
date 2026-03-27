@@ -833,6 +833,8 @@ function SubtasksSection({
   const [subtasks, setSubtasks] = useState<SubtaskWithFields[]>(initialSubtasks);
   const [draft, setDraft] = useState("");
   const [addingNew, setAddingNew] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
   const [, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -869,6 +871,15 @@ function SubtasksSection({
   const handleDelete = (subtaskId: string) => {
     setSubtasks((prev) => prev.filter((s) => s.id !== subtaskId));
     startTransition(async () => { await deleteSubtask(subtaskId); });
+  };
+
+  const handleRename = (subtaskId: string) => {
+    const title = editDraft.trim();
+    setEditingId(null);
+    setEditDraft("");
+    if (!title) return;
+    setSubtasks((prev) => prev.map((s) => (s.id === subtaskId ? { ...s, title } : s)));
+    startTransition(async () => { await updateSubtaskTitleAction(subtaskId, title); });
   };
 
   const handleAdd = () => {
@@ -924,9 +935,26 @@ function SubtasksSection({
                     </svg>
                   )}
                 </button>
-                <span className={`flex-1 text-sm ${done ? "line-through text-gray-400 dark:text-gray-500" : "text-gray-700 dark:text-gray-300"}`}>
-                  {sub.title}
-                </span>
+                {editingId === sub.id ? (
+                  <input
+                    autoFocus
+                    value={editDraft}
+                    onChange={(e) => setEditDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleRename(sub.id);
+                      if (e.key === "Escape") { setEditingId(null); setEditDraft(""); }
+                    }}
+                    onBlur={() => handleRename(sub.id)}
+                    className="flex-1 text-sm text-gray-700 dark:text-gray-300 outline-none border-b border-indigo-300 pb-0.5 bg-transparent"
+                  />
+                ) : (
+                  <span
+                    onClick={() => { setEditingId(sub.id); setEditDraft(sub.title); }}
+                    className={`flex-1 text-sm cursor-text ${done ? "line-through text-gray-400 dark:text-gray-500" : "text-gray-700 dark:text-gray-300"}`}
+                  >
+                    {sub.title}
+                  </span>
+                )}
                 <button
                   onClick={() => handleDelete(sub.id)}
                   className="opacity-0 group-hover/sub:opacity-100 p-0.5 text-gray-300 hover:text-red-400 transition-all cursor-pointer"

@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useRef, useEffect } from "react";
 import Link from "next/link";
-import { deleteProject, renameProject } from "@/lib/actions";
+import { deleteProject, renameProject, togglePinProject } from "@/lib/actions";
 
 function DeleteConfirmModal({
   projectName,
@@ -83,6 +83,7 @@ type ProjectWithStats = {
   name: string;
   createdAt: Date;
   _count: { groups: number; members: number };
+  members: { isPinned: boolean }[];
   groups: {
     _count: { tasks: number };
     tasks: TaskLight[];
@@ -94,6 +95,7 @@ export function ProjectCard({ project }: { project: ProjectWithStats }) {
   const [renaming, setRenaming] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [draft, setDraft] = useState(project.name);
+  const [pinned, setPinned] = useState(project.members[0]?.isPinned ?? false);
   const [isPending, startTransition] = useTransition();
   const menuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -135,18 +137,39 @@ export function ProjectCard({ project }: { project: ProjectWithStats }) {
     startTransition(async () => {
       await renameProject(project.id, name);
       setRenaming(false);
-      // Refresh page to update the name
       window.location.reload();
     });
   };
 
-  // Delete is now handled by DeleteConfirmModal
+  const handlePin = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setPinned((v) => !v);
+    startTransition(async () => {
+      await togglePinProject(project.id);
+      window.location.reload();
+    });
+  };
 
   const COLORS = ["bg-indigo-100 text-indigo-600", "bg-emerald-100 text-emerald-600", "bg-amber-100 text-amber-700", "bg-rose-100 text-rose-600", "bg-sky-100 text-sky-600", "bg-purple-100 text-purple-600"];
   const colorIdx = project.name.charCodeAt(0) % COLORS.length;
 
   return (
-    <div className="relative bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-sm transition-all group">
+    <div className={`relative bg-white dark:bg-gray-800 rounded-xl border p-5 hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-sm transition-all group ${pinned ? "border-indigo-200 dark:border-indigo-700" : "border-gray-200 dark:border-gray-700"}`}>
+      {/* Pin indicator */}
+      {pinned && (
+        <div className="absolute top-0 left-0 w-full h-0.5 bg-indigo-400 rounded-t-xl" />
+      )}
+      {/* Pin button */}
+      <button
+        onClick={handlePin}
+        title={pinned ? "Désépingler" : "Épingler"}
+        className={`absolute top-3 left-3 p-1 rounded transition-all cursor-pointer ${pinned ? "opacity-100 text-indigo-500" : "opacity-0 group-hover:opacity-100 text-gray-300 hover:text-indigo-400"}`}
+      >
+        <svg className="w-3 h-3" viewBox="0 0 24 24" fill={pinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
       {/* Context menu trigger */}
       <div ref={menuRef} className="absolute top-3 right-3">
         <button

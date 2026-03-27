@@ -211,12 +211,16 @@ export async function addProjectColumn(projectId: string, type: string, label: s
 
 export async function listProjects() {
   const userId = await getAuthUserId();
-  return prisma.project.findMany({
+  const projects = await prisma.project.findMany({
     where: { members: { some: { userId } } },
     orderBy: { createdAt: "desc" },
     include: {
       _count: {
         select: { groups: true, members: true },
+      },
+      members: {
+        where: { userId },
+        select: { isPinned: true },
       },
       groups: {
         include: {
@@ -237,6 +241,25 @@ export async function listProjects() {
         },
       },
     },
+  });
+  // Sort: pinned projects first, then by createdAt desc
+  return projects.sort((a, b) => {
+    const aPinned = a.members[0]?.isPinned ?? false;
+    const bPinned = b.members[0]?.isPinned ?? false;
+    if (aPinned !== bPinned) return aPinned ? -1 : 1;
+    return 0;
+  });
+}
+
+export async function togglePinProject(projectId: string) {
+  const userId = await getAuthUserId();
+  const member = await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId } },
+  });
+  if (!member) throw new Error("Non membre");
+  return prisma.projectMember.update({
+    where: { projectId_userId: { projectId, userId } },
+    data: { isPinned: !member.isPinned },
   });
 }
 
