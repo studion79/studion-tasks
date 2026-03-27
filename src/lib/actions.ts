@@ -221,7 +221,7 @@ export async function listProjects() {
       },
       members: {
         where: { userId },
-        select: { isPinned: true },
+        select: { isPinned: true, userGroupId: true },
       },
       groups: {
         include: {
@@ -261,6 +261,53 @@ export async function togglePinProject(projectId: string) {
   return prisma.projectMember.update({
     where: { projectId_userId: { projectId, userId } },
     data: { isPinned: !member.isPinned },
+  });
+}
+
+// ---- User project groups ----
+
+export async function listUserProjectGroups() {
+  const userId = await getAuthUserId();
+  return prisma.userProjectGroup.findMany({
+    where: { userId },
+    orderBy: { position: "asc" },
+  });
+}
+
+export async function createUserProjectGroup(name: string) {
+  const userId = await getAuthUserId();
+  if (!name.trim()) throw new Error("Le nom est requis");
+  const max = await prisma.userProjectGroup.aggregate({ where: { userId }, _max: { position: true } });
+  return prisma.userProjectGroup.create({
+    data: { userId, name: name.trim(), position: (max._max.position ?? -1) + 1 },
+  });
+}
+
+export async function renameUserProjectGroup(groupId: string, name: string) {
+  const userId = await getAuthUserId();
+  if (!name.trim()) throw new Error("Le nom est requis");
+  const g = await prisma.userProjectGroup.findUnique({ where: { id: groupId } });
+  if (!g || g.userId !== userId) throw new Error("Groupe introuvable");
+  return prisma.userProjectGroup.update({ where: { id: groupId }, data: { name: name.trim() } });
+}
+
+export async function deleteUserProjectGroup(groupId: string) {
+  const userId = await getAuthUserId();
+  const g = await prisma.userProjectGroup.findUnique({ where: { id: groupId } });
+  if (!g || g.userId !== userId) throw new Error("Groupe introuvable");
+  // Members will have userGroupId set to null via SetNull
+  return prisma.userProjectGroup.delete({ where: { id: groupId } });
+}
+
+export async function assignProjectToGroup(projectId: string, groupId: string | null) {
+  const userId = await getAuthUserId();
+  if (groupId) {
+    const g = await prisma.userProjectGroup.findUnique({ where: { id: groupId } });
+    if (!g || g.userId !== userId) throw new Error("Groupe introuvable");
+  }
+  return prisma.projectMember.update({
+    where: { projectId_userId: { projectId, userId } },
+    data: { userGroupId: groupId },
   });
 }
 

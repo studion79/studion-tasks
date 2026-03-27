@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useRef, useEffect } from "react";
 import Link from "next/link";
-import { deleteProject, renameProject, togglePinProject } from "@/lib/actions";
+import { deleteProject, renameProject, togglePinProject, assignProjectToGroup } from "@/lib/actions";
 
 function DeleteConfirmModal({
   projectName,
@@ -83,14 +83,16 @@ type ProjectWithStats = {
   name: string;
   createdAt: Date;
   _count: { groups: number; members: number };
-  members: { isPinned: boolean }[];
+  members: { isPinned: boolean; userGroupId: string | null }[];
   groups: {
     _count: { tasks: number };
     tasks: TaskLight[];
   }[];
 };
 
-export function ProjectCard({ project }: { project: ProjectWithStats }) {
+type UserGroup = { id: string; name: string };
+
+export function ProjectCard({ project, userGroups, onGroupChange }: { project: ProjectWithStats; userGroups?: UserGroup[]; onGroupChange?: () => void }) {
   const [showMenu, setShowMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -182,7 +184,7 @@ export function ProjectCard({ project }: { project: ProjectWithStats }) {
         </button>
 
         {showMenu && (
-          <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 z-20 w-40">
+          <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 z-20 w-44">
             <button
               onClick={() => { setShowMenu(false); setRenaming(true); }}
               className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer flex items-center gap-2"
@@ -192,6 +194,43 @@ export function ProjectCard({ project }: { project: ProjectWithStats }) {
               </svg>
               Renommer
             </button>
+            {userGroups && userGroups.length > 0 && (
+              <>
+                <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
+                <p className="px-3 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Déplacer vers</p>
+                {userGroups.map((g) => (
+                  <button
+                    key={g.id}
+                    onClick={() => {
+                      setShowMenu(false);
+                      startTransition(async () => {
+                        await assignProjectToGroup(project.id, g.id);
+                        onGroupChange?.();
+                        window.location.reload();
+                      });
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer truncate"
+                  >
+                    {g.name}
+                  </button>
+                ))}
+                {project.members[0]?.userGroupId && (
+                  <button
+                    onClick={() => {
+                      setShowMenu(false);
+                      startTransition(async () => {
+                        await assignProjectToGroup(project.id, null);
+                        onGroupChange?.();
+                        window.location.reload();
+                      });
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-sm text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer italic"
+                  >
+                    Sans groupe
+                  </button>
+                )}
+              </>
+            )}
             <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
             <button
               onClick={() => { setShowMenu(false); setShowDeleteModal(true); }}

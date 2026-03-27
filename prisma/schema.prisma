@@ -19,6 +19,18 @@ model User {
   comments              Comment[]
   notifications         Notification[]
   notificationPrefs     UserNotificationPreference[]
+  projectGroups         UserProjectGroup[]
+}
+
+model UserProjectGroup {
+  id        String          @id @default(cuid())
+  userId    String
+  name      String
+  position  Int             @default(0)
+  createdAt DateTime        @default(now())
+
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  members   ProjectMember[]
 }
 
 model UserNotificationPreference {
@@ -33,15 +45,17 @@ model UserNotificationPreference {
 }
 
 model ProjectMember {
-  id        String   @id @default(cuid())
-  projectId String
-  userId    String
-  role      MemberRole @default(MEMBER)
-  isPinned  Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id           String            @id @default(cuid())
+  projectId    String
+  userId       String
+  role         MemberRole        @default(MEMBER)
+  isPinned     Boolean           @default(false)
+  userGroupId  String?
+  createdAt    DateTime          @default(now())
 
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userGroup    UserProjectGroup? @relation(fields: [userGroupId], references: [id], onDelete: SetNull)
 
   @@unique([projectId, userId])
 }

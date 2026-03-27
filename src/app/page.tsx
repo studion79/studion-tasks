@@ -1,19 +1,20 @@
 export const dynamic = 'force-dynamic';
 
-import { listProjects, getPendingInvitations } from "@/lib/actions";
+import { listProjects, getPendingInvitations, listUserProjectGroups } from "@/lib/actions";
 import { auth, signOut } from "@/auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ProjectCard } from "@/components/home/ProjectCard";
+import { HomePageClient } from "@/components/home/HomePageClient";
 import { PendingInvitationsSection } from "@/components/home/PendingInvitationsSection";
 
 export default async function HomePage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const [projects, pendingInvitations] = await Promise.all([
+  const [projects, pendingInvitations, userGroups] = await Promise.all([
     listProjects(),
     session.user.email ? getPendingInvitations(session.user.email) : Promise.resolve([]),
+    listUserProjectGroups(),
   ]);
 
   return (
@@ -91,37 +92,7 @@ export default async function HomePage() {
         {pendingInvitations.length > 0 && (
           <PendingInvitationsSection invitations={pendingInvitations} userId={session.user.id!} />
         )}
-
-        {projects.length === 0 ? (
-          <div className="text-center py-16 sm:py-24">
-            <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path d="M19 11H5m14 0l-4-4m4 4l-4 4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-50 mb-2">Aucun projet pour l&apos;instant</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Créez votre premier projet pour commencer.</p>
-            <Link
-              href="/projects/new"
-              className="inline-flex items-center gap-2 bg-indigo-600 text-white text-sm font-medium rounded-lg px-5 py-2.5 hover:bg-indigo-700 transition-colors"
-            >
-              Créer un projet
-            </Link>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {projects.map((project) => (
-              <ProjectCard key={project.id} project={project} />
-            ))}
-            <Link
-              href="/projects/new"
-              className="flex flex-col items-center justify-center bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 p-5 hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all text-gray-400 dark:text-gray-500 hover:text-indigo-500 group min-h-[120px]"
-            >
-              <span className="w-8 h-8 rounded-lg border-2 border-current flex items-center justify-center mb-2 text-lg leading-none group-hover:scale-110 transition-transform">+</span>
-              <span className="text-sm font-medium">Nouveau projet</span>
-            </Link>
-          </div>
-        )}
+        <HomePageClient projects={projects} userGroups={userGroups} />
       </main>
     </div>
   );
