@@ -1,20 +1,23 @@
 export const dynamic = 'force-dynamic';
 
-import { listProjects, getPendingInvitations, listUserProjectGroups } from "@/lib/actions";
+import { listProjects, getPendingInvitations, listUserProjectGroups, getMyTasks, getMyNotifications } from "@/lib/actions";
 import { auth, signOut } from "@/auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { HomePageClient } from "@/components/home/HomePageClient";
+import { DashboardSidebar } from "@/components/home/DashboardSidebar";
 import { PendingInvitationsSection } from "@/components/home/PendingInvitationsSection";
 
 export default async function HomePage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const [projects, pendingInvitations, userGroups] = await Promise.all([
+  const [projects, pendingInvitations, userGroups, myTasks, notifications] = await Promise.all([
     listProjects(),
     session.user.email ? getPendingInvitations(session.user.email) : Promise.resolve([]),
     listUserProjectGroups(),
+    getMyTasks().catch(() => []),
+    getMyNotifications().catch(() => []),
   ]);
 
   return (
@@ -65,7 +68,7 @@ export default async function HomePage() {
             <span className="hidden sm:inline">Nouveau projet</span>
           </Link>
           <div className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-gray-200 dark:border-gray-700">
-            <div className="w-7 h-7 rounded-full flex-shrink-0 overflow-hidden">
+            <Link href="/me" className="w-7 h-7 rounded-full flex-shrink-0 overflow-hidden block">
               {session.user.image ? (
                 <img src={session.user.image} alt={session.user.name ?? ""} className="w-full h-full object-cover rounded-full" />
               ) : (
@@ -73,7 +76,7 @@ export default async function HomePage() {
                   {session.user.name?.charAt(0).toUpperCase() ?? "?"}
                 </div>
               )}
-            </div>
+            </Link>
             <span className="hidden sm:block text-sm text-gray-700 dark:text-gray-200 max-w-[120px] truncate">{session.user.name}</span>
             <form action={async () => { "use server"; await signOut({ redirectTo: "/login" }); }}>
               <button type="submit" className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer">
@@ -87,12 +90,23 @@ export default async function HomePage() {
         </div>
       </header>
 
-      <main className="px-4 sm:px-6 py-6 sm:py-8 max-w-5xl mx-auto">
+      <main className="px-4 sm:px-6 py-6 sm:py-8 max-w-7xl mx-auto">
         {/* Pending invitations */}
         {pendingInvitations.length > 0 && (
-          <PendingInvitationsSection invitations={pendingInvitations} userId={session.user.id!} />
+          <div className="mb-6">
+            <PendingInvitationsSection invitations={pendingInvitations} userId={session.user.id!} />
+          </div>
         )}
-        <HomePageClient projects={projects} userGroups={userGroups} />
+
+        {/* Two-column layout: projects + dashboard sidebar */}
+        <div className="flex gap-6 items-start">
+          <div className="flex-1 min-w-0">
+            <HomePageClient projects={projects} userGroups={userGroups} />
+          </div>
+          <div className="w-72 flex-shrink-0 hidden lg:block">
+            <DashboardSidebar tasks={myTasks} notifications={notifications} />
+          </div>
+        </div>
       </main>
     </div>
   );

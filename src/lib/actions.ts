@@ -1304,6 +1304,20 @@ export async function markAllNotificationsRead(userId: string) {
   await prisma.notification.updateMany({ where: { userId, isRead: false }, data: { isRead: true } });
 }
 
+export async function getMyNotifications() {
+  const userId = await getAuthUserId();
+  return prisma.notification.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+}
+
+export async function markAllMyNotificationsRead() {
+  const userId = await getAuthUserId();
+  await prisma.notification.updateMany({ where: { userId, isRead: false }, data: { isRead: true } });
+}
+
 // --- Notification preferences ---
 
 /** Returns the list of preferences for the current user (missing entries = enabled by default). */
