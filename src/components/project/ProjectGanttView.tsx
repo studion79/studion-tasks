@@ -292,7 +292,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
   }, [project, viewStart, timelineCol, dueDateCol]);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden bg-white dark:bg-gray-900">
       {/* ── Toolbar ── */}
       <div className="flex items-center gap-1 px-4 py-2 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
         <button onClick={handlePrev} title="Période précédente" className="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">

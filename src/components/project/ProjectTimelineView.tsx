@@ -362,7 +362,7 @@ export function ProjectTimelineView({
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden bg-white dark:bg-gray-900">
       {/* Legend */}
       <div className="flex items-center gap-4 px-4 py-2 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-100 dark:border-gray-700 flex-shrink-0 text-xs text-gray-500 dark:text-gray-400">
         <span className="font-medium text-gray-700 dark:text-gray-300">Échéancier par responsable</span>
