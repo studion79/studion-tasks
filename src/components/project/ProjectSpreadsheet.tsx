@@ -37,6 +37,10 @@ import {
   bulkUpdateTaskField,
   bulkArchiveTasks,
   bulkDeleteTasks,
+  saveGroupAsTemplate as saveGroupAsTemplateAction,
+  listGroupTemplates as listGroupTemplatesAction,
+  deleteGroupTemplate as deleteGroupTemplateAction,
+  importGroupTemplate as importGroupTemplateAction,
 } from "@/lib/actions";
 import { STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/lib/constants";
 
@@ -336,6 +340,7 @@ function GroupHeader({
   canMoveDown,
   donePct,
   totalBudget,
+  onSaveAsTemplate,
 }: {
   group: GroupWithTasks;
   taskCount: number;
@@ -350,6 +355,7 @@ function GroupHeader({
   canMoveDown: boolean;
   donePct: number | null;
   totalBudget: number | null;
+  onSaveAsTemplate: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(group.name);
@@ -480,6 +486,17 @@ function GroupHeader({
               <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
+          <button
+            onClick={onSaveAsTemplate}
+            className="p-0.5 rounded text-gray-400 hover:text-indigo-500 cursor-pointer transition-colors"
+            title="Sauvegarder ce groupe comme template"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" />
+              <polyline points="17 21 17 13 7 13 7 21" />
+              <polyline points="7 3 7 8 15 8" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -593,6 +610,12 @@ export function ProjectSpreadsheet({
   const [addingGroup, setAddingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  // Group template state
+  const [saveTemplateGroupId, setSaveTemplateGroupId] = useState<string | null>(null);
+  const [saveTemplateName, setSaveTemplateName] = useState("");
+  const [saveTemplateError, setSaveTemplateError] = useState("");
+  const [importTemplateOpen, setImportTemplateOpen] = useState(false);
+  const [groupTemplates, setGroupTemplates] = useState<{ id: string; name: string }[]>([]);
   const [groupPageSizes, setGroupPageSizes] = useState<Record<string, number>>({});
   const GROUP_PAGE_SIZE = 50;
   const [, startTransition] = useTransition();
@@ -980,6 +1003,38 @@ export function ProjectSpreadsheet({
     });
   };
 
+  const handleSaveGroupAsTemplate = async () => {
+    const name = saveTemplateName.trim();
+    if (!name) { setSaveTemplateError("Le nom est requis"); return; }
+    try {
+      await saveGroupAsTemplateAction(saveTemplateGroupId!, name);
+      setSaveTemplateGroupId(null);
+      setSaveTemplateName("");
+      setSaveTemplateError("");
+    } catch (e) {
+      setSaveTemplateError(e instanceof Error ? e.message : "Erreur");
+    }
+  };
+
+  const openImportTemplate = async () => {
+    const templates = await listGroupTemplatesAction();
+    setGroupTemplates(templates);
+    setImportTemplateOpen(true);
+  };
+
+  const handleImportGroupTemplate = async (templateId: string) => {
+    setImportTemplateOpen(false);
+    startTransition(async () => {
+      await importGroupTemplateAction(project.id, templateId);
+      router.refresh();
+    });
+  };
+
+  const handleDeleteGroupTemplate = async (templateId: string) => {
+    await deleteGroupTemplateAction(templateId);
+    setGroupTemplates((prev) => prev.filter((t) => t.id !== templateId));
+  };
+
   const totalMinWidth =
     CHECK_COL + TASK_COL + columns.reduce((sum, c) => sum + colW(c.type), 0) + ACTIONS_COL + 48;
 
@@ -1109,6 +1164,11 @@ export function ProjectSpreadsheet({
                 canMoveDown={groupIdx < groups.length - 1}
                 donePct={donePct}
                 totalBudget={totalBudget}
+                onSaveAsTemplate={() => {
+                  setSaveTemplateName(group.name);
+                  setSaveTemplateError("");
+                  setSaveTemplateGroupId(group.id);
+                }}
               />
 
               {!isCollapsed && (
@@ -1336,7 +1396,7 @@ export function ProjectSpreadsheet({
         </div>
 
         {/* ── Add group ── */}
-        <div className="px-4 py-3">
+        <div className="px-4 py-3 flex items-center gap-3">
           {addingGroup ? (
             <div className="flex items-center gap-2">
               <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 flex-shrink-0" />
@@ -1354,20 +1414,89 @@ export function ProjectSpreadsheet({
               />
             </div>
           ) : (
-            <button
-              onClick={() => {
-                setNewGroupName("");
-                setAddingGroup(true);
-              }}
-              className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors cursor-pointer"
-            >
-              <span className="w-4 h-4 flex items-center justify-center rounded border border-dashed border-gray-300 dark:border-gray-600 hover:border-indigo-400">
-                +
-              </span>
-              Ajouter un groupe
-            </button>
+            <>
+              <button
+                onClick={() => {
+                  setNewGroupName("");
+                  setAddingGroup(true);
+                }}
+                className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+              >
+                <span className="w-4 h-4 flex items-center justify-center rounded border border-dashed border-gray-300 dark:border-gray-600 hover:border-indigo-400">
+                  +
+                </span>
+                Ajouter un groupe
+              </button>
+              <button
+                onClick={openImportTemplate}
+                className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+                title="Importer un groupe depuis un template"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Importer depuis un template
+              </button>
+            </>
           )}
         </div>
+
+        {/* ── Save group as template modal ── */}
+        {saveTemplateGroupId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">Sauvegarder comme template de groupe</h3>
+              <input
+                autoFocus
+                value={saveTemplateName}
+                onChange={(e) => { setSaveTemplateName(e.target.value); setSaveTemplateError(""); }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSaveGroupAsTemplate(); if (e.key === "Escape") setSaveTemplateGroupId(null); }}
+                placeholder="Nom du template…"
+                className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 placeholder-gray-400"
+              />
+              {saveTemplateError && <p className="text-xs text-red-500 mt-1">{saveTemplateError}</p>}
+              <div className="flex justify-end gap-2 mt-4">
+                <button onClick={() => setSaveTemplateGroupId(null)} className="px-3 py-1.5 text-xs rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors">Annuler</button>
+                <button onClick={handleSaveGroupAsTemplate} className="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer transition-colors">Sauvegarder</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Import group template modal ── */}
+        {importTemplateOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">Importer un groupe depuis un template</h3>
+              {groupTemplates.length === 0 ? (
+                <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4">Aucun template de groupe disponible.</p>
+              ) : (
+                <ul className="space-y-1 max-h-64 overflow-y-auto">
+                  {groupTemplates.map((tpl) => (
+                    <li key={tpl.id} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 group">
+                      <button
+                        className="flex-1 text-left text-sm text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer transition-colors"
+                        onClick={() => handleImportGroupTemplate(tpl.id)}
+                      >
+                        {tpl.name}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteGroupTemplate(tpl.id)}
+                        className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-gray-400 hover:text-red-500 cursor-pointer transition-all"
+                        title="Supprimer ce template"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round"/></svg>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex justify-end mt-4">
+                <button onClick={() => setImportTemplateOpen(false)} className="px-3 py-1.5 text-xs rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors">Fermer</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
 

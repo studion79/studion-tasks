@@ -1022,6 +1022,95 @@ export async function listProjectTemplates() {
   return prisma.projectTemplate.findMany({ orderBy: { createdAt: "desc" } });
 }
 
+// ---- Group templates ----
+
+interface GroupTemplateSnapshot {
+  name: string;
+  color: string;
+  tasks: { title: string; priority?: string | null; notes?: string | null }[];
+}
+
+export async function saveGroupAsTemplate(groupId: string, templateName: string) {
+  if (!templateName.trim()) throw new Error("Le nom du template est requis");
+  const group = await prisma.group.findUnique({
+    where: { id: groupId },
+    include: {
+      tasks: {
+        where: { archivedAt: null, parentId: null },
+        orderBy: { position: "asc" },
+        include: { fieldValues: { include: { column: true } } },
+      },
+    },
+  });
+  if (!group) throw new Error("Groupe introuvable");
+  const existing = await prisma.groupTemplate.findFirst({ where: { name: templateName.trim() } });
+  if (existing) throw new Error(`Un template de groupe nommé "${templateName.trim()}" existe déjà`);
+
+  const snapshot: GroupTemplateSnapshot = {
+    name: group.name,
+    color: group.color,
+    tasks: (group.tasks as Array<{ title: string; fieldValues: Array<{ column: { type: string }; value: string | null }> }>).map((t) => {
+      const fv = (type: string) => t.fieldValues.find((f) => f.column.type === type)?.value ?? null;
+      return { title: t.title, priority: fv("PRIORITY"), notes: fv("NOTES") };
+    }),
+  };
+
+  return prisma.groupTemplate.create({
+    data: { name: templateName.trim(), snapshot: JSON.stringify(snapshot) },
+  });
+}
+
+export async function listGroupTemplates() {
+  return prisma.groupTemplate.findMany({ orderBy: { createdAt: "desc" } });
+}
+
+export async function deleteGroupTemplate(templateId: string) {
+  return prisma.groupTemplate.delete({ where: { id: templateId } });
+}
+
+export async function importGroupTemplate(projectId: string, templateId: string) {
+  await requireAdmin(projectId);
+  const template = await prisma.groupTemplate.findUnique({ where: { id: templateId } });
+  if (!template) throw new Error("Template introuvable");
+  const snapshot = JSON.parse(template.snapshot) as GroupTemplateSnapshot;
+
+  const maxPos = await prisma.group.aggregate({ where: { projectId }, _max: { position: true } });
+  const newPos = (maxPos._max.position ?? -1) + 1;
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: { columns: true },
+  });
+  if (!project) throw new Error("Projet introuvable");
+
+  const priorityCol = project.columns.find((c) => c.type === "PRIORITY");
+  const notesCol = project.columns.find((c) => c.type === "NOTES");
+
+  const group = await prisma.group.create({
+    data: {
+      projectId,
+      name: snapshot.name,
+      color: snapshot.color,
+      position: newPos,
+    },
+  });
+
+  for (let idx = 0; idx < snapshot.tasks.length; idx++) {
+    const t = snapshot.tasks[idx];
+    const fieldValues: { columnId: string; value: string }[] = [];
+    if (t.priority && priorityCol) fieldValues.push({ columnId: priorityCol.id, value: t.priority });
+    if (t.notes && notesCol) fieldValues.push({ columnId: notesCol.id, value: t.notes });
+    await prisma.task.create({
+      data: {
+        groupId: group.id,
+        title: t.title,
+        position: idx,
+        fieldValues: fieldValues.length > 0 ? { create: fieldValues } : undefined,
+      },
+    });
+  }
+}
+
 export async function deleteProjectTemplate(templateId: string) {
   return prisma.projectTemplate.delete({ where: { id: templateId } });
 }
