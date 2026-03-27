@@ -294,22 +294,22 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Toolbar ── */}
-      <div className="flex items-center gap-1 px-4 py-2 bg-white border-b border-gray-100 flex-shrink-0">
-        <button onClick={handlePrev} title="Période précédente" className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer">
+      <div className="flex items-center gap-1 px-4 py-2 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
+        <button onClick={handlePrev} title="Période précédente" className="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
-        <button onClick={handleGoToday} className="text-xs text-gray-600 border border-gray-200 rounded-md px-2.5 py-1 hover:bg-gray-50 transition-colors cursor-pointer mx-0.5">
+        <button onClick={handleGoToday} className="text-xs text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md px-2.5 py-1 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer mx-0.5">
           Aujourd&apos;hui
         </button>
-        <button onClick={handleNext} title="Période suivante" className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer">
+        <button onClick={handleNext} title="Période suivante" className="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
-        <div className="w-px h-4 bg-gray-200 mx-2 flex-shrink-0" />
+        <div className="w-px h-4 bg-gray-200 dark:bg-gray-600 mx-2 flex-shrink-0" />
         {PERIOD_OPTIONS.map((opt) => (
           <button
             key={opt.days}
             onClick={() => handlePeriod(opt.days)}
-            className={`text-xs px-2.5 py-1 rounded-md transition-colors cursor-pointer ${activePeriodDays === opt.days ? "bg-indigo-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}
+            className={`text-xs px-2.5 py-1 rounded-md transition-colors cursor-pointer ${activePeriodDays === opt.days ? "bg-indigo-600 text-white" : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
           >
             {opt.label}
           </button>
@@ -317,7 +317,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
         <button
           onClick={() => setManualView(null)}
           title="Ajuster à l'étendue des tâches"
-          className={`text-xs px-2.5 py-1 rounded-md transition-colors cursor-pointer ml-1 ${!manualView ? "bg-gray-100 text-gray-800 font-medium" : "text-gray-400 hover:bg-gray-50"}`}
+          className={`text-xs px-2.5 py-1 rounded-md transition-colors cursor-pointer ml-1 ${!manualView ? "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-medium" : "text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
         >
           Auto
         </button>
@@ -326,26 +326,26 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
       <div className="flex flex-1 overflow-hidden">
       {/* ── Left label column (fixed) ── */}
       <div
-        className="flex-shrink-0 bg-white border-r border-gray-200 z-10"
+        className="flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-10"
         style={{ width: LABEL_W }}
       >
         {/* Header spacer */}
-        <div className="h-[56px] border-b border-gray-200" />
+        <div className="h-[56px] border-b border-gray-200 dark:border-gray-700" />
 
         {/* Group rows */}
         {project.groups.map((group) => (
           <div key={group.id}>
             {/* Group header */}
             <div
-              className="flex items-center gap-2 px-4 py-2 border-b border-gray-100"
+              className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 dark:border-gray-700"
               style={{ height: ROW_H, background: getGroupBg(group.color) }}
             >
               <div
                 className="w-2 h-2 rounded-full flex-shrink-0"
                 style={{ background: group.color }}
               />
-              <span className="text-xs font-semibold text-gray-700 truncate">{group.name}</span>
-              <span className="ml-auto text-[10px] text-gray-400">{group.tasks.length}</span>
+              <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 truncate">{group.name}</span>
+              <span className="ml-auto text-[10px] text-gray-400 dark:text-gray-500">{group.tasks.length}</span>
             </div>
 
             {/* Task rows */}
@@ -353,10 +353,10 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
               <div
                 key={task.id}
                 onClick={() => setSelectedTask({ task: task as TaskWithFields, groupName: group.name, groupColor: group.color })}
-                className="flex items-center px-4 border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors group"
+                className="flex items-center px-4 border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors group"
                 style={{ height: ROW_H }}
               >
-                <span className="text-xs text-gray-700 truncate group-hover:text-indigo-600 transition-colors">
+                <span className="text-xs text-gray-700 dark:text-gray-300 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                   {task.title}
                 </span>
               </div>
@@ -369,14 +369,14 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
       <div className="flex-1 overflow-x-auto overflow-y-hidden relative">
         <div style={{ width: totalDays * DAY_PX, minHeight: "100%" }}>
           {/* Month header */}
-          <div className="flex border-b border-gray-200 bg-white sticky top-0 z-10">
+          <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 sticky top-0 z-10">
             {monthGroups.map((m, i) => (
               <div
                 key={i}
-                className="border-r border-gray-100 px-2 py-1.5 flex-shrink-0"
+                className="border-r border-gray-100 dark:border-gray-700 px-2 py-1.5 flex-shrink-0"
                 style={{ width: m.days * DAY_PX }}
               >
-                <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   {m.label}
                 </span>
               </div>
@@ -384,7 +384,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
           </div>
 
           {/* Day sub-header */}
-          <div className="flex border-b border-gray-200 bg-white sticky top-[30px] z-10">
+          <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 sticky top-[30px] z-10">
             {days.map((d, i) => {
               const isToday = diffDays(viewStart, d) === todayOffset;
               const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -394,10 +394,10 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                   className={[
                     "flex-shrink-0 flex flex-col items-center justify-center border-r text-[10px] leading-none",
                     isToday
-                      ? "bg-indigo-50 border-indigo-200 text-indigo-600 font-bold"
+                      ? "bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 font-bold"
                       : isWeekend
-                      ? "bg-gray-50 border-gray-100 text-gray-400"
-                      : "border-gray-100 text-gray-400",
+                      ? "bg-gray-50 dark:bg-gray-900/40 border-gray-100 dark:border-gray-700 text-gray-400 dark:text-gray-600"
+                      : "border-gray-100 dark:border-gray-700 text-gray-400 dark:text-gray-500",
                   ].join(" ")}
                   style={{ width: DAY_PX, height: 26 }}
                 >
@@ -414,7 +414,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
             <div key={group.id}>
               {/* Group header row */}
               <div
-                className="border-b border-gray-100 relative"
+                className="border-b border-gray-100 dark:border-gray-700 relative"
                 style={{ height: ROW_H, background: getGroupBg(group.color) }}
               >
                 {/* Weekend shading */}
@@ -422,7 +422,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                   d.getDay() === 0 || d.getDay() === 6 ? (
                     <div
                       key={i}
-                      className="absolute top-0 bottom-0 opacity-30 bg-gray-200"
+                      className="absolute top-0 bottom-0 opacity-30 bg-gray-200 dark:bg-gray-600"
                       style={{ left: i * DAY_PX, width: DAY_PX }}
                     />
                   ) : null
@@ -457,7 +457,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                 return (
                   <div
                     key={task.id}
-                    className="border-b border-gray-50 relative hover:bg-indigo-50/30 transition-colors cursor-pointer"
+                    className="border-b border-gray-50 dark:border-gray-700/30 relative hover:bg-indigo-50/30 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer"
                     style={{ height: ROW_H }}
                     onClick={() => {
                       if (justDragged.current) { justDragged.current = false; return; }
@@ -469,7 +469,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                       d.getDay() === 0 || d.getDay() === 6 ? (
                         <div
                           key={i}
-                          className="absolute top-0 bottom-0 bg-gray-100/60"
+                          className="absolute top-0 bottom-0 bg-gray-100/60 dark:bg-gray-700/30"
                           style={{ left: i * DAY_PX, width: DAY_PX }}
                         />
                       ) : null
@@ -596,7 +596,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                           ghosts.push(
                             <div
                               key={i}
-                              className="absolute top-1/2 -translate-y-1/2 rounded border border-dashed border-indigo-300 bg-indigo-100/60 pointer-events-none"
+                              className="absolute top-1/2 -translate-y-1/2 rounded border border-dashed border-indigo-300 dark:border-indigo-700 bg-indigo-100/60 dark:bg-indigo-900/40 pointer-events-none"
                               style={{ left: gStart * DAY_PX + 2, width: Math.max(gDays * DAY_PX - 4, 12), height: 20, zIndex: 15 }}
                             />
                           );
@@ -607,7 +607,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                           ghosts.push(
                             <div
                               key={i}
-                              className="absolute border border-dashed border-amber-300 bg-amber-100/60 pointer-events-none"
+                              className="absolute border border-dashed border-amber-300 dark:border-amber-700 bg-amber-100/60 dark:bg-amber-900/40 pointer-events-none"
                               style={{ left: gOff * DAY_PX + 2, top: "50%", width: 10, height: 10, transform: "translateY(-50%) rotate(45deg)", borderRadius: 1, zIndex: 15 }}
                             />
                           );

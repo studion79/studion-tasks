@@ -38,7 +38,7 @@ function Widget({
         span === 2 ? "col-span-2" : ""
       }`}
     >
-      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-4">
+      <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">
         {title}
       </p>
       {children}
@@ -109,7 +109,7 @@ function LineChart({
             x2={pad.left + w}
             y1={py(v)}
             y2={py(v)}
-            stroke="#f3f4f6"
+            className="stroke-gray-100 dark:stroke-gray-700"
             strokeWidth="1"
           />
           <text x={pad.left - 4} y={py(v) + 3} fontSize="8" fill="#9ca3af" textAnchor="end">
@@ -123,7 +123,7 @@ function LineChart({
         <path
           d={toPath(idealPoints)}
           fill="none"
-          stroke="#d1d5db"
+          className="stroke-gray-300 dark:stroke-gray-600"
           strokeWidth="1.5"
           strokeDasharray="4 3"
         />
@@ -188,7 +188,7 @@ function BarChart({
         const y = padT + chartH - (v / maxVal) * chartH;
         return (
           <g key={v}>
-            <line x1={padL} x2={totalW} y1={y} y2={y} stroke="#f3f4f6" strokeWidth="1" />
+            <line x1={padL} x2={totalW} y1={y} y2={y} className="stroke-gray-100 dark:stroke-gray-700" strokeWidth="1" />
             <text x={padL - 4} y={y + 3} fontSize="8" fill="#9ca3af" textAnchor="end">
               {v}
             </text>
@@ -379,8 +379,8 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
       <div>
         <div className="flex items-end justify-between mb-4">
           <div>
-            <p className="text-4xl font-bold text-gray-900 leading-none">{total}</p>
-            <p className="text-sm text-gray-500 mt-1">tâche{total !== 1 ? "s" : ""} au total</p>
+            <p className="text-4xl font-bold text-gray-900 dark:text-gray-50 leading-none">{total}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">tâche{total !== 1 ? "s" : ""} au total</p>
           </div>
           <div className="text-right">
             <p className="text-2xl font-bold text-indigo-600 leading-none">{completionPct}%</p>
@@ -388,7 +388,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
           </div>
         </div>
         <Bar pct={completionPct} className="bg-indigo-500" />
-        <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
+        <div className="flex items-center justify-between mt-3 text-xs text-gray-500 dark:text-gray-400">
           <span>{doneCount} terminées</span>
           <span>{total - doneCount} restantes</span>
         </div>
@@ -403,10 +403,10 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
               <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${s.color}`}>
                 {s.label}
               </span>
-              <span className="text-xs font-semibold text-gray-700 tabular-nums">
+              <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 tabular-nums">
                 {s.count}
                 {total > 0 && (
-                  <span className="font-normal text-gray-400 ml-1">
+                  <span className="font-normal text-gray-400 dark:text-gray-500 ml-1">
                     ({Math.round((s.count / total) * 100)}%)
                   </span>
                 )}
@@ -430,14 +430,14 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
           <div className="space-y-2.5">
             {ownerEntries.slice(0, 6).map(([name, count]) => (
               <div key={name} className="flex items-center gap-2.5">
-                <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                  <span className="text-[10px] font-bold text-indigo-600 uppercase">
+                <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase">
                     {name.charAt(0)}
                   </span>
                 </div>
-                <span className="text-sm text-gray-700 flex-1 truncate">{name}</span>
+                <span className="text-sm text-gray-700 dark:text-gray-200 flex-1 truncate">{name}</span>
                 <div className="flex items-center gap-2">
-                  <div className="w-16 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                  <div className="w-16 bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
                     <div
                       className="h-full bg-indigo-400 rounded-full"
                       style={{ width: `${(count / total) * 100}%` }}
@@ -459,7 +459,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
         <div className="flex items-center gap-3 mb-3">
           <div
             className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
-              overdueTasksList.length > 0 ? "bg-red-50" : "bg-gray-50"
+              overdueTasksList.length > 0 ? "bg-red-50 dark:bg-red-900/20" : "bg-gray-50 dark:bg-gray-700"
             }`}
           >
             <svg
@@ -479,13 +479,13 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
             >
               {overdueTasksList.length}
             </p>
-            <p className="text-xs text-gray-500 mt-0.5">tâche{overdueTasksList.length !== 1 ? "s" : ""} en retard</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">tâche{overdueTasksList.length !== 1 ? "s" : ""} en retard</p>
           </div>
         </div>
         {overdueTasksList.length > 0 && (
-          <div className="space-y-1 mt-2 border-t border-gray-100 pt-2">
+          <div className="space-y-1 mt-2 border-t border-gray-100 dark:border-gray-700 pt-2">
             {overdueTasksList.slice(0, 4).map((t) => (
-              <p key={t.id} className="text-xs text-gray-600 truncate">
+              <p key={t.id} className="text-xs text-gray-600 dark:text-gray-300 truncate">
                 <span className="text-red-400 mr-1.5">·</span>
                 {t.title}
               </p>
@@ -512,7 +512,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
             ].map(({ label, count, color, dot }) => (
               <div key={label} className="flex items-center gap-2.5 py-0.5">
                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} />
-                <span className="text-sm text-gray-600 flex-1">{label}</span>
+                <span className="text-sm text-gray-600 dark:text-gray-300 flex-1">{label}</span>
                 <span className={`text-sm font-semibold tabular-nums ${count > 0 ? color : "text-gray-300"}`}>
                   {count}
                 </span>
@@ -531,7 +531,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
               <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${p.color}`}>
                 {p.label}
               </span>
-              <span className="text-xs font-semibold text-gray-700 tabular-nums">
+              <span className="text-xs font-semibold text-gray-700 dark:text-gray-200 tabular-nums">
                 {p.count}
                 {total > 0 && <span className="font-normal text-gray-400 ml-1">({Math.round((p.count / total) * 100)}%)</span>}
               </span>
@@ -540,7 +540,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
           </div>
         ))}
         {noPriority > 0 && (
-          <div className="flex items-center justify-between text-xs text-gray-400 pt-1 border-t border-gray-100">
+          <div className="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500 pt-1 border-t border-gray-100 dark:border-gray-700">
             <span>Sans priorité</span>
             <span>{noPriority}</span>
           </div>
@@ -559,11 +559,11 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
               <div className="flex items-center justify-between mb-1.5">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: g.color }} />
-                  <span className="text-xs text-gray-700 truncate">{g.name}</span>
+                  <span className="text-xs text-gray-700 dark:text-gray-200 truncate">{g.name}</span>
                 </div>
                 <span className="text-xs font-semibold text-gray-700 tabular-nums ml-2 flex-shrink-0">
                   {g.done}/{g.total}
-                  <span className="font-normal text-gray-400 ml-1">
+                  <span className="font-normal text-gray-400 dark:text-gray-500 ml-1">
                     ({g.total > 0 ? Math.round((g.done / g.total) * 100) : 0}%)
                   </span>
                 </span>
@@ -591,24 +591,24 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
           <>
             <div className="flex items-end justify-between mb-4">
               <div>
-                <p className="text-3xl font-bold text-gray-900 leading-none">
+                <p className="text-3xl font-bold text-gray-900 dark:text-gray-50 leading-none">
                   {budgetTotal.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">budget total alloué</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">budget total alloué</p>
               </div>
               {budgetTotal > 0 && (
                 <div className="text-right">
                   <p className="text-xl font-bold text-emerald-600 leading-none">
                     {budgetDone.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
                   </p>
-                  <p className="text-xs text-gray-400 mt-1">tâches terminées</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">tâches terminées</p>
                 </div>
               )}
             </div>
             {budgetTotal > 0 && (
               <>
                 <Bar pct={(budgetDone / budgetTotal) * 100} className="bg-emerald-500" />
-                <div className="flex items-center justify-between mt-2 text-xs text-gray-400">
+                <div className="flex items-center justify-between mt-2 text-xs text-gray-400 dark:text-gray-500">
                   <span>{Math.round((budgetDone / budgetTotal) * 100)}% du budget complété</span>
                   <span>{(budgetTotal - budgetDone).toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })} restant</span>
                 </div>
@@ -621,7 +621,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
 
     BURNDOWN: (
       <div>
-        <div className="flex items-center gap-4 mb-3 text-xs text-gray-400">
+        <div className="flex items-center gap-4 mb-3 text-xs text-gray-400 dark:text-gray-500">
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-6 border-t-2 border-dashed border-gray-300" />
             Idéal (linéaire)
@@ -646,7 +646,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
 
     VELOCITY: (
       <div>
-        <p className="text-xs text-gray-400 mb-2">Tâches complétées par semaine (6 dernières semaines)</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Tâches complétées par semaine (6 dernières semaines)</p>
         <BarChart bars={velocityBars} color="#6366f1" height={120} />
       </div>
     ),
@@ -658,7 +658,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
       <div className="flex justify-end mb-4">
         <button
           onClick={() => setShowConfig((v) => !v)}
-          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${showConfig ? "bg-indigo-50 border-indigo-300 text-indigo-600" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${showConfig ? "bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400" : "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" strokeWidth="1.5" />
@@ -670,8 +670,8 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
 
       {/* Config panel */}
       {showConfig && (
-        <div className="mb-5 bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-3">Widgets affichés</p>
+        <div className="mb-5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-sm">
+          <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Widgets affichés</p>
           <div className="grid grid-cols-2 gap-2">
             {project.dashboardWidgets.map((w) => {
               const meta = AVAILABLE_WIDGETS.find((m) => m.type === w.type);
@@ -680,16 +680,16 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
                 <button
                   key={w.id}
                   onClick={() => toggleWidget(w.id)}
-                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left transition-colors cursor-pointer ${active ? "border-indigo-200 bg-indigo-50" : "border-gray-200 hover:bg-gray-50"}`}
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left transition-colors cursor-pointer ${active ? "border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20" : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
                 >
-                  <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${active ? "bg-indigo-500 border-indigo-500" : "border-gray-300"}`}>
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${active ? "bg-indigo-500 border-indigo-500" : "border-gray-300 dark:border-gray-600"}`}>
                     {active && (
                       <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path d="M5 13l4 4L19 7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     )}
                   </div>
-                  <span className={`text-xs font-medium ${active ? "text-indigo-700" : "text-gray-600"}`}>
+                  <span className={`text-xs font-medium ${active ? "text-indigo-700 dark:text-indigo-400" : "text-gray-600 dark:text-gray-400"}`}>
                     {meta?.label ?? widgetLabels[w.type] ?? w.type}
                   </span>
                 </button>
