@@ -180,6 +180,7 @@ export async function getProject(id: string) {
                 include: { fieldValues: true },
               },
               blockerDeps: { select: { id: true, blockedId: true } },
+              attachments: { select: { id: true } },
             },
           },
         },

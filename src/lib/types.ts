@@ -28,6 +28,7 @@ export type TaskWithFields = Task & {
   fieldValues: TaskFieldValue[];
   subtasks?: SubtaskWithFields[];
   blockerDeps?: { id: string; blockedId: string }[];
+  attachments?: { id: string }[];
 };
 export type SubtaskWithFields = Task & { fieldValues: TaskFieldValue[] };
 export type GroupWithTasks = Group & { tasks: TaskWithFields[] };

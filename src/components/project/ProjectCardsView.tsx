@@ -42,10 +42,16 @@ function TaskCard({
   const dueDateCol = columns.find((c) => c.type === "DUE_DATE");
   const ownerCol = columns.find((c) => c.type === "OWNER");
 
+  const notesCol = columns.find((c) => c.type === "NOTES");
+
   const statusVal = statusCol ? getFieldValue(task.fieldValues, statusCol.id) : null;
   const priorityVal = priorityCol ? getFieldValue(task.fieldValues, priorityCol.id) : null;
   const dueDateVal = dueDateCol ? getFieldValue(task.fieldValues, dueDateCol.id) : null;
   const ownerVal = ownerCol ? getFieldValue(task.fieldValues, ownerCol.id) : null;
+  const hasNotes = notesCol ? !!getFieldValue(task.fieldValues, notesCol.id) : false;
+  const subtaskCount = task.subtasks?.length ?? 0;
+  const attachCount = task.attachments?.length ?? 0;
+  const depCount = task.blockerDeps?.length ?? 0;
 
   const { memberAvatars } = useProjectContext();
   const statusMeta = STATUS_OPTIONS.find((o) => o.value === statusVal);
@@ -94,6 +100,44 @@ function TaskCard({
           {statusMeta && <Badge label={statusMeta.label} className={statusMeta.color} />}
           {priorityMeta && <Badge label={priorityMeta.label} className={priorityMeta.color} />}
           <RecurrenceIcon recurrence={task.recurrence ?? null} />
+        </div>
+      )}
+
+      {/* Icon indicators */}
+      {(subtaskCount > 0 || attachCount > 0 || depCount > 0 || hasNotes) && (
+        <div className="flex items-center gap-2.5 mb-2 text-gray-400 dark:text-gray-500">
+          {subtaskCount > 0 && (
+            <span className="flex items-center gap-0.5 text-[10px]" title={`${subtaskCount} sous-tâche${subtaskCount > 1 ? "s" : ""}`}>
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              {subtaskCount}
+            </span>
+          )}
+          {attachCount > 0 && (
+            <span className="flex items-center gap-0.5 text-[10px]" title={`${attachCount} pièce${attachCount > 1 ? "s" : ""} jointe${attachCount > 1 ? "s" : ""}`}>
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              {attachCount}
+            </span>
+          )}
+          {depCount > 0 && (
+            <span className="flex items-center gap-0.5 text-[10px]" title={`${depCount} dépendance${depCount > 1 ? "s" : ""}`}>
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M10.172 13.828a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.102-1.101" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              {depCount}
+            </span>
+          )}
+          {hasNotes && (
+            <span title="Note" className="flex items-center">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </span>
+          )}
         </div>
       )}
 
