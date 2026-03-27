@@ -588,6 +588,8 @@ export function ProjectSpreadsheet({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [addingTaskIn, setAddingTaskIn] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskOwner, setNewTaskOwner] = useState("");
+  const [newTaskDueDate, setNewTaskDueDate] = useState("");
   const [addingGroup, setAddingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
@@ -907,9 +909,18 @@ export function ProjectSpreadsheet({
 
   const submitAddTask = (groupId: string) => {
     const title = newTaskTitle.trim();
+    const owner = newTaskOwner.trim();
+    const dueDate = newTaskDueDate.trim();
     setNewTaskTitle("");
+    setNewTaskOwner("");
+    setNewTaskDueDate("");
     setAddingTaskIn(null);
     if (!title) return;
+    const ownerCol = columns.find((c) => c.type === "OWNER");
+    const dueDateCol = columns.find((c) => c.type === "DUE_DATE");
+    const initialFieldValues: TaskWithFields["fieldValues"] = [];
+    if (owner && ownerCol) initialFieldValues.push({ id: `opt-${ownerCol.id}`, taskId: "temp", columnId: ownerCol.id, value: owner, updatedAt: new Date() });
+    if (dueDate && dueDateCol) initialFieldValues.push({ id: `opt-${dueDateCol.id}`, taskId: "temp", columnId: dueDateCol.id, value: dueDate, updatedAt: new Date() });
     const tempId = `temp-${Date.now()}`;
     const tempTask: TaskWithFields = {
       id: tempId,
@@ -922,13 +933,16 @@ export function ProjectSpreadsheet({
       recurrence: null,
       createdAt: new Date(),
       updatedAt: new Date(),
-      fieldValues: [],
+      fieldValues: initialFieldValues,
     };
     setGroups((prev) =>
       prev.map((g) => (g.id === groupId ? { ...g, tasks: [...g.tasks, tempTask] } : g))
     );
     startTransition(async () => {
       const created = await createTaskAction(groupId, title);
+      // Set extra fields
+      if (owner && ownerCol) await upsertTaskField(created.id, ownerCol.id, owner);
+      if (dueDate && dueDateCol) await upsertTaskField(created.id, dueDateCol.id, dueDate);
       setGroups((prev) =>
         prev.map((g) =>
           g.id === groupId
@@ -1207,24 +1221,52 @@ export function ProjectSpreadsheet({
 
                   {/* Add task row */}
                   {addingTaskIn === group.id ? (
-                    <div className="flex items-center border-t border-gray-100 dark:border-gray-700 px-4 py-2">
-                      <div className="w-0.5 self-stretch mr-3 rounded-full bg-transparent flex-shrink-0" />
-                      <div className="w-3.5 h-3.5 rounded-sm border border-gray-300 dark:border-gray-600 flex-shrink-0 mr-2" />
+                    <div className="flex items-center gap-2 border-t border-gray-100 dark:border-gray-700 px-4 py-2 flex-wrap">
+                      <div className="w-0.5 self-stretch rounded-full bg-transparent flex-shrink-0" />
+                      <div className="w-3.5 h-3.5 rounded-sm border border-gray-300 dark:border-gray-600 flex-shrink-0" />
                       <input
                         ref={taskInputRef}
                         value={newTaskTitle}
                         onChange={(e) => setNewTaskTitle(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") submitAddTask(group.id);
-                          if (e.key === "Escape") setAddingTaskIn(null);
+                          if (e.key === "Escape") { setNewTaskTitle(""); setNewTaskOwner(""); setNewTaskDueDate(""); setAddingTaskIn(null); }
                         }}
-                        onBlur={() => submitAddTask(group.id)}
                         placeholder="Nom de la tâche…"
-                        className="flex-1 text-sm text-gray-800 dark:text-gray-100 outline-none placeholder-gray-400 dark:placeholder-gray-600 bg-transparent"
+                        className="flex-1 min-w-[160px] text-sm text-gray-800 dark:text-gray-100 outline-none placeholder-gray-400 dark:placeholder-gray-600 bg-transparent"
                       />
-                      <span className="text-[11px] text-gray-400 dark:text-gray-500 ml-2">
-                        Entrée pour valider · Échap pour annuler
-                      </span>
+                      {(memberNames?.length ?? 0) > 0 && columns.some((c) => c.type === "OWNER") && (
+                        <select
+                          value={newTaskOwner}
+                          onChange={(e) => setNewTaskOwner(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") submitAddTask(group.id); }}
+                          className="text-xs text-gray-600 dark:text-gray-300 bg-transparent border border-gray-200 dark:border-gray-600 rounded px-1.5 py-0.5 outline-none cursor-pointer"
+                        >
+                          <option value="">Assigner…</option>
+                          {memberNames!.map((n) => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      )}
+                      {columns.some((c) => c.type === "DUE_DATE") && (
+                        <input
+                          type="date"
+                          value={newTaskDueDate}
+                          onChange={(e) => setNewTaskDueDate(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") submitAddTask(group.id); }}
+                          className="text-xs text-gray-600 dark:text-gray-300 bg-transparent border border-gray-200 dark:border-gray-600 rounded px-1.5 py-0.5 outline-none cursor-pointer"
+                        />
+                      )}
+                      <button
+                        onMouseDown={(e) => { e.preventDefault(); submitAddTask(group.id); }}
+                        className="text-[11px] px-2 py-0.5 rounded bg-indigo-500 text-white hover:bg-indigo-600 transition-colors cursor-pointer flex-shrink-0"
+                      >
+                        Ajouter
+                      </button>
+                      <button
+                        onMouseDown={(e) => { e.preventDefault(); setNewTaskTitle(""); setNewTaskOwner(""); setNewTaskDueDate(""); setAddingTaskIn(null); }}
+                        className="text-[11px] text-gray-400 hover:text-gray-600 cursor-pointer flex-shrink-0"
+                      >
+                        Annuler
+                      </button>
                     </div>
                   ) : (
                     <div className="border-t border-gray-100 dark:border-gray-700 px-4 py-1.5">
