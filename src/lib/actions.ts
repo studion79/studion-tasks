@@ -1000,6 +1000,7 @@ export async function deleteProjectTemplate(templateId: string) {
 
 export async function createProjectFromTemplate(templateId: string, name: string) {
   if (!name.trim()) throw new Error("Le nom du projet est requis");
+  const userId = await getAuthUserId();
   const template = await prisma.projectTemplate.findUnique({ where: { id: templateId } });
   if (!template) throw new Error("Template introuvable");
 
@@ -1076,6 +1077,11 @@ export async function createProjectFromTemplate(templateId: string, name: string
       }
     }
   }
+
+  // Créateur automatiquement ADMIN du projet
+  await prisma.projectMember.create({
+    data: { projectId: project.id, userId, role: "ADMIN" },
+  });
 
   redirect(`/projects/${project.id}`);
 }

@@ -1504,9 +1504,9 @@ export function ProjectPageClient({
             <div style={{ position: "fixed", top: panelPos.top, left: panelPos.left, zIndex: 50 }} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl w-72 py-2">
               <div className="px-3 pb-2 border-b border-gray-100 dark:border-gray-700">
                 <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Sauvegarder la vue actuelle</p>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2">
                   <input type="text" value={saveViewName} onChange={(e) => setSaveViewName(e.target.value)} placeholder="Nom de la vue…"
-                    className="flex-1 text-xs text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 placeholder-gray-400 dark:placeholder-gray-500"
+                    className="w-full text-xs text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 placeholder-gray-400 dark:placeholder-gray-500"
                     onKeyDown={(e) => { if (e.key === "Enter") document.getElementById("save-view-btn")?.click(); }}
                   />
                   <button id="save-view-btn" disabled={savingView || !saveViewName.trim()}
@@ -1520,8 +1520,8 @@ export function ProjectPageClient({
                         setSaveViewName("");
                       } finally { setSavingView(false); }
                     }}
-                    className="text-xs bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 text-white rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer disabled:cursor-default"
-                  >{savingView ? "…" : "Sauvegarder"}</button>
+                    className="w-full text-xs bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 text-white rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer disabled:cursor-default"
+                  >{savingView ? "…" : "Sauvegarder la vue"}</button>
                 </div>
               </div>
               <div className="px-3 pt-2">

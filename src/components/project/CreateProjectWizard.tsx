@@ -365,6 +365,8 @@ export function CreateProjectWizard() {
       try {
         await createProject({ name, selectedColumns, defaultView, selectedWidgets });
       } catch (e) {
+        // redirect() throws a special Next.js error — let it propagate
+        if (e instanceof Error && (e as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw e;
         setError(e instanceof Error ? e.message : "Une erreur est survenue");
       }
     });

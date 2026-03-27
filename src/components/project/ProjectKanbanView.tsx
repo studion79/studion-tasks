@@ -11,7 +11,7 @@ import {
   createTask as createTaskAction,
   updateTaskTitle as updateTaskTitleAction,
   upsertTaskField,
-  deleteTask as deleteTaskAction,
+  archiveTask as archiveTaskAction,
 } from "@/lib/actions";
 
 // --- Kanban card ---
@@ -190,6 +190,7 @@ export function ProjectKanbanView({ project }: { project: ProjectWithRelations }
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const router = useRouter();
 
@@ -222,10 +223,11 @@ export function ProjectKanbanView({ project }: { project: ProjectWithRelations }
     setDragOverCol(null);
   };
 
-  const handleDelete = (taskId: string) => {
+  const handleArchiveTask = (taskId: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    setArchiveConfirmId(null);
     startTransition(async () => {
-      await deleteTaskAction(taskId);
+      await archiveTaskAction(taskId);
       router.refresh();
     });
   };
@@ -345,7 +347,7 @@ export function ProjectKanbanView({ project }: { project: ProjectWithRelations }
                     isDragging={draggingId === task.id}
                     onDragStart={() => setDraggingId(task.id)}
                     onOpen={() => setOpenTaskId(task.id)}
-                    onDelete={() => handleDelete(task.id)}
+                    onDelete={() => setArchiveConfirmId(task.id)}
                   />
                 ))}
 
@@ -378,6 +380,20 @@ export function ProjectKanbanView({ project }: { project: ProjectWithRelations }
           onTitleUpdate={(title) => handleTitleUpdate(openTask.id, title)}
           onFieldUpdate={(columnId, value) => handleFieldUpdate(openTask.id, columnId, value)}
         />
+      )}
+
+      {/* Archive confirmation */}
+      {archiveConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setArchiveConfirmId(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xl p-5 w-72 mx-4" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-50 mb-1">Archiver cette tâche ?</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">La tâche sera déplacée dans les archives du projet.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setArchiveConfirmId(null)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer">Annuler</button>
+              <button onClick={() => handleArchiveTask(archiveConfirmId)} className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors cursor-pointer">Archiver</button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
