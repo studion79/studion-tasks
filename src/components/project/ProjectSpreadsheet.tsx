@@ -57,6 +57,7 @@ function TitleCell({
   onOpen,
   onArchive,
   onDuplicate,
+  completing,
 }: {
   task: TaskWithFields;
   groupColor: string;
@@ -65,6 +66,7 @@ function TitleCell({
   onOpen: () => void;
   onArchive: () => void;
   onDuplicate: () => void;
+  completing?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.title);
@@ -111,9 +113,14 @@ function TitleCell({
         />
       ) : (
         <span
-          onClick={() => setEditing(true)}
-          className="flex-1 min-w-0 text-sm text-gray-800 dark:text-gray-100 cursor-text hover:text-gray-900 dark:hover:text-white truncate"
+          onClick={() => !completing && setEditing(true)}
+          className={`flex-1 min-w-0 text-sm cursor-text truncate transition-all ${completing ? "line-through text-emerald-600 dark:text-emerald-400" : "text-gray-800 dark:text-gray-100 hover:text-gray-900 dark:hover:text-white"}`}
         >
+          {completing && (
+            <svg className="inline w-3.5 h-3.5 mr-1 mb-0.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path d="M5 13l4 4L19 7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
           {task.title}
         </span>
       )}
@@ -569,7 +576,9 @@ export function ProjectSpreadsheet({
 
   const { allColumns } = useProjectContext();
   const columns = visibleColumns ?? project.columns;
+  const statusColId = columns.find((c) => c.type === "STATUS")?.id ?? null;
   const [groups, setGroups] = useState<GroupWithTasks[]>(project.groups);
+  const [completingTasks, setCompletingTasks] = useState<Set<string>>(new Set());
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [showArchives, setShowArchives] = useState(false);
   const [archivedTasks, setArchivedTasks] = useState<ArchivedTaskEntry[]>([]);
@@ -633,12 +642,30 @@ export function ProjectSpreadsheet({
           }),
         }))
       );
+
+      // Completion animation: STATUS → DONE triggers strikethrough then archive
+      if (statusColId && columnId === statusColId && value === "DONE") {
+        setCompletingTasks((prev) => new Set(prev).add(taskId));
+        setTimeout(() => {
+          setGroups((prev) =>
+            prev.map((g) => ({ ...g, tasks: g.tasks.filter((t) => t.id !== taskId) }))
+          );
+          setCompletingTasks((prev) => { const s = new Set(prev); s.delete(taskId); return s; });
+          startTransition(async () => {
+            await upsertTaskField(taskId, columnId, value);
+            await archiveTaskAction(taskId);
+            router.refresh();
+          });
+        }, 1500);
+        return;
+      }
+
       startTransition(async () => {
         await upsertTaskField(taskId, columnId, value);
         router.refresh();
       });
     },
-    [router]
+    [router, statusColId]
   );
 
   const handleTitleUpdate = useCallback((taskId: string, title: string) => {
@@ -1085,7 +1112,7 @@ export function ProjectSpreadsheet({
                         onDrop={() => handleDropAt(group.id, taskIdx)}
                       />
                     <div
-                      className={`flex items-center border-t border-gray-100 dark:border-gray-700/50 hover:bg-gray-50/60 dark:hover:bg-gray-700/40 transition-colors group/row ${selectedTaskIds.has(task.id) ? "bg-indigo-50/40 dark:bg-indigo-900/20" : ""}`}
+                      className={`flex items-center border-t border-gray-100 dark:border-gray-700/50 hover:bg-gray-50/60 dark:hover:bg-gray-700/40 transition-all group/row ${selectedTaskIds.has(task.id) ? "bg-indigo-50/40 dark:bg-indigo-900/20" : ""} ${completingTasks.has(task.id) ? "opacity-50 bg-emerald-50/60 dark:bg-emerald-900/10" : ""}`}
                       draggable
                       onDragStart={() => handleDragStart(task.id, group.id)}
                       onDragEnd={handleDragEnd}
@@ -1130,6 +1157,7 @@ export function ProjectSpreadsheet({
                           onOpen={() => setOpenTaskId(task.id)}
                           onArchive={() => handleArchiveTask(task.id)}
                           onDuplicate={() => handleDuplicateTask(task.id)}
+                          completing={completingTasks.has(task.id)}
                         />
                       </div>
                       {columns.map((col) => (
