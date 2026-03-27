@@ -36,6 +36,12 @@ export function CommandPalette({ project, onClose, onOpenTask, onSwitchTab, onAd
     setTimeout(() => inputRef.current?.focus(), 10);
   }, []);
 
+  // Lock body scroll while palette is open
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
   // Static actions
   const actions: Action[] = useMemo(() => [
     {

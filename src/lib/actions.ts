@@ -104,6 +104,9 @@ export async function createProject(input: CreateProjectInput) {
     throw new Error("Le nom du projet est requis");
   }
 
+  const existing = await prisma.project.findFirst({ where: { name: name.trim() } });
+  if (existing) throw new Error(`Un projet nommé "${name.trim()}" existe déjà`);
+
   const project = await prisma.project.create({
     data: {
       name: name.trim(),
@@ -246,6 +249,8 @@ export async function deleteProject(projectId: string) {
 export async function renameProject(projectId: string, name: string) {
   await requireAdmin(projectId);
   if (!name.trim()) throw new Error("Le nom est requis");
+  const existing = await prisma.project.findFirst({ where: { name: name.trim(), NOT: { id: projectId } } });
+  if (existing) throw new Error(`Un projet nommé "${name.trim()}" existe déjà`);
   return prisma.project.update({ where: { id: projectId }, data: { name: name.trim() } });
 }
 
@@ -914,7 +919,6 @@ export async function bulkDeleteTasks(taskIds: string[]) {
 type TemplateTask = {
   title: string;
   priority?: string | null;
-  status?: string | null;
   notes?: string | null;
 };
 
@@ -932,6 +936,8 @@ export async function saveProjectAsTemplate(
 ) {
   await requireAdmin(projectId);
   if (!templateName.trim()) throw new Error("Le nom du template est requis");
+  const existingTpl = await prisma.projectTemplate.findFirst({ where: { name: templateName.trim() } });
+  if (existingTpl) throw new Error(`Un template nommé "${templateName.trim()}" existe déjà`);
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: {
@@ -954,7 +960,6 @@ export async function saveProjectAsTemplate(
   });
   if (!project) throw new Error("Projet introuvable");
 
-  const statusTypes = ["STATUS"];
   const priorityTypes = ["PRIORITY"];
   const notesTypes = ["NOTES"];
 
@@ -972,7 +977,6 @@ export async function saveProjectAsTemplate(
             t.fieldValues.find((f) => f.column.type === type)?.value ?? null;
           return {
             title: t.title,
-            status: fv(statusTypes[0]),
             priority: fv(priorityTypes[0]),
             notes: fv(notesTypes[0]),
           };
@@ -1000,6 +1004,8 @@ export async function deleteProjectTemplate(templateId: string) {
 
 export async function createProjectFromTemplate(templateId: string, name: string) {
   if (!name.trim()) throw new Error("Le nom du projet est requis");
+  const existing = await prisma.project.findFirst({ where: { name: name.trim() } });
+  if (existing) throw new Error(`Un projet nommé "${name.trim()}" existe déjà`);
   const userId = await getAuthUserId();
   const template = await prisma.projectTemplate.findUnique({ where: { id: templateId } });
   if (!template) throw new Error("Template introuvable");
@@ -1050,7 +1056,6 @@ export async function createProjectFromTemplate(templateId: string, name: string
   // If any group has tasks, recreate them with proper column IDs
   const hasTasks = snapshot.groups.some((g) => g.tasks && g.tasks.length > 0);
   if (hasTasks) {
-    const statusCol = project.columns.find((c) => c.type === "STATUS");
     const priorityCol = project.columns.find((c) => c.type === "PRIORITY");
     const notesCol = project.columns.find((c) => c.type === "NOTES");
 
@@ -1062,7 +1067,6 @@ export async function createProjectFromTemplate(templateId: string, name: string
       for (let idx = 0; idx < snapGroup.tasks.length; idx++) {
         const t = snapGroup.tasks[idx];
         const fieldValues: { columnId: string; value: string }[] = [];
-        if (t.status && statusCol) fieldValues.push({ columnId: statusCol.id, value: t.status });
         if (t.priority && priorityCol) fieldValues.push({ columnId: priorityCol.id, value: t.priority });
         if (t.notes && notesCol) fieldValues.push({ columnId: notesCol.id, value: t.notes });
 
