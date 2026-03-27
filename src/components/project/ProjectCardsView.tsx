@@ -222,13 +222,26 @@ function AddTaskCard({ onAdd }: { onAdd: (title: string) => void }) {
 }
 
 // --- Main ---
+const LAYOUT_KEY = "cards-layout-vertical";
+
 export function ProjectCardsView({ project }: { project: ProjectWithRelations }) {
   const { columns } = project;
   const [groups, setGroups] = useState<GroupWithTasks[]>(project.groups);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
+  const [vertical, setVertical] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(LAYOUT_KEY) === "1";
+  });
   const [, startTransition] = useTransition();
   const router = useRouter();
+
+  const toggleVertical = () => {
+    setVertical((v) => {
+      localStorage.setItem(LAYOUT_KEY, v ? "0" : "1");
+      return !v;
+    });
+  };
 
   const handleFieldUpdate = (taskId: string, columnId: string, value: string | null) => {
     setGroups((prev) =>
@@ -316,6 +329,28 @@ export function ProjectCardsView({ project }: { project: ProjectWithRelations })
   return (
     <>
       <div className="p-6 overflow-y-auto">
+        {/* Layout toggle */}
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={toggleVertical}
+            title={vertical ? "Affichage en grille" : "Affichage en colonne"}
+            className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${vertical ? "border-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600" : "border-gray-200 dark:border-gray-700 text-gray-400 hover:text-indigo-500 hover:border-indigo-300"}`}
+          >
+            {vertical ? (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <rect x="3" y="3" width="7" height="7" rx="1" strokeWidth="1.5" />
+                <rect x="14" y="3" width="7" height="7" rx="1" strokeWidth="1.5" />
+                <rect x="3" y="14" width="7" height="7" rx="1" strokeWidth="1.5" />
+                <rect x="14" y="14" width="7" height="7" rx="1" strokeWidth="1.5" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
+        </div>
+
         {groups.map((group) => (
           <div key={group.id} className="mb-8">
             {/* Group header */}
@@ -331,7 +366,7 @@ export function ProjectCardsView({ project }: { project: ProjectWithRelations })
             </div>
 
             {/* Cards grid */}
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
+            <div className={vertical ? "flex flex-col gap-2" : "grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3"}>
               {group.tasks.map((task) => (
                 <TaskCard
                   key={task.id}
