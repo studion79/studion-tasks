@@ -141,26 +141,25 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
   const dragRef = useRef<{
     taskId: string;
     type: "timeline" | "duedate";
+    edge?: "left" | "right"; // undefined = move whole bar
     startClientX: number;
     dragged: boolean;
-    lastDays: number; // always in sync with the last rendered dragDelta
+    lastDays: number;
     originalTl: { start: Date; end: Date } | null;
     originalDd: Date | null;
   } | null>(null);
-  type DeltaState = { taskId: string; days: number; type: "timeline" | "duedate" };
+  type DeltaState = { taskId: string; days: number; type: "timeline" | "duedate"; edge?: "left" | "right" };
   const [dragDelta, setDragDelta] = useState<DeltaState | null>(null);
-  // Keeps the visual offset alive while the server transition is pending
   const [committedDelta, setCommittedDelta] = useState<DeltaState | null>(null);
   const justDragged = useRef(false);
 
-  // Clear committed offset once new project data arrives from the server
   useEffect(() => { setCommittedDelta(null); }, [project]);
 
-  // Unified delta for rendering: live drag takes priority, then committed
-  const getDisplayDelta = (taskId: string, type: "timeline" | "duedate"): number => {
-    if (dragDelta?.taskId === taskId && dragDelta.type === type) return dragDelta.days;
-    if (committedDelta?.taskId === taskId && committedDelta.type === type) return committedDelta.days;
-    return 0;
+  const getDisplayDelta = (taskId: string, type: "timeline" | "duedate"): { days: number; edge?: "left" | "right" } => {
+    const d = dragDelta?.taskId === taskId && dragDelta.type === type ? dragDelta
+              : committedDelta?.taskId === taskId && committedDelta.type === type ? committedDelta
+              : null;
+    return d ? { days: d.days, edge: d.edge } : { days: 0 };
   };
 
   // Find relevant columns — use allColumns (includes inactive) so bars appear
@@ -486,20 +485,36 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                     {/* Task bar */}
                     {barStart !== null && barDays !== null && (() => {
                       const dragType = isMilestone ? "duedate" : "timeline";
-                      const deltaDays = getDisplayDelta(task.id, dragType);
+                      const { days: deltaDays, edge: deltaEdge } = getDisplayDelta(task.id, dragType);
                       const isDraggingThis = dragDelta?.taskId === task.id && dragDelta.type === dragType;
+
+                      // Compute display position and size based on edge type
+                      const displayLeft = deltaEdge === "left" ? (barStart + deltaDays) * DAY_PX + 2 : barStart * DAY_PX + 2;
+                      const displayWidth = isMilestone ? 12
+                        : deltaEdge === "left" ? Math.max((barDays - deltaDays) * DAY_PX - 4, 12)
+                        : deltaEdge === "right" ? Math.max((barDays + deltaDays) * DAY_PX - 4, 12)
+                        : Math.max(barDays * DAY_PX - 4, 12);
+
+                      const makeHandlePointerDown = (edge: "left" | "right") => (e: React.PointerEvent) => {
+                        if (e.button !== 0) return;
+                        e.stopPropagation();
+                        e.preventDefault();
+                        dragRef.current = { taskId: task.id, type: dragType, edge, startClientX: e.clientX, dragged: false, lastDays: 0, originalTl: tl, originalDd: dd };
+                        (e.currentTarget as Element).setPointerCapture(e.pointerId);
+                      };
+
                       return (
                         <div
                           className={[
-                            "absolute top-1/2 -translate-y-1/2 rounded z-20 flex items-center px-2 select-none",
+                            "absolute top-1/2 -translate-y-1/2 rounded z-20 flex items-center select-none group/bar",
                             isMilestone
                               ? "bg-amber-400 border border-amber-500"
                               : "bg-indigo-500 border border-indigo-600 hover:bg-indigo-600",
                             isDraggingThis ? "opacity-80 shadow-lg" : "",
                           ].join(" ")}
                           style={{
-                            left: (barStart + deltaDays) * DAY_PX + 2,
-                            width: isMilestone ? 12 : Math.max(barDays * DAY_PX - 4, 12),
+                            left: displayLeft + (deltaEdge ? 0 : deltaDays * DAY_PX),
+                            width: displayWidth,
                             height: isMilestone ? 12 : 20,
                             borderRadius: isMilestone ? "50%" : undefined,
                             transform: isMilestone ? "translateY(-50%) rotate(45deg)" : undefined,
@@ -510,15 +525,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                           onPointerDown={(e) => {
                             if (e.button !== 0) return;
                             e.stopPropagation();
-                            dragRef.current = {
-                              taskId: task.id,
-                              type: dragType,
-                              startClientX: e.clientX,
-                              dragged: false,
-                              lastDays: 0,
-                              originalTl: tl,
-                              originalDd: dd,
-                            };
+                            dragRef.current = { taskId: task.id, type: dragType, startClientX: e.clientX, dragged: false, lastDays: 0, originalTl: tl, originalDd: dd };
                             e.currentTarget.setPointerCapture(e.pointerId);
                           }}
                           onPointerMove={(e) => {
@@ -529,7 +536,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                             if (dr.dragged) {
                               const days = Math.round(deltaX / DAY_PX);
                               dr.lastDays = days;
-                              setDragDelta({ taskId: task.id, days, type: dr.type });
+                              setDragDelta({ taskId: task.id, days, type: dr.type, edge: dr.edge });
                             }
                           }}
                           onPointerUp={(e) => {
@@ -540,17 +547,16 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                             dragRef.current = null;
                             if (!didDrag) { setDragDelta(null); return; }
                             justDragged.current = true;
-                            if (days !== 0) setCommittedDelta({ taskId: task.id, days, type: dr.type });
+                            if (days !== 0) setCommittedDelta({ taskId: task.id, days, type: dr.type, edge: dr.edge });
                             setDragDelta(null);
                             if (days === 0) return;
                             if (dr.type === "timeline" && dr.originalTl && timelineCol) {
-                              const ns = addDays(dr.originalTl.start, days);
-                              const ne = addDays(dr.originalTl.end, days);
+                              let ns = dr.originalTl.start, ne = dr.originalTl.end;
+                              if (!dr.edge) { ns = addDays(ns, days); ne = addDays(ne, days); }
+                              else if (dr.edge === "left") { ns = addDays(ns, days); if (ns >= ne) ns = addDays(ne, -1); }
+                              else { ne = addDays(ne, days); if (ne <= ns) ne = addDays(ns, 1); }
                               startTransition(async () => {
-                                await upsertTaskField(task.id, timelineCol.id, JSON.stringify({
-                                  start: toLocalDateStr(ns),
-                                  end: toLocalDateStr(ne),
-                                }));
+                                await upsertTaskField(task.id, timelineCol.id, JSON.stringify({ start: toLocalDateStr(ns), end: toLocalDateStr(ne) }));
                                 router.refresh();
                               });
                             } else if (dr.type === "duedate" && dr.originalDd && dueDateCol) {
@@ -562,8 +568,17 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                             }
                           }}
                         >
+                          {/* Left resize handle */}
+                          {!isMilestone && (
+                            <div
+                              className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize z-30 flex items-center justify-center opacity-0 group-hover/bar:opacity-100 transition-opacity"
+                              onPointerDown={makeHandlePointerDown("left")}
+                            >
+                              <div className="w-0.5 h-3 bg-white/60 rounded-full" />
+                            </div>
+                          )}
                           {!isMilestone && barDays * DAY_PX > 50 && (
-                            <span className="flex items-center gap-1 pointer-events-none min-w-0">
+                            <span className="flex items-center gap-1 pointer-events-none min-w-0 px-2">
                               <span className="text-[10px] text-white font-medium truncate leading-none">
                                 {task.title}
                               </span>
@@ -576,6 +591,15 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                                 </span>
                               )}
                             </span>
+                          )}
+                          {/* Right resize handle */}
+                          {!isMilestone && (
+                            <div
+                              className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize z-30 flex items-center justify-center opacity-0 group-hover/bar:opacity-100 transition-opacity"
+                              onPointerDown={makeHandlePointerDown("right")}
+                            >
+                              <div className="w-0.5 h-3 bg-white/60 rounded-full" />
+                            </div>
                           )}
                         </div>
                       );
@@ -618,7 +642,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
 
                     {/* Due date marker (when timeline bar + due date both set) */}
                     {tl && dd && (() => {
-                      const ddDeltaDays = getDisplayDelta(task.id, "duedate");
+                      const { days: ddDeltaDays } = getDisplayDelta(task.id, "duedate");
                       const ddOff = diffDays(viewStart, dd) + ddDeltaDays;
                       const isDraggingDd = dragDelta?.taskId === task.id && dragDelta.type === "duedate";
                       return (
