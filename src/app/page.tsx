@@ -11,10 +11,12 @@ import { PendingInvitationsSection } from "@/components/home/PendingInvitationsS
 export default async function HomePage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
+  const user = session.user as { id?: string; isSuperAdmin?: boolean; email?: string | null; image?: string | null; name?: string | null };
+  const isSuperAdmin = Boolean(user.isSuperAdmin);
 
   const [projects, pendingInvitations, userGroups, myTasks, notifications] = await Promise.all([
     listProjects(),
-    session.user.email ? getPendingInvitations(session.user.email) : Promise.resolve([]),
+    user.email ? getPendingInvitations(user.email) : Promise.resolve([]),
     listUserProjectGroups(),
     getMyTasks().catch(() => []),
     getMyNotifications().catch(() => []),
@@ -101,9 +103,9 @@ export default async function HomePage() {
         {/* Two-column layout: projects + dashboard sidebar */}
         <div className="flex gap-6 items-start">
           <div className="flex-1 min-w-0">
-            <HomePageClient projects={projects} userGroups={userGroups} />
+            <HomePageClient projects={projects} userGroups={userGroups} isSuperAdmin={isSuperAdmin} />
           </div>
-          <div className="w-72 flex-shrink-0 hidden lg:block">
+          <div className="w-[420px] flex-shrink-0">
             <DashboardSidebar tasks={myTasks} notifications={notifications} />
           </div>
         </div>

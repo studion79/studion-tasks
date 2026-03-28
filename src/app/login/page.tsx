@@ -9,7 +9,7 @@ function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const registered = params.get("registered");
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,7 +19,7 @@ function LoginForm() {
     setError("");
     setLoading(true);
     const res = await signIn("credentials", {
-      email,
+      email: identifier,
       password,
       redirect: false,
     });
@@ -53,15 +53,15 @@ function LoginForm() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email</label>
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Identifiant</label>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               required
               autoFocus
               className="w-full px-3 py-2.5 text-sm text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors placeholder-gray-400 dark:placeholder-gray-500"
-              placeholder="vous@exemple.com"
+              placeholder="admin ou vous@exemple.com"
             />
           </div>
           <div>

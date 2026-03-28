@@ -150,13 +150,14 @@ export function ProjectTimelineView({
   const dragRef = useRef<{
     taskId: string;
     type: "timeline" | "duedate";
+    edge?: "left" | "right";
     startClientX: number;
     dragged: boolean;
     lastDays: number; // always in sync with the last rendered dragDelta
     originalTl: { start: Date; end: Date } | null;
     originalDd: Date | null;
   } | null>(null);
-  type DeltaState = { taskId: string; days: number; type: "timeline" | "duedate" };
+  type DeltaState = { taskId: string; days: number; type: "timeline" | "duedate"; edge?: "left" | "right" };
   const [dragDelta, setDragDelta] = useState<DeltaState | null>(null);
   // Keeps the visual offset alive while the server transition is pending
   const [committedDelta, setCommittedDelta] = useState<DeltaState | null>(null);
@@ -576,13 +577,39 @@ export function ProjectTimelineView({
                         const startOff = diffDays(viewStart, tl.start);
                         const endOff = diffDays(viewStart, tl.end);
                         const tlDelta = getDisplayDelta(task.id, "timeline");
-                        const barX = (startOff + tlDelta) * DAY_PX;
-                        const barW = Math.max((endOff - startOff + 1) * DAY_PX - 2, DAY_PX);
+                        const tlDeltaForEdge = dragDelta?.taskId === task.id && dragDelta.type === "timeline" ? dragDelta.edge : undefined;
+                        const committedForEdge = committedDelta?.taskId === task.id && committedDelta.type === "timeline" ? committedDelta.edge : undefined;
+                        const activeEdge = tlDeltaForEdge ?? committedForEdge;
+                        const barX = activeEdge === "right" ? startOff * DAY_PX : (startOff + tlDelta) * DAY_PX;
+                        const baseDays = endOff - startOff + 1;
+                        const barW = activeEdge === "left"
+                          ? Math.max((baseDays - tlDelta) * DAY_PX - 2, DAY_PX)
+                          : activeEdge === "right"
+                          ? Math.max((baseDays + tlDelta) * DAY_PX - 2, DAY_PX)
+                          : Math.max(baseDays * DAY_PX - 2, DAY_PX);
                         const isDraggingBar = dragDelta?.taskId === task.id && dragDelta.type === "timeline";
+
+                        const makeHandlePointerDown = (edge: "left" | "right") => (e: React.PointerEvent) => {
+                          if (e.button !== 0) return;
+                          e.stopPropagation();
+                          e.preventDefault();
+                          dragRef.current = {
+                            taskId: task.id,
+                            type: "timeline",
+                            edge,
+                            startClientX: e.clientX,
+                            dragged: false,
+                            lastDays: 0,
+                            originalTl: tl,
+                            originalDd: null,
+                          };
+                          (e.currentTarget as Element).setPointerCapture(e.pointerId);
+                        };
+
                         items.push(
                           <div
                             key={task.id + "-bar"}
-                            className={`absolute flex items-center px-2 rounded select-none transition-opacity ${colorSet.bar} ${isDone ? "opacity-40" : ""} ${isDraggingBar ? "opacity-80 shadow-lg" : "hover:opacity-90"}`}
+                            className={`absolute group/bar flex items-center px-2 rounded select-none transition-opacity ${colorSet.bar} ${isDone ? "opacity-40" : ""} ${isDraggingBar ? "opacity-80 shadow-lg" : "hover:opacity-90"}`}
                             style={{
                               left: barX,
                               top: barY,
@@ -614,7 +641,7 @@ export function ProjectTimelineView({
                               if (dr.dragged) {
                                 const days = Math.round(deltaX / DAY_PX);
                                 dr.lastDays = days;
-                                setDragDelta({ taskId: task.id, days, type: "timeline" });
+                                setDragDelta({ taskId: task.id, days, type: "timeline", edge: dr.edge });
                               }
                             }}
                             onPointerUp={(e) => {
@@ -625,11 +652,13 @@ export function ProjectTimelineView({
                               dragRef.current = null;
                               if (!didDrag) { setDragDelta(null); return; }
                               justDragged.current = true;
-                              if (days !== 0) setCommittedDelta({ taskId: task.id, days, type: "timeline" });
+                              if (days !== 0) setCommittedDelta({ taskId: task.id, days, type: "timeline", edge: dr.edge });
                               setDragDelta(null);
                               if (days === 0 || !dr.originalTl || !timelineCol) return;
-                              const ns = addDays(dr.originalTl.start, days);
-                              const ne = addDays(dr.originalTl.end, days);
+                              let ns = dr.originalTl.start, ne = dr.originalTl.end;
+                              if (!dr.edge) { ns = addDays(ns, days); ne = addDays(ne, days); }
+                              else if (dr.edge === "left") { ns = addDays(ns, days); if (ns >= ne) ns = addDays(ne, -1); }
+                              else { ne = addDays(ne, days); if (ne <= ns) ne = addDays(ns, 1); }
                               startTransition(async () => {
                                 await upsertTaskField(task.id, timelineCol.id, JSON.stringify({
                                   start: toLocalDateStr(ns),
@@ -643,6 +672,13 @@ export function ProjectTimelineView({
                               setSelectedTask({ task, groupName: group.name, groupColor: group.color });
                             }}
                           >
+                            {/* Left resize handle */}
+                            <div
+                              className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize z-30 flex items-center justify-center opacity-0 group-hover/bar:opacity-100 transition-opacity"
+                              onPointerDown={makeHandlePointerDown("left")}
+                            >
+                              <div className="w-0.5 h-3 bg-white/60 rounded-full" />
+                            </div>
                             {barW > 40 && (
                               <span className="flex items-center gap-1 pointer-events-none min-w-0">
                                 <span className="text-[10px] font-medium text-white truncate leading-tight">
@@ -658,6 +694,13 @@ export function ProjectTimelineView({
                                 )}
                               </span>
                             )}
+                            {/* Right resize handle */}
+                            <div
+                              className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize z-30 flex items-center justify-center opacity-0 group-hover/bar:opacity-100 transition-opacity"
+                              onPointerDown={makeHandlePointerDown("right")}
+                            >
+                              <div className="w-0.5 h-3 bg-white/60 rounded-full" />
+                            </div>
                           </div>
                         );
                       }

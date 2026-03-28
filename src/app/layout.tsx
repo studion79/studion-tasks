@@ -39,6 +39,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const appVersion = process.env.NEXT_PUBLIC_APP_VERSION ?? "dev";
+
   return (
     <html
       lang="fr"
@@ -51,6 +53,9 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <SessionProvider>{children}</SessionProvider>
+        <div className="fixed bottom-3 right-3 z-40 rounded-full border border-gray-200/80 bg-white/90 px-2.5 py-1 text-[10px] font-medium text-gray-600 shadow-sm backdrop-blur dark:border-gray-700/80 dark:bg-gray-900/85 dark:text-gray-300">
+          v{appVersion}
+        </div>
         <PwaRegister />
       </body>
     </html>

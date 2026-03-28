@@ -43,6 +43,7 @@ function KanbanCard({
   const subtaskCount = task.subtasks?.length ?? 0;
   const attachCount = task.attachments?.length ?? 0;
   const depCount = task.blockerDeps?.length ?? 0;
+  const commentCount = task.comments?.length ?? 0;
 
   const { memberAvatars } = useProjectContext();
   const priorityMeta = PRIORITY_OPTIONS.find((o) => o.value === priorityVal);
@@ -96,7 +97,7 @@ function KanbanCard({
       )}
 
       {/* Icon indicators */}
-      {(subtaskCount > 0 || attachCount > 0 || depCount > 0 || hasNotes) && (
+      {(subtaskCount > 0 || attachCount > 0 || depCount > 0 || hasNotes || commentCount > 0) && (
         <div className="flex items-center gap-2 mb-2 text-gray-400 dark:text-gray-500">
           {subtaskCount > 0 && (
             <span className="flex items-center gap-0.5 text-[10px]" title={`${subtaskCount} sous-tâche${subtaskCount > 1 ? "s" : ""}`}>
@@ -128,6 +129,14 @@ function KanbanCard({
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
+            </span>
+          )}
+          {commentCount > 0 && (
+            <span className="flex items-center gap-0.5 text-[10px]" title={`${commentCount} commentaire${commentCount > 1 ? "s" : ""}`}>
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {commentCount}
             </span>
           )}
         </div>
@@ -167,12 +176,20 @@ function KanbanCard({
 // --- Add task inline ---
 function AddTaskInline({
   onAdd,
+  columns,
 }: {
-  onAdd: (title: string) => void;
+  onAdd: (title: string, owner?: string, dueDate?: string) => void;
+  columns: ProjectWithRelations["columns"];
 }) {
   const [active, setActive] = useState(false);
   const [draft, setDraft] = useState("");
+  const [newOwner, setNewOwner] = useState("");
+  const [newDueDate, setNewDueDate] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const { memberNames } = useProjectContext();
+
+  const ownerColId = columns.find((c) => c.type === "OWNER")?.id ?? null;
+  const dueDateColId = columns.find((c) => c.type === "DUE_DATE")?.id ?? null;
 
   useEffect(() => {
     if (active) inputRef.current?.focus();
@@ -181,25 +198,60 @@ function AddTaskInline({
   const submit = () => {
     const t = draft.trim();
     setDraft("");
+    setNewOwner("");
+    setNewDueDate("");
     setActive(false);
-    if (t) onAdd(t);
+    if (t) onAdd(t, newOwner || undefined, newDueDate || undefined);
   };
 
   if (active) {
     return (
-      <div className="bg-white dark:bg-gray-800 border border-indigo-300 rounded-xl p-3">
+      <div className="bg-white dark:bg-gray-800 border border-indigo-300 rounded-xl p-3 space-y-2">
         <input
           ref={inputRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") submit();
-            if (e.key === "Escape") { setDraft(""); setActive(false); }
+            if (e.key === "Escape") { setDraft(""); setNewOwner(""); setNewDueDate(""); setActive(false); }
           }}
-          onBlur={submit}
           placeholder="Nom de la tâche…"
           className="w-full text-sm text-gray-800 dark:text-gray-100 outline-none placeholder-gray-400 dark:placeholder-gray-500 bg-transparent"
         />
+        {ownerColId && memberNames.length > 0 && (
+          <select
+            value={newOwner}
+            onChange={(e) => setNewOwner(e.target.value)}
+            className="w-full text-xs text-gray-600 dark:text-gray-400 bg-transparent border border-gray-200 dark:border-gray-600 rounded-md px-2 py-1 outline-none"
+          >
+            <option value="">Responsable…</option>
+            {memberNames.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        )}
+        {dueDateColId && (
+          <input
+            type="date"
+            value={newDueDate}
+            onChange={(e) => setNewDueDate(e.target.value)}
+            className="w-full text-xs text-gray-600 dark:text-gray-400 bg-transparent border border-gray-200 dark:border-gray-600 rounded-md px-2 py-1 outline-none"
+          />
+        )}
+        <div className="flex gap-2">
+          <button
+            onClick={submit}
+            className="flex-1 text-xs bg-indigo-500 text-white rounded-md py-1 hover:bg-indigo-600 transition-colors cursor-pointer"
+          >
+            Ajouter
+          </button>
+          <button
+            onClick={() => { setDraft(""); setNewOwner(""); setNewDueDate(""); setActive(false); }}
+            className="text-xs text-gray-400 hover:text-gray-600 px-2 cursor-pointer"
+          >
+            Annuler
+          </button>
+        </div>
       </div>
     );
   }
@@ -231,6 +283,16 @@ export function ProjectKanbanView({ project }: { project: ProjectWithRelations }
   const firstGroupId = project.groups[0]?.id ?? null;
 
   const [tasks, setTasks] = useState<TaskWithFields[]>(initialTasks);
+
+  // Full sync from server after every refresh
+  useEffect(() => {
+    setTasks((prev) => {
+      const serverTasks = project.groups.flatMap((g) => g.tasks);
+      const tempTasks = prev.filter((t) => t.id.startsWith("temp-"));
+      return [...serverTasks, ...tempTasks];
+    });
+  }, [project]);
+
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
@@ -303,12 +365,16 @@ export function ProjectKanbanView({ project }: { project: ProjectWithRelations }
     });
   };
 
-  const handleAddTask = (statusValue: string) => async (title: string) => {
+  const handleAddTask = (statusValue: string) => (title: string, owner?: string, dueDate?: string) => {
     if (!firstGroupId) return;
     const tempId = `temp-${Date.now()}`;
-    const initialFieldValues = statusCol
+    const ownerCol = columns.find((c) => c.type === "OWNER") ?? null;
+    const dueDateCol = columns.find((c) => c.type === "DUE_DATE") ?? null;
+    const initialFieldValues: TaskWithFields["fieldValues"] = statusCol
       ? [{ id: `opt-${statusCol.id}`, taskId: tempId, columnId: statusCol.id, value: statusValue, updatedAt: new Date() }]
       : [];
+    if (owner && ownerCol) initialFieldValues.push({ id: `opt-${ownerCol.id}`, taskId: tempId, columnId: ownerCol.id, value: owner, updatedAt: new Date() });
+    if (dueDate && dueDateCol) initialFieldValues.push({ id: `opt-${dueDateCol.id}`, taskId: tempId, columnId: dueDateCol.id, value: dueDate, updatedAt: new Date() });
     const tempTask: TaskWithFields = {
       id: tempId, groupId: firstGroupId, parentId: null, title,
       position: 9999, archivedAt: null, completedAt: null, recurrence: null, createdAt: new Date(), updatedAt: new Date(),
@@ -317,20 +383,18 @@ export function ProjectKanbanView({ project }: { project: ProjectWithRelations }
     setTasks((prev) => [...prev, tempTask]);
     startTransition(async () => {
       const created = await createTaskAction(firstGroupId, title);
-      // Set the status on the newly created task
-      if (statusCol) {
-        await upsertTaskField(created.id, statusCol.id, statusValue);
-        const createdWithStatus: TaskWithFields = {
-          ...(created as TaskWithFields),
-          fieldValues: [
-            ...(created as TaskWithFields).fieldValues,
-            { id: `opt-${statusCol.id}`, taskId: created.id, columnId: statusCol.id, value: statusValue, updatedAt: new Date() },
-          ],
-        };
-        setTasks((prev) => prev.map((t) => (t.id === tempId ? createdWithStatus : t)));
-      } else {
-        setTasks((prev) => prev.map((t) => (t.id === tempId ? (created as TaskWithFields) : t)));
-      }
+      if (statusCol) await upsertTaskField(created.id, statusCol.id, statusValue);
+      if (owner && ownerCol) await upsertTaskField(created.id, ownerCol.id, owner);
+      if (dueDate && dueDateCol) await upsertTaskField(created.id, dueDateCol.id, dueDate);
+      const extraFields: TaskWithFields["fieldValues"] = [];
+      if (statusCol) extraFields.push({ id: `opt-${statusCol.id}`, taskId: created.id, columnId: statusCol.id, value: statusValue, updatedAt: new Date() });
+      if (owner && ownerCol) extraFields.push({ id: `opt-${ownerCol.id}`, taskId: created.id, columnId: ownerCol.id, value: owner, updatedAt: new Date() });
+      if (dueDate && dueDateCol) extraFields.push({ id: `opt-${dueDateCol.id}`, taskId: created.id, columnId: dueDateCol.id, value: dueDate, updatedAt: new Date() });
+      const createdWithFields: TaskWithFields = {
+        ...(created as TaskWithFields),
+        fieldValues: [...(created as TaskWithFields).fieldValues, ...extraFields],
+      };
+      setTasks((prev) => prev.map((t) => (t.id === tempId ? createdWithFields : t)));
       router.refresh();
     });
   };
@@ -405,7 +469,7 @@ export function ProjectKanbanView({ project }: { project: ProjectWithRelations }
 
               {/* Add task */}
               <div className="mt-2 px-1">
-                <AddTaskInline onAdd={handleAddTask(status.value)} />
+                <AddTaskInline columns={columns} onAdd={handleAddTask(status.value)} />
               </div>
             </div>
           );

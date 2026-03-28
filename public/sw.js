@@ -53,23 +53,11 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Assets JS/CSS Next.js → cache-first
-  // Ces fichiers ont un hash dans leur nom et sont immuables
+  // Assets JS/CSS Next.js → network-first
+  // En dev (Turbopack), les chunks changent à chaque restart sans changer d'URL.
+  // On ne cache JAMAIS les chunks JS/CSS pour éviter les "module factory not available".
   if (url.pathname.startsWith("/_next/static/")) {
-    event.respondWith(
-      caches.match(request).then(
-        (cached) =>
-          cached ||
-          fetch(request).then((res) => {
-            if (res.ok) {
-              const clone = res.clone();
-              caches.open(CACHE_NAME).then((c) => c.put(request, clone));
-            }
-            return res;
-          })
-      )
-    );
-    return;
+    return; // network only — le navigateur gère son propre HTTP cache
   }
 
   // Icônes et manifest → cache-first

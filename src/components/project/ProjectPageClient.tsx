@@ -9,8 +9,9 @@ import type {
   SpreadsheetSortColumn,
 } from "@/lib/types";
 import { STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/lib/constants";
-import { setColumnActive, addProjectColumn, inviteMember, removeMember, updateMemberRole, updateProjectDescription, saveProjectAsTemplate, createSavedView, listSavedViews, deleteSavedView, markNotificationRead, markAllNotificationsRead, getProjectLinks, addProjectLink, removeProjectLink, listProjects, getProjectInvitations, cancelInvitation, getNotifPreferences, setNotifPreference, listUserGroups } from "@/lib/actions";
-import { GroupsManagerModal } from "./GroupsManagerModal";
+import { setColumnActive, addProjectColumn, updateProjectDescription, createSavedView, listSavedViews, deleteSavedView, markNotificationRead, markAllNotificationsRead, getProjectLinks, addProjectLink, removeProjectLink, listProjects, getNotifPreferences, setNotifPreference } from "@/lib/actions";
+import { InviteModal } from "./InviteModal";
+import { SaveTemplateModal } from "./SaveTemplateModal";
 import { NOTIF_TYPES } from "@/lib/constants";
 import type { NotifType } from "@/lib/constants";
 import { AVAILABLE_COLUMNS } from "@/lib/types";
@@ -30,397 +31,6 @@ import { AutomationsPanel } from "./AutomationsPanel";
 type Tab = "spreadsheet" | "cards" | "kanban" | "calendar" | "gantt" | "timeline" | "dashboard" | "activity";
 
 type Member = { id: string; userId: string; role: string; user: { id: string; name: string; email: string; avatar: string | null } };
-
-// --- Invite Modal ---
-type PendingInvitation = { id: string; email: string; createdAt: Date; expiresAt: Date };
-
-type UserGroupRow = { id: string; name: string; emails: string };
-
-function InviteModal({
-  projectId,
-  members,
-  isAdmin,
-  onClose,
-  onMemberRemoved,
-  onMemberUpdated,
-}: {
-  projectId: string;
-  members: Member[];
-  isAdmin: boolean;
-  onClose: () => void;
-  onMemberRemoved: (userId: string) => void;
-  onMemberUpdated: (m: Member) => void;
-}) {
-  const [email, setEmail] = useState("");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [isPending, startTransition] = useTransition();
-  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
-  const [userGroups, setUserGroups] = useState<UserGroupRow[]>([]);
-  const [showGroupsManager, setShowGroupsManager] = useState(false);
-  const [groupInviteStatus, setGroupInviteStatus] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    getProjectInvitations(projectId).then((data) => setPendingInvitations(data as PendingInvitation[]));
-    listUserGroups().then((rows) => setUserGroups(rows as UserGroupRow[]));
-  }, [projectId]);
-
-  const handleInviteGroup = (group: UserGroupRow) => {
-    const emails: string[] = JSON.parse(group.emails);
-    setGroupInviteStatus((s) => ({ ...s, [group.id]: "loading" }));
-    startTransition(async () => {
-      let sent = 0;
-      for (const e of emails) {
-        try { await inviteMember(projectId, e); sent++; } catch { /* already member or pending */ }
-      }
-      const updated = await getProjectInvitations(projectId);
-      setPendingInvitations(updated as PendingInvitation[]);
-      const msg = sent === 0 ? "Déjà membres" : `${sent} invitation${sent > 1 ? "s" : ""} envoyée${sent > 1 ? "s" : ""}`;
-      setGroupInviteStatus((s) => ({ ...s, [group.id]: msg }));
-      setTimeout(() => setGroupInviteStatus((s) => { const n = { ...s }; delete n[group.id]; return n; }), 3000);
-    });
-  };
-
-  const handleInvite = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
-    startTransition(async () => {
-      try {
-        await inviteMember(projectId, email.trim());
-        setSuccess(`Invitation envoyée à ${email.trim()}`);
-        setEmail("");
-        // Refresh pending invitations
-        const updated = await getProjectInvitations(projectId);
-        setPendingInvitations(updated as PendingInvitation[]);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Erreur");
-      }
-    });
-  };
-
-  const handleRemoveMember = (userId: string) => {
-    startTransition(async () => {
-      await removeMember(projectId, userId);
-      onMemberRemoved(userId);
-    });
-  };
-
-  const handleToggleRole = (m: Member) => {
-    const newRole = m.role === "ADMIN" ? "MEMBER" : "ADMIN";
-    startTransition(async () => {
-      const updated = await updateMemberRole(projectId, m.userId, newRole);
-      onMemberUpdated(updated as Member);
-    });
-  };
-
-  const handleCancelInvitation = (invId: string) => {
-    startTransition(async () => {
-      await cancelInvitation(invId);
-      setPendingInvitations((prev) => prev.filter((i) => i.id !== invId));
-    });
-  };
-
-  return (
-    <>
-      <div className="fixed inset-0 z-50 bg-black/20" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl p-6 w-full max-w-sm pointer-events-auto max-h-[90vh] overflow-y-auto">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Membres du projet</h2>
-            <button onClick={onClose} className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path d="M6 18L18 6M6 6l12 12" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Active members list */}
-          {members.length > 0 && (
-            <div className="mb-4 space-y-2">
-              {members.map((m) => (
-                <div key={m.userId} className="flex items-center gap-2.5 group">
-                  <div className="w-8 h-8 rounded-full flex-shrink-0 overflow-hidden">
-                    {m.user.avatar ? (
-                      <img src={m.user.avatar} alt={m.user.name} className="w-full h-full object-cover rounded-full" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
-                        <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{m.user.name.charAt(0).toUpperCase()}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{m.user.name}</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{m.user.email}</p>
-                  </div>
-                  {isAdmin ? (
-                    <button
-                      onClick={() => handleToggleRole(m)}
-                      title={m.role === "ADMIN" ? "Rétrograder en membre" : "Promouvoir admin"}
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
-                        m.role === "ADMIN"
-                          ? "border-indigo-200 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
-                          : "border-gray-200 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:border-indigo-200 hover:text-indigo-500"
-                      }`}
-                    >
-                      {m.role === "ADMIN" ? "Admin" : "Membre"}
-                    </button>
-                  ) : (
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                      m.role === "ADMIN"
-                        ? "border-indigo-200 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600"
-                        : "border-gray-200 dark:border-gray-600 text-gray-400 dark:text-gray-500"
-                    }`}>
-                      {m.role === "ADMIN" ? "Admin" : "Membre"}
-                    </span>
-                  )}
-                  {isAdmin && (
-                    <button
-                      onClick={() => handleRemoveMember(m.userId)}
-                      className="opacity-0 group-hover:opacity-100 text-xs text-gray-400 hover:text-red-500 transition-all cursor-pointer ml-1"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Pending invitations */}
-          {pendingInvitations.length > 0 && (
-            <div className="mb-4">
-              <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">En attente</p>
-              <div className="space-y-1.5">
-                {pendingInvitations.map((inv) => (
-                  <div key={inv.id} className="flex items-center gap-2.5 group py-1">
-                    <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" strokeWidth="1.5" strokeLinecap="round" />
-                      </svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-600 dark:text-gray-300 truncate">{inv.email}</p>
-                      <p className="text-[10px] text-gray-400 dark:text-gray-500">Invitation envoyée</p>
-                    </div>
-                    {isAdmin && (
-                      <button
-                        onClick={() => handleCancelInvitation(inv.id)}
-                        className="opacity-0 group-hover:opacity-100 text-xs text-gray-400 hover:text-red-500 transition-all cursor-pointer"
-                        title="Annuler l'invitation"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Groups section — visible for all, actions for admins only */}
-          {userGroups.length > 0 && (
-            <div className="mb-4 border-t border-gray-100 dark:border-gray-700 pt-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Groupes</p>
-                {isAdmin && (
-                  <button
-                    onClick={() => setShowGroupsManager(true)}
-                    className="text-[11px] text-gray-400 hover:text-indigo-500 transition-colors cursor-pointer"
-                  >
-                    Gérer
-                  </button>
-                )}
-              </div>
-              <div className="space-y-2">
-                {userGroups.map((g) => {
-                  const emails: string[] = JSON.parse(g.emails);
-                  const status = groupInviteStatus[g.id];
-                  return (
-                    <div key={g.id} className="flex items-center justify-between gap-2 py-1">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{g.name}</p>
-                        <p className="text-[11px] text-gray-400 dark:text-gray-500">
-                          {emails.length} membre{emails.length > 1 ? "s" : ""}
-                        </p>
-                      </div>
-                      {isAdmin && (
-                        status === "loading" ? (
-                          <span className="text-[11px] text-gray-400">Envoi…</span>
-                        ) : status ? (
-                          <span className={`text-[11px] ${status === "Déjà membres" ? "text-gray-400" : "text-green-600"}`}>{status}</span>
-                        ) : (
-                          <button
-                            onClick={() => handleInviteGroup(g)}
-                            className="text-[11px] font-medium text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-100 dark:border-indigo-700 px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex-shrink-0"
-                          >
-                            Inviter le groupe
-                          </button>
-                        )
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* "Gérer les groupes" shortcut when no group exists yet — admin only */}
-          {isAdmin && userGroups.length === 0 && (
-            <div className="mb-4 border-t border-gray-100 dark:border-gray-700 pt-4">
-              <button
-                onClick={() => setShowGroupsManager(true)}
-                className="w-full flex items-center justify-center gap-1.5 text-[12px] text-gray-400 hover:text-indigo-500 transition-colors cursor-pointer py-1"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Configurer des groupes d&apos;invitation
-              </button>
-            </div>
-          )}
-
-          {isAdmin && (
-            <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
-              {/* Invite form */}
-              <form onSubmit={handleInvite} className="space-y-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Inviter par email</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => { setEmail(e.target.value); setSuccess(""); setError(""); }}
-                    required
-                    autoFocus
-                    placeholder="user@exemple.com"
-                    className="w-full px-3 py-2 text-sm text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 transition-colors placeholder-gray-400 dark:placeholder-gray-500"
-                  />
-                </div>
-                {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
-                {success && (
-                  <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center gap-1.5">
-                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path d="M5 13l4 4L19 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    {success}
-                  </div>
-                )}
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="w-full bg-indigo-600 text-white text-sm font-medium py-2 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-60 cursor-pointer"
-                >
-                  {isPending ? "Envoi…" : "Envoyer l'invitation"}
-                </button>
-              </form>
-              <p className="mt-3 text-[11px] text-gray-400 dark:text-gray-500 text-center">
-                Un email avec un lien d&apos;invitation sera envoyé. Sans compte, un lien de création sera proposé.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-      {showGroupsManager && (
-        <GroupsManagerModal
-          onClose={() => {
-            setShowGroupsManager(false);
-            listUserGroups().then((rows) => setUserGroups(rows as UserGroupRow[]));
-          }}
-        />
-      )}
-    </>
-  );
-}
-
-// --- Save Template Modal ---
-function SaveTemplateModal({
-  projectId,
-  projectName,
-  onClose,
-}: {
-  projectId: string;
-  projectName: string;
-  onClose: () => void;
-}) {
-  const [name, setName] = useState(projectName);
-  const [includeTasks, setIncludeTasks] = useState(false);
-  const [done, setDone] = useState(false);
-  const [isPending, startTransition] = useTransition();
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    startTransition(async () => {
-      await saveProjectAsTemplate(projectId, name.trim(), includeTasks);
-      setDone(true);
-    });
-  };
-
-  return (
-    <>
-      <div className="fixed inset-0 z-50 bg-black/20" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl p-6 w-full max-w-sm pointer-events-auto">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Sauvegarder comme template</h2>
-            <button onClick={onClose} className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path d="M6 18L18 6M6 6l12 12" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
-          {done ? (
-            <div className="flex flex-col items-center py-4 gap-3">
-              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
-                <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M5 13l4 4L19 7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Template sauvegardé !</p>
-              <div className="flex gap-2 w-full">
-                <button onClick={onClose} className="flex-1 border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 rounded-lg py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
-                  Fermer
-                </button>
-                <a href="/templates" className="flex-1 text-center bg-indigo-600 text-white text-sm font-medium rounded-lg py-2 hover:bg-indigo-700 transition-colors">
-                  Voir les templates
-                </a>
-              </div>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit}>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1.5">Nom du template</label>
-              <input
-                autoFocus
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 mb-4 placeholder-gray-400 dark:placeholder-gray-500"
-                placeholder="Nom du template"
-              />
-              <label className="flex items-center gap-2.5 py-2 mb-3 cursor-pointer select-none">
-                <div
-                  onClick={() => setIncludeTasks((v) => !v)}
-                  className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${includeTasks ? "bg-indigo-500" : "bg-gray-200 dark:bg-gray-600"}`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${includeTasks ? "translate-x-4" : ""}`}
-                  />
-                </div>
-                <span className="text-sm text-gray-700 dark:text-gray-200">Inclure les tâches</span>
-              </label>
-              <button
-                type="submit"
-                disabled={isPending || !name.trim()}
-                className="w-full bg-indigo-600 text-white text-sm font-medium py-2 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-60 cursor-pointer"
-              >
-                {isPending ? "Sauvegarde…" : "Sauvegarder"}
-              </button>
-            </form>
-          )}
-        </div>
-      </div>
-    </>
-  );
-}
 
 const VIEW_ICONS: Record<string, React.ReactNode> = {
   SPREADSHEET: (
@@ -499,6 +109,7 @@ export function ProjectPageClient({
   allColumns,
   initialMembers,
   currentUserId,
+  isGlobalAdmin,
   initialNotifications,
   initialUnreadCount,
 }: {
@@ -506,19 +117,34 @@ export function ProjectPageClient({
   allColumns: ProjectColumn[];
   initialMembers: Member[];
   currentUserId: string | null;
+  isGlobalAdmin: boolean;
   initialNotifications: NotificationItem[];
   initialUnreadCount: number;
 }) {
   const [activeTab, setActiveTab] = useState<Tab>("spreadsheet");
+
+  // Restore last viewed tab from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(`project-tab-${project.id}`);
+    const valid: Tab[] = ["spreadsheet","cards","kanban","calendar","gantt","timeline","dashboard","activity"];
+    if (saved && valid.includes(saved as Tab)) setActiveTab(saved as Tab);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id]);
+
+  const switchTab = (tab: Tab) => {
+    setActiveTab(tab);
+    localStorage.setItem(`project-tab-${project.id}`, tab);
+  };
   const [activeColumnIds, setActiveColumnIds] = useState<Set<string>>(
     () => new Set(project.columns.map((c) => c.id))
   );
   const [, startColumnTransition] = useTransition();
   const [members, setMembers] = useState<Member[]>(initialMembers);
-  const isAdmin = members.find((m) => m.userId === currentUserId)?.role === "ADMIN";
+  const isAdmin = isGlobalAdmin || members.find((m) => m.userId === currentUserId)?.role === "ADMIN";
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>(initialNotifications);
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
@@ -636,6 +262,12 @@ export function ProjectPageClient({
         setShowCommandPalette((v) => !v);
         return;
       }
+      // ? → keyboard shortcuts help
+      if (!isInput && e.key === "?") {
+        e.preventDefault();
+        setShowKeyboardHelp((v) => !v);
+        return;
+      }
       // Escape → close all panels
       if (e.key === "Escape") {
         setShowFilterPanel(false);
@@ -643,6 +275,7 @@ export function ProjectPageClient({
         setShowColumnsPanel(false);
         setShowInviteModal(false);
         setShowCommandPalette(false);
+        setShowKeyboardHelp(false);
       }
     };
     window.addEventListener("keydown", handler);
@@ -1071,7 +704,7 @@ export function ProjectPageClient({
         <div className="flex items-center gap-0.5 -mb-px overflow-x-auto scrollbar-none">
           <TabButton
             active={activeTab === "spreadsheet"}
-            onClick={() => setActiveTab("spreadsheet")}
+            onClick={() => switchTab("spreadsheet")}
             icon={VIEW_ICONS[defaultView?.type ?? "SPREADSHEET"]}
           >
             {VIEW_LABELS[defaultView?.type ?? "SPREADSHEET"] ?? "Tableur"}
@@ -1079,7 +712,7 @@ export function ProjectPageClient({
 
           <TabButton
             active={activeTab === "cards"}
-            onClick={() => setActiveTab("cards")}
+            onClick={() => switchTab("cards")}
             icon={VIEW_ICONS["CARDS"]}
           >
             Fiches
@@ -1087,7 +720,7 @@ export function ProjectPageClient({
 
           <TabButton
             active={activeTab === "kanban"}
-            onClick={() => setActiveTab("kanban")}
+            onClick={() => switchTab("kanban")}
             icon={VIEW_ICONS["KANBAN"]}
           >
             Kanban
@@ -1095,7 +728,7 @@ export function ProjectPageClient({
 
           <TabButton
             active={activeTab === "calendar"}
-            onClick={() => setActiveTab("calendar")}
+            onClick={() => switchTab("calendar")}
             icon={VIEW_ICONS["CALENDAR"]}
           >
             Calendrier
@@ -1103,7 +736,7 @@ export function ProjectPageClient({
 
           <TabButton
             active={activeTab === "gantt"}
-            onClick={() => setActiveTab("gantt")}
+            onClick={() => switchTab("gantt")}
             icon={VIEW_ICONS["GANTT"]}
           >
             Gantt
@@ -1111,7 +744,7 @@ export function ProjectPageClient({
 
           <TabButton
             active={activeTab === "timeline"}
-            onClick={() => setActiveTab("timeline")}
+            onClick={() => switchTab("timeline")}
             icon={VIEW_ICONS["TIMELINE"]}
           >
             Échéancier
@@ -1121,7 +754,7 @@ export function ProjectPageClient({
 
           <TabButton
             active={activeTab === "dashboard"}
-            onClick={() => setActiveTab("dashboard")}
+            onClick={() => switchTab("dashboard")}
             icon={
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <rect x="3" y="3" width="8" height="5" rx="1" strokeWidth="1.5" />
@@ -1136,7 +769,7 @@ export function ProjectPageClient({
 
           <TabButton
             active={activeTab === "activity"}
-            onClick={() => setActiveTab("activity")}
+            onClick={() => switchTab("activity")}
             icon={
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -1179,6 +812,20 @@ export function ProjectPageClient({
           </div>
 
           <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1 flex-shrink-0" />
+
+          {/* Reset view button */}
+          {(activeFilterCount > 0 || sort !== null || hiddenColumnIds.length > 0 || search) && (
+            <button
+              onClick={() => { clearFilters(); setSort(null); setHiddenColumnIds([]); setSearch(""); }}
+              className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-red-500 transition-colors cursor-pointer flex-shrink-0"
+              title="Réinitialiser la vue"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Réinitialiser
+            </button>
+          )}
 
           {/* Filter button */}
           <div ref={filterBtnRef} className="flex-shrink-0">
@@ -1331,6 +978,13 @@ export function ProjectPageClient({
               title="Command palette (⌘K)"
             >
               <kbd className="text-[10px] border border-gray-200 dark:border-gray-600 rounded px-1 font-mono">⌘K</kbd>
+            </button>
+            <button
+              onClick={() => setShowKeyboardHelp(true)}
+              className="hidden sm:flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 px-2 py-1.5 rounded-md transition-colors cursor-pointer"
+              title="Raccourcis clavier (?)"
+            >
+              <kbd className="text-[10px] border border-gray-200 dark:border-gray-600 rounded px-1 font-mono">?</kbd>
             </button>
           </div>
 
@@ -1635,6 +1289,9 @@ export function ProjectPageClient({
           onClose={() => setShowAutomationsPanel(false)}
         />
       )}
+      {showKeyboardHelp && (
+        <KeyboardShortcutsModal onClose={() => setShowKeyboardHelp(false)} />
+      )}
       {showCommandPalette && (
         <CommandPalette
           project={project}
@@ -1670,6 +1327,76 @@ export function ProjectPageClient({
       )}
     </div>
     </ProjectProvider>
+  );
+}
+
+function KeyboardShortcutsModal({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
+  const sections = [
+    {
+      title: "Navigation",
+      shortcuts: [
+        { keys: ["⌘K"], label: "Ouvrir la palette de commandes" },
+        { keys: ["?"], label: "Afficher les raccourcis clavier" },
+        { keys: ["/", "⌘F"], label: "Rechercher (vue tableur)" },
+        { keys: ["Échap"], label: "Fermer / annuler" },
+      ],
+    },
+    {
+      title: "Vues",
+      shortcuts: [
+        { keys: ["⌘K", "puis", "T"], label: "Tableur" },
+        { keys: ["⌘K", "puis", "K"], label: "Kanban" },
+        { keys: ["⌘K", "puis", "C"], label: "Fiches" },
+        { keys: ["⌘K", "puis", "G"], label: "Gantt" },
+      ],
+    },
+  ];
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-none">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-md pointer-events-auto">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-50">Raccourcis clavier</h2>
+            <button onClick={onClose} className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-pointer transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="2" strokeLinecap="round" /></svg>
+            </button>
+          </div>
+          <div className="px-5 py-4 space-y-5">
+            {sections.map((section) => (
+              <div key={section.title}>
+                <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">{section.title}</p>
+                <div className="space-y-1.5">
+                  {section.shortcuts.map((s, i) => (
+                    <div key={i} className="flex items-center justify-between gap-4">
+                      <span className="text-sm text-gray-600 dark:text-gray-300">{s.label}</span>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {s.keys.map((k, ki) => (
+                          k === "puis" ? (
+                            <span key={ki} className="text-[10px] text-gray-400 dark:text-gray-500">puis</span>
+                          ) : (
+                            <kbd key={ki} className="text-[10px] font-mono border border-gray-200 dark:border-gray-600 rounded px-1.5 py-0.5 text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700">{k}</kbd>
+                          )
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700 text-center">
+            <span className="text-[11px] text-gray-400 dark:text-gray-500">Appuyer sur <kbd className="font-mono border border-gray-200 dark:border-gray-600 rounded px-1 text-[10px]">?</kbd> ou <kbd className="font-mono border border-gray-200 dark:border-gray-600 rounded px-1 text-[10px]">Échap</kbd> pour fermer</span>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 

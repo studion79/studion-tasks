@@ -9,14 +9,18 @@ import { MySpacePage } from "@/components/me/MySpacePage";
 export default async function MePage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
+  const sessionUser = session.user as { isSuperAdmin?: boolean; id?: string; name?: string | null; email?: string | null; image?: string | null };
+  const isSuperAdmin = Boolean(sessionUser.isSuperAdmin);
 
-  const [tasks, projects] = await Promise.all([getMyTasks(), getMyProjects()]);
+  const [tasks, projects] = isSuperAdmin
+    ? [[], []]
+    : await Promise.all([getMyTasks(), getMyProjects()]);
 
   const user = {
-    id: session.user.id ?? "",
-    name: session.user.name ?? "",
-    email: session.user.email ?? "",
-    avatar: session.user.image ?? null,
+    id: sessionUser.id ?? "",
+    name: sessionUser.name ?? "",
+    email: sessionUser.email ?? "",
+    avatar: sessionUser.image ?? null,
   };
 
   return (

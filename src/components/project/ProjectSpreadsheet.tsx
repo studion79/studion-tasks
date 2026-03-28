@@ -41,6 +41,7 @@ import {
   listGroupTemplates as listGroupTemplatesAction,
   deleteGroupTemplate as deleteGroupTemplateAction,
   importGroupTemplate as importGroupTemplateAction,
+  unarchiveTask,
 } from "@/lib/actions";
 import { STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/lib/constants";
 
@@ -61,6 +62,7 @@ function TitleCell({
   onOpen,
   onArchive,
   onDuplicate,
+  onComplete,
   completing,
 }: {
   task: TaskWithFields;
@@ -70,6 +72,7 @@ function TitleCell({
   onOpen: () => void;
   onArchive: () => void;
   onDuplicate: () => void;
+  onComplete?: () => void;
   completing?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
@@ -99,10 +102,16 @@ function TitleCell({
         style={{ backgroundColor: groupColor }}
       />
       <div
-        className="w-3.5 h-3.5 rounded-sm border border-gray-300 dark:border-gray-600 flex-shrink-0 cursor-pointer group-hover/title:border-indigo-400 transition-colors"
-        onClick={onDelete}
-        title="Supprimer la tâche"
-      />
+        className={`w-3.5 h-3.5 rounded-sm border flex-shrink-0 cursor-pointer transition-all flex items-center justify-center ${completing ? "border-emerald-500 bg-emerald-500" : "border-gray-300 dark:border-gray-600 group-hover/title:border-indigo-400"}`}
+        onClick={completing ? undefined : (onComplete ?? onDelete)}
+        title={completing ? "Terminée" : onComplete ? "Terminer la tâche" : "Supprimer la tâche"}
+      >
+        {completing && (
+          <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M5 13l4 4L19 7" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </div>
       {editing ? (
         <input
           ref={inputRef}
@@ -593,8 +602,20 @@ export function ProjectSpreadsheet({
 
   const { allColumns } = useProjectContext();
   const columns = visibleColumns ?? project.columns;
-  const statusColId = columns.find((c) => c.type === "STATUS")?.id ?? null;
+  const statusColId = allColumns.find((c) => c.type === "STATUS")?.id ?? null;
   const [groups, setGroups] = useState<GroupWithTasks[]>(project.groups);
+
+  // Full sync from server after every refresh — keeps temp (in-flight) tasks intact
+  useEffect(() => {
+    setGroups((prev) =>
+      project.groups.map((serverGroup) => {
+        const localGroup = prev.find((g) => g.id === serverGroup.id);
+        const tempTasks = localGroup ? localGroup.tasks.filter((t) => t.id.startsWith("temp-")) : [];
+        return { ...serverGroup, tasks: [...serverGroup.tasks, ...tempTasks] };
+      })
+    );
+  }, [project]);
+
   const [completingTasks, setCompletingTasks] = useState<Set<string>>(new Set());
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [showArchives, setShowArchives] = useState(false);
@@ -892,6 +913,14 @@ export function ProjectSpreadsheet({
     });
   };
 
+  const handleRestoreTask = (taskId: string) => {
+    setArchivedTasks((prev) => prev.filter((t) => t.id !== taskId));
+    startTransition(async () => {
+      await unarchiveTask(taskId);
+      router.refresh();
+    });
+  };
+
   const handleDragStart = (taskId: string, fromGroupId: string) => {
     dragTask.current = { taskId, fromGroupId };
   };
@@ -1025,7 +1054,10 @@ export function ProjectSpreadsheet({
   const handleImportGroupTemplate = async (templateId: string) => {
     setImportTemplateOpen(false);
     startTransition(async () => {
-      await importGroupTemplateAction(project.id, templateId);
+      const newGroup = await importGroupTemplateAction(project.id, templateId);
+      if (newGroup) {
+        setGroups((prev) => [...prev, { ...newGroup, tasks: newGroup.tasks ?? [] }]);
+      }
       router.refresh();
     });
   };
@@ -1231,6 +1263,7 @@ export function ProjectSpreadsheet({
                           onOpen={() => setOpenTaskId(task.id)}
                           onArchive={() => handleArchiveTask(task.id)}
                           onDuplicate={() => handleDuplicateTask(task.id)}
+                          onComplete={statusColId ? () => handleFieldUpdate(task.id, statusColId, "DONE") : undefined}
                           completing={completingTasks.has(task.id)}
                         />
                       </div>
@@ -1377,15 +1410,18 @@ export function ProjectSpreadsheet({
               ) : (
                 <div className="space-y-1">
                   {archivedTasks.map((task) => (
-                    <div key={task.id} className="flex items-center gap-2.5 py-1.5 text-xs group/arch">
+                    <div key={task.id} className="flex items-center gap-2.5 py-1.5 text-xs group/arch group/archrow">
                       <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: task.group.color }} />
                       <span className="text-gray-400 dark:text-gray-500 flex-1 truncate">{task.title}</span>
                       <span className="text-gray-300 dark:text-gray-600 text-[10px]">{task.group.name}</span>
                       <button
-                        onClick={() => handleRestore(task.id)}
-                        className="opacity-0 group-hover/arch:opacity-100 text-[10px] text-indigo-500 hover:text-indigo-700 transition-all cursor-pointer ml-2 flex-shrink-0"
+                        onClick={() => handleRestoreTask(task.id)}
+                        className="opacity-0 group-hover/archrow:opacity-100 p-0.5 text-gray-300 hover:text-emerald-500 transition-all cursor-pointer"
+                        title="Restaurer la tâche"
                       >
-                        Restaurer
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
                       </button>
                     </div>
                   ))}

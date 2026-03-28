@@ -404,8 +404,8 @@ export function CreateProjectWizard() {
           <div className="mt-6 sm:mt-8 flex items-center justify-between border-t border-gray-100 dark:border-gray-700 pt-5 sm:pt-6">
             <Button
               variant="ghost"
-              onClick={() => setStep((s) => s - 1)}
-              disabled={step === 1 || isPending}
+              onClick={() => step === 1 ? window.location.href = "/" : setStep((s) => s - 1)}
+              disabled={isPending}
             >
               ← Retour
             </Button>

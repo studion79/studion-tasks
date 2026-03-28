@@ -237,10 +237,14 @@ export function DashboardSidebar({
 }) {
   const [showNotif, setShowNotif] = useState(false);
   const [taskFilter, setTaskFilter] = useState<"today" | "week" | "late" | "all">("today");
+  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set());
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
-
   const activeTasks = tasks.filter((t) => !t.completedAt);
+
+  const lateCount = activeTasks.filter((t) => isLate(t)).length;
+  const todayCount = activeTasks.filter((t) => isToday(t)).length;
+  const weekCount = activeTasks.filter((t) => isThisWeek(t)).length;
 
   const filtered = activeTasks.filter((t) => {
     if (taskFilter === "today") return isToday(t);
@@ -249,13 +253,25 @@ export function DashboardSidebar({
     return true;
   });
 
-  const lateCount = activeTasks.filter((t) => isLate(t)).length;
-  const todayCount = activeTasks.filter((t) => isToday(t)).length;
-  const weekCount = activeTasks.filter((t) => isThisWeek(t)).length;
+  // Group filtered tasks by project
+  const byProject: { projectId: string; projectName: string; tasks: MyTask[] }[] = [];
+  for (const task of filtered) {
+    const existing = byProject.find((g) => g.projectId === task.projectId);
+    if (existing) { existing.tasks.push(task); }
+    else { byProject.push({ projectId: task.projectId, projectName: task.projectName, tasks: [task] }); }
+  }
+
+  const toggleProject = (projectId: string) => {
+    setCollapsedProjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) next.delete(projectId); else next.add(projectId);
+      return next;
+    });
+  };
 
   return (
-    <div className="space-y-5">
-      {/* Notifications bell */}
+    <div className="space-y-4">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Mon tableau de bord</h2>
         <div className="relative">
@@ -274,34 +290,38 @@ export function DashboardSidebar({
             )}
           </button>
           {showNotif && (
-            <NotificationsPanel
-              notifications={notifications}
-              onClose={() => setShowNotif(false)}
-            />
+            <NotificationsPanel notifications={notifications} onClose={() => setShowNotif(false)} />
           )}
         </div>
       </div>
 
-      {/* Stats chips */}
+      {/* Stat chips */}
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-3 text-center">
-          <p className="text-lg font-bold text-gray-900 dark:text-gray-50">{activeTasks.length}</p>
+          <p className="text-xl font-bold text-gray-900 dark:text-gray-50">{activeTasks.length}</p>
           <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">En cours</p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-3 text-center">
-          <p className={`text-lg font-bold ${todayCount > 0 ? "text-indigo-600 dark:text-indigo-400" : "text-gray-900 dark:text-gray-50"}`}>{todayCount}</p>
+        <div
+          className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-3 text-center cursor-pointer hover:border-indigo-200 dark:hover:border-indigo-700 transition-colors"
+          onClick={() => setTaskFilter("today")}
+        >
+          <p className={`text-xl font-bold ${todayCount > 0 ? "text-indigo-600 dark:text-indigo-400" : "text-gray-900 dark:text-gray-50"}`}>{todayCount}</p>
           <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Aujourd&apos;hui</p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-3 text-center">
-          <p className={`text-lg font-bold ${lateCount > 0 ? "text-red-500" : "text-gray-900 dark:text-gray-50"}`}>{lateCount}</p>
+        <div
+          className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-3 text-center cursor-pointer hover:border-red-200 dark:hover:border-red-800 transition-colors"
+          onClick={() => setTaskFilter("late")}
+        >
+          <p className={`text-xl font-bold ${lateCount > 0 ? "text-red-500" : "text-gray-900 dark:text-gray-50"}`}>{lateCount}</p>
           <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">En retard</p>
         </div>
       </div>
 
-      {/* My tasks */}
+      {/* My tasks - grouped by project */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-        <div className="flex items-center gap-1 px-3 pt-3 pb-2 border-b border-gray-50 dark:border-gray-700/50">
-          <p className="text-xs font-semibold text-gray-700 dark:text-gray-200 flex-1">Mes tâches</p>
+        {/* Header + filters */}
+        <div className="flex items-center gap-2 px-4 pt-3 pb-2.5 border-b border-gray-100 dark:border-gray-700">
+          <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 flex-1">Mes tâches</p>
           <div className="flex gap-0.5">
             {([
               { key: "today", label: "Auj.", count: todayCount },
@@ -314,49 +334,71 @@ export function DashboardSidebar({
                 onClick={() => setTaskFilter(key)}
                 className={`text-[10px] px-1.5 py-0.5 rounded-md transition-colors cursor-pointer ${taskFilter === key ? "bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-semibold" : "text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
               >
-                {label}{count > 0 && ` · ${count}`}
+                {label}{count > 0 ? ` · ${count}` : ""}
               </button>
             ))}
           </div>
         </div>
-        <div className="divide-y divide-gray-50 dark:divide-gray-700/50 max-h-64 overflow-y-auto">
-          {filtered.length === 0 ? (
-            <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-5">
+
+        {/* Tasks grouped by project */}
+        <div className="max-h-[480px] overflow-y-auto">
+          {byProject.length === 0 ? (
+            <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-6">
               {taskFilter === "today" ? "Aucune tâche pour aujourd'hui 🎉" : "Aucune tâche"}
             </p>
-          ) : filtered.map((task) => {
-            const dateStr = fmtDate(task.dueDate);
-            const late = isLate(task);
-            const statusColor = STATUS_DOT[task.status ?? ""] ?? "bg-gray-300";
-            return (
-              <Link
-                key={task.id}
-                href={`/projects/${task.projectId}`}
-                className="flex items-start gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group"
-              >
-                <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${statusColor}`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-700 dark:text-gray-300 leading-snug truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                    {task.title}
-                  </p>
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500 truncate mt-0.5">{task.projectName}</p>
-                </div>
-                {dateStr && (
-                  <span className={`text-[10px] flex-shrink-0 font-medium ${late ? "text-red-500" : "text-gray-400 dark:text-gray-500"}`}>
-                    {dateStr}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+          ) : (
+            <div className="divide-y divide-gray-50 dark:divide-gray-700/50">
+              {byProject.map(({ projectId, projectName, tasks: projectTasks }) => {
+                const isCollapsed = collapsedProjects.has(projectId);
+                return (
+                  <div key={projectId}>
+                    {/* Project group header */}
+                    <button
+                      onClick={() => toggleProject(projectId)}
+                      className="w-full flex items-center gap-2 px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors cursor-pointer"
+                    >
+                      <svg className={`w-3 h-3 text-gray-400 flex-shrink-0 transition-transform ${isCollapsed ? "-rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-400 flex-1 text-left truncate">
+                        {projectName}
+                      </span>
+                      <span className="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums">{projectTasks.length}</span>
+                    </button>
+                    {/* Tasks */}
+                    {!isCollapsed && (
+                      <div className="pb-1">
+                        {projectTasks.map((task) => {
+                          const dateStr = fmtDate(task.dueDate);
+                          const late = isLate(task);
+                          const statusColor = STATUS_DOT[task.status ?? ""] ?? "bg-gray-300";
+                          return (
+                            <Link
+                              key={task.id}
+                              href={`/projects/${task.projectId}`}
+                              className="flex items-center gap-2.5 px-4 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors group"
+                            >
+                              <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusColor}`} />
+                              <p className="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate leading-snug group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                {task.title}
+                              </p>
+                              {dateStr && (
+                                <span className={`text-[10px] flex-shrink-0 font-medium tabular-nums ${late ? "text-red-500" : "text-gray-400 dark:text-gray-500"}`}>
+                                  {dateStr}
+                                </span>
+                              )}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-        {activeTasks.length > 0 && (
-          <div className="px-3 py-2 border-t border-gray-50 dark:border-gray-700/50">
-            <Link href="/me" className="text-[10px] text-indigo-500 hover:text-indigo-700 transition-colors">
-              Voir toutes mes tâches →
-            </Link>
-          </div>
-        )}
+
       </div>
 
       {/* Mini calendar */}

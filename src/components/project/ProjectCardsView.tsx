@@ -52,6 +52,7 @@ function TaskCard({
   const subtaskCount = task.subtasks?.length ?? 0;
   const attachCount = task.attachments?.length ?? 0;
   const depCount = task.blockerDeps?.length ?? 0;
+  const commentCount = task.comments?.length ?? 0;
 
   const { memberAvatars } = useProjectContext();
   const statusMeta = STATUS_OPTIONS.find((o) => o.value === statusVal);
@@ -86,7 +87,7 @@ function TaskCard({
       {/* Delete button */}
       <button
         onClick={(e) => { e.stopPropagation(); onDelete(); }}
-        title="Supprimer"
+        title="Archiver"
         className="absolute top-3 right-3 opacity-0 group-hover/card:opacity-100 p-0.5 rounded text-gray-300 hover:text-red-400 transition-all cursor-pointer"
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -104,7 +105,7 @@ function TaskCard({
       )}
 
       {/* Icon indicators */}
-      {(subtaskCount > 0 || attachCount > 0 || depCount > 0 || hasNotes) && (
+      {(subtaskCount > 0 || attachCount > 0 || depCount > 0 || hasNotes || commentCount > 0) && (
         <div className="flex items-center gap-2.5 mb-2 text-gray-400 dark:text-gray-500">
           {subtaskCount > 0 && (
             <span className="flex items-center gap-0.5 text-[10px]" title={`${subtaskCount} sous-tâche${subtaskCount > 1 ? "s" : ""}`}>
@@ -136,6 +137,14 @@ function TaskCard({
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
+            </span>
+          )}
+          {commentCount > 0 && (
+            <span className="flex items-center gap-0.5 text-[10px]" title={`${commentCount} commentaire${commentCount > 1 ? "s" : ""}`}>
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {commentCount}
             </span>
           )}
         </div>
@@ -173,10 +182,16 @@ function TaskCard({
 }
 
 // --- Add task card ---
-function AddTaskCard({ onAdd }: { onAdd: (title: string) => void }) {
+function AddTaskCard({ onAdd, columns }: { onAdd: (title: string, owner?: string, dueDate?: string) => void; columns: ProjectWithRelations["columns"] }) {
   const [active, setActive] = useState(false);
   const [draft, setDraft] = useState("");
+  const [newOwner, setNewOwner] = useState("");
+  const [newDueDate, setNewDueDate] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const { memberNames } = useProjectContext();
+
+  const ownerColId = columns.find((c) => c.type === "OWNER")?.id ?? null;
+  const dueDateColId = columns.find((c) => c.type === "DUE_DATE")?.id ?? null;
 
   useEffect(() => {
     if (active) inputRef.current?.focus();
@@ -185,25 +200,60 @@ function AddTaskCard({ onAdd }: { onAdd: (title: string) => void }) {
   const submit = () => {
     const t = draft.trim();
     setDraft("");
+    setNewOwner("");
+    setNewDueDate("");
     setActive(false);
-    if (t) onAdd(t);
+    if (t) onAdd(t, newOwner || undefined, newDueDate || undefined);
   };
 
   if (active) {
     return (
-      <div className="border border-indigo-300 bg-indigo-50/30 dark:bg-indigo-900/20 rounded-xl p-4">
+      <div className="border border-indigo-300 bg-indigo-50/30 dark:bg-indigo-900/20 rounded-xl p-4 space-y-2">
         <input
           ref={inputRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") submit();
-            if (e.key === "Escape") { setDraft(""); setActive(false); }
+            if (e.key === "Escape") { setDraft(""); setNewOwner(""); setNewDueDate(""); setActive(false); }
           }}
-          onBlur={submit}
           placeholder="Nom de la tâche…"
           className="w-full text-sm text-gray-800 dark:text-gray-100 outline-none bg-transparent placeholder-gray-400 dark:placeholder-gray-500"
         />
+        {ownerColId && memberNames.length > 0 && (
+          <select
+            value={newOwner}
+            onChange={(e) => setNewOwner(e.target.value)}
+            className="w-full text-xs text-gray-600 dark:text-gray-400 bg-transparent border border-gray-200 dark:border-gray-600 rounded-md px-2 py-1 outline-none"
+          >
+            <option value="">Responsable…</option>
+            {memberNames.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        )}
+        {dueDateColId && (
+          <input
+            type="date"
+            value={newDueDate}
+            onChange={(e) => setNewDueDate(e.target.value)}
+            className="w-full text-xs text-gray-600 dark:text-gray-400 bg-transparent border border-gray-200 dark:border-gray-600 rounded-md px-2 py-1 outline-none"
+          />
+        )}
+        <div className="flex gap-2">
+          <button
+            onClick={submit}
+            className="flex-1 text-xs bg-indigo-500 text-white rounded-md py-1 hover:bg-indigo-600 transition-colors cursor-pointer"
+          >
+            Ajouter
+          </button>
+          <button
+            onClick={() => { setDraft(""); setNewOwner(""); setNewDueDate(""); setActive(false); }}
+            className="text-xs text-gray-400 hover:text-gray-600 px-2 cursor-pointer"
+          >
+            Annuler
+          </button>
+        </div>
       </div>
     );
   }
@@ -222,26 +272,36 @@ function AddTaskCard({ onAdd }: { onAdd: (title: string) => void }) {
 }
 
 // --- Main ---
-const LAYOUT_KEY = "cards-layout-vertical";
-
 export function ProjectCardsView({ project }: { project: ProjectWithRelations }) {
   const { columns } = project;
   const [groups, setGroups] = useState<GroupWithTasks[]>(project.groups);
+  const [isGridLayout, setIsGridLayout] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(`cards-layout-${project.id}`);
+    setIsGridLayout(saved === "grid");
+  }, [project.id]);
+
+  const toggleLayout = () => {
+    const next = !isGridLayout;
+    setIsGridLayout(next);
+    localStorage.setItem(`cards-layout-${project.id}`, next ? "grid" : "columns");
+  };
+
+  useEffect(() => {
+    setGroups((prev) =>
+      project.groups.map((serverGroup) => {
+        const localGroup = prev.find((g) => g.id === serverGroup.id);
+        const tempTasks = localGroup ? localGroup.tasks.filter((t) => t.id.startsWith("temp-")) : [];
+        return { ...serverGroup, tasks: [...serverGroup.tasks, ...tempTasks] };
+      })
+    );
+  }, [project]);
+
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [archiveConfirmId, setArchiveConfirmId] = useState<string | null>(null);
-  const [vertical, setVertical] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem(LAYOUT_KEY) === "1";
-  });
   const [, startTransition] = useTransition();
   const router = useRouter();
-
-  const toggleVertical = () => {
-    setVertical((v) => {
-      localStorage.setItem(LAYOUT_KEY, v ? "0" : "1");
-      return !v;
-    });
-  };
 
   const handleFieldUpdate = (taskId: string, columnId: string, value: string | null) => {
     setGroups((prev) =>
@@ -289,8 +349,13 @@ export function ProjectCardsView({ project }: { project: ProjectWithRelations })
     });
   };
 
-  const handleAddTask = (groupId: string, title: string) => {
+  const handleAddTask = (groupId: string, title: string, owner?: string, dueDate?: string) => {
     const tempId = `temp-${Date.now()}`;
+    const ownerColId = columns.find((c) => c.type === "OWNER")?.id ?? null;
+    const dueDateColId = columns.find((c) => c.type === "DUE_DATE")?.id ?? null;
+    const initialFieldValues: TaskWithFields["fieldValues"] = [];
+    if (owner && ownerColId) initialFieldValues.push({ id: `opt-${ownerColId}`, taskId: tempId, columnId: ownerColId, value: owner, updatedAt: new Date() });
+    if (dueDate && dueDateColId) initialFieldValues.push({ id: `opt-${dueDateColId}`, taskId: tempId, columnId: dueDateColId, value: dueDate, updatedAt: new Date() });
     const tempTask: TaskWithFields = {
       id: tempId,
       groupId,
@@ -302,17 +367,19 @@ export function ProjectCardsView({ project }: { project: ProjectWithRelations })
       recurrence: null,
       createdAt: new Date(),
       updatedAt: new Date(),
-      fieldValues: [],
+      fieldValues: initialFieldValues,
     };
     setGroups((prev) =>
       prev.map((g) => (g.id === groupId ? { ...g, tasks: [...g.tasks, tempTask] } : g))
     );
     startTransition(async () => {
       const created = await createTaskAction(groupId, title);
+      if (owner && ownerColId) await upsertTaskField(created.id, ownerColId, owner);
+      if (dueDate && dueDateColId) await upsertTaskField(created.id, dueDateColId, dueDate);
       setGroups((prev) =>
         prev.map((g) =>
           g.id === groupId
-            ? { ...g, tasks: g.tasks.map((t) => (t.id === tempId ? (created as TaskWithFields) : t)) }
+            ? { ...g, tasks: g.tasks.map((t) => (t.id === tempId ? { ...t, id: created.id } : t)) }
             : g
         )
       );
@@ -328,45 +395,72 @@ export function ProjectCardsView({ project }: { project: ProjectWithRelations })
 
   return (
     <>
-      <div className="p-6 overflow-y-auto">
-        {/* Layout toggle */}
-        <div className="flex justify-end mb-4">
-          <button
-            onClick={toggleVertical}
-            title={vertical ? "Affichage en grille" : "Affichage en colonne"}
-            className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${vertical ? "border-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600" : "border-gray-200 dark:border-gray-700 text-gray-400 hover:text-indigo-500 hover:border-indigo-300"}`}
-          >
-            {vertical ? (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {/* Layout toggle */}
+      <div className="flex justify-end px-4 pt-3 pb-1">
+        <button
+          onClick={toggleLayout}
+          title={isGridLayout ? "Vue par colonnes" : "Vue grille"}
+          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+        >
+          {isGridLayout ? (
+            <>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <rect x="3" y="5" width="8" height="14" rx="1.5" strokeWidth="1.5" />
+                <rect x="13" y="5" width="8" height="14" rx="1.5" strokeWidth="1.5" />
+              </svg>
+              Colonnes
+            </>
+          ) : (
+            <>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <rect x="3" y="3" width="7" height="7" rx="1" strokeWidth="1.5" />
                 <rect x="14" y="3" width="7" height="7" rx="1" strokeWidth="1.5" />
                 <rect x="3" y="14" width="7" height="7" rx="1" strokeWidth="1.5" />
                 <rect x="14" y="14" width="7" height="7" rx="1" strokeWidth="1.5" />
               </svg>
-            ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            )}
-          </button>
-        </div>
+              Grille
+            </>
+          )}
+        </button>
+      </div>
 
+      {isGridLayout ? (
+        /* Grid layout: flat wrapping grid of all cards */
+        <div className="p-4 pt-2">
+          <div className="flex flex-wrap gap-4">
+            {groups.flatMap((group) =>
+              group.tasks.map((task) => (
+                <div key={task.id} className="w-72 flex-shrink-0">
+                  <TaskCard
+                    task={task}
+                    columns={columns}
+                    groupColor={group.color}
+                    onOpen={() => setOpenTaskId(task.id)}
+                    onDelete={() => setArchiveConfirmId(task.id)}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      ) : (
+      <div className="flex gap-4 p-4 pt-2 overflow-x-auto h-full items-start pb-4">
         {groups.map((group) => (
-          <div key={group.id} className="mb-8">
-            {/* Group header */}
-            <div className="flex items-center gap-2 mb-3">
+          <div key={group.id} className="flex-shrink-0 w-72 flex flex-col max-h-full">
+            {/* Column header */}
+            <div className="flex items-center gap-2 px-1 mb-3">
               <div
                 className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                 style={{ backgroundColor: group.color }}
               />
-              <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+              <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide flex-1">
                 {group.name}
               </span>
               <span className="text-[11px] text-gray-400 tabular-nums">{group.tasks.length}</span>
             </div>
 
-            {/* Cards grid */}
-            <div className={vertical ? "flex flex-col gap-2" : "grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3"}>
+            {/* Cards */}
+            <div className="flex flex-col gap-3 overflow-y-auto pr-1">
               {group.tasks.map((task) => (
                 <TaskCard
                   key={task.id}
@@ -377,13 +471,13 @@ export function ProjectCardsView({ project }: { project: ProjectWithRelations })
                   onDelete={() => setArchiveConfirmId(task.id)}
                 />
               ))}
-              <AddTaskCard onAdd={(title) => handleAddTask(group.id, title)} />
+              <AddTaskCard columns={columns} onAdd={(title, owner, dueDate) => handleAddTask(group.id, title, owner, dueDate)} />
             </div>
           </div>
         ))}
 
         {groups.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-24 text-gray-400">
+          <div className="flex flex-col items-center justify-center py-24 text-gray-400 w-full">
             <svg className="w-10 h-10 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <rect x="3" y="5" width="8" height="10" rx="1.5" strokeWidth="1.5" />
               <rect x="13" y="5" width="8" height="10" rx="1.5" strokeWidth="1.5" />
@@ -392,6 +486,7 @@ export function ProjectCardsView({ project }: { project: ProjectWithRelations })
           </div>
         )}
       </div>
+      )}
 
       {/* Task detail panel */}
       {openTask && openGroup && (

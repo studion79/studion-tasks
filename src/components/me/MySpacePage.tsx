@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useTransition } from "react";
 import Link from "next/link";
-import { updateMyProfile, updateMyPassword, updateMyAvatar, toggleMyTask } from "@/lib/actions";
+import { updateMyProfile, updateMyPassword, toggleMyTask } from "@/lib/actions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -49,6 +49,15 @@ const PRIORITY_COLORS: Record<string, string> = {
   "Medium": "text-yellow-500",
   "Low": "text-blue-400",
 };
+const ALLOWED_AVATAR_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+]);
+const MAX_AVATAR_UPLOAD_BYTES = 20 * 1024 * 1024; // 20MB
 
 function isToday(d: string | null) {
   if (!d) return false;
@@ -412,12 +421,49 @@ function ProfileModal({ user, onClose, onAvatarChange }: { user: UserInfo; onClo
     const file = e.target.files?.[0];
     if (!file) return;
     setAvatarError("");
+    if (!ALLOWED_AVATAR_TYPES.has(file.type)) {
+      setAvatarError("Format non supporté. Utilisez JPG, PNG, WebP, GIF ou AVIF.");
+      return;
+    }
+    if (file.size > MAX_AVATAR_UPLOAD_BYTES) {
+      setAvatarError("Image trop volumineuse (maximum 20MB).");
+      return;
+    }
+
     const preview = URL.createObjectURL(file);
     setAvatarPreview(preview);
     const fd = new FormData(); fd.append("avatar", file);
     startTransition(async () => {
-      try { const url = await updateMyAvatar(fd); onAvatarChange(url); }
-      catch (err) { setAvatarError(err instanceof Error ? err.message : "Erreur upload"); setAvatarPreview(user.avatar); }
+      try {
+        const response = await fetch("/api/me/avatar", {
+          method: "POST",
+          body: fd,
+        });
+
+        let result: { ok: boolean; url?: string; error?: string };
+        try {
+          result = (await response.json()) as { ok: boolean; url?: string; error?: string };
+        } catch {
+          throw new Error(`Réponse serveur invalide (HTTP ${response.status})`);
+        }
+
+        if (!result.ok) {
+          setAvatarError(result.error ?? "Erreur upload");
+          setAvatarPreview(user.avatar);
+          return;
+        }
+        if (!result.url) {
+          setAvatarError("Réponse serveur invalide");
+          setAvatarPreview(user.avatar);
+          return;
+        }
+        onAvatarChange(result.url);
+      }
+      catch (err) {
+        const msg = err instanceof Error ? err.message : "Erreur upload";
+        setAvatarError(`Échec de l'envoi (${msg})`);
+        setAvatarPreview(user.avatar);
+      }
     });
   };
 
@@ -452,7 +498,7 @@ function ProfileModal({ user, onClose, onAvatarChange }: { user: UserInfo; onClo
               </div>
             </div>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
-            <p className="text-xs text-gray-400 dark:text-gray-500">Cliquez pour changer la photo — toutes tailles acceptées</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">Cliquez pour changer la photo — JPG, PNG, WebP, GIF, AVIF (max 20MB)</p>
             {avatarError && <p className="text-xs text-red-600">{avatarError}</p>}
           </div>
 

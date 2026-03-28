@@ -10,7 +10,9 @@ export default async function ProjectPage({
 }) {
   const { id } = await params;
   const session = await auth();
-  const currentUserId = (session?.user as { id?: string })?.id ?? null;
+  const currentUser = session?.user as { id?: string; isSuperAdmin?: boolean } | undefined;
+  const currentUserId = currentUser?.id ?? null;
+  const isGlobalAdmin = Boolean(currentUser?.isSuperAdmin);
 
   // Generate new instances for overdue recurring tasks (idempotent)
   await generateRecurringTasks(id).catch(() => {});
@@ -33,6 +35,7 @@ export default async function ProjectPage({
       allColumns={allColumns}
       initialMembers={members}
       currentUserId={currentUserId}
+      isGlobalAdmin={isGlobalAdmin}
       initialNotifications={notifications}
       initialUnreadCount={unreadCount}
     />

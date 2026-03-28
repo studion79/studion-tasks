@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useTransition, useMemo } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { useProjectContext } from "./ProjectContext";
 import type { TaskWithFields, SubtaskWithFields, ProjectColumn } from "@/lib/types";
 import { STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/lib/constants";
@@ -837,6 +838,7 @@ function SubtasksSection({
   const [editDraft, setEditDraft] = useState("");
   const [, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (addingNew) inputRef.current?.focus();
@@ -870,7 +872,10 @@ function SubtasksSection({
 
   const handleDelete = (subtaskId: string) => {
     setSubtasks((prev) => prev.filter((s) => s.id !== subtaskId));
-    startTransition(async () => { await deleteSubtask(subtaskId); });
+    startTransition(async () => {
+      await deleteSubtask(subtaskId);
+      router.refresh();
+    });
   };
 
   const handleRename = (subtaskId: string) => {
@@ -897,6 +902,7 @@ function SubtasksSection({
     startTransition(async () => {
       const created = await createSubtask(parentId, groupId, title);
       setSubtasks((prev) => prev.map((s) => (s.id === tempId ? (created as SubtaskWithFields) : s)));
+      router.refresh();
     });
   };
 

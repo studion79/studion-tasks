@@ -92,12 +92,25 @@ type ProjectWithStats = {
 
 type UserGroup = { id: string; name: string };
 
-export function ProjectCard({ project, userGroups, onGroupChange }: { project: ProjectWithStats; userGroups?: UserGroup[]; onGroupChange?: () => void }) {
+export function ProjectCard({
+  project,
+  userGroups,
+  onGroupChange,
+  canPin = true,
+  canGroup = true,
+}: {
+  project: ProjectWithStats;
+  userGroups?: UserGroup[];
+  onGroupChange?: () => void;
+  canPin?: boolean;
+  canGroup?: boolean;
+}) {
   const [showMenu, setShowMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [draft, setDraft] = useState(project.name);
   const [pinned, setPinned] = useState(project.members[0]?.isPinned ?? false);
+  const [renameError, setRenameError] = useState("");
   const [isPending, startTransition] = useTransition();
   const menuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -136,16 +149,22 @@ export function ProjectCard({ project, userGroups, onGroupChange }: { project: P
   const handleRename = () => {
     const name = draft.trim();
     if (!name || name === project.name) { setRenaming(false); return; }
+    setRenameError("");
     startTransition(async () => {
-      await renameProject(project.id, name);
-      setRenaming(false);
-      window.location.reload();
+      try {
+        await renameProject(project.id, name);
+        setRenaming(false);
+        window.location.reload();
+      } catch (e) {
+        setRenameError(e instanceof Error ? e.message : "Erreur");
+      }
     });
   };
 
   const handlePin = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!canPin) return;
     setPinned((v) => !v);
     startTransition(async () => {
       await togglePinProject(project.id);
@@ -158,20 +177,18 @@ export function ProjectCard({ project, userGroups, onGroupChange }: { project: P
 
   return (
     <div className={`relative bg-white dark:bg-gray-800 rounded-xl border p-5 hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-sm transition-all group ${pinned ? "border-indigo-200 dark:border-indigo-700" : "border-gray-200 dark:border-gray-700"}`}>
-      {/* Pin indicator */}
-      {pinned && (
-        <div className="absolute top-0 left-0 w-full h-0.5 bg-indigo-400 rounded-t-xl" />
-      )}
       {/* Pin button */}
-      <button
-        onClick={handlePin}
-        title={pinned ? "Désépingler" : "Épingler"}
-        className={`absolute top-3 left-3 p-1 rounded transition-all cursor-pointer ${pinned ? "opacity-100 text-indigo-500" : "opacity-0 group-hover:opacity-100 text-gray-300 hover:text-indigo-400"}`}
-      >
-        <svg className="w-3 h-3" viewBox="0 0 24 24" fill={pinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
-          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
+      {canPin && (
+        <button
+          onClick={handlePin}
+          title={pinned ? "Désépingler" : "Épingler"}
+          className={`absolute top-3 left-3 p-1 rounded transition-all cursor-pointer ${pinned ? "opacity-100 text-indigo-500" : "opacity-0 group-hover:opacity-100 text-gray-300 hover:text-indigo-400"}`}
+        >
+          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M16 4a1 1 0 011 1v1.5l1.5 3H18v4h-5v5a1 1 0 01-2 0v-5H6v-4H6.5L8 6.5V5a1 1 0 011-1h7z"/>
+          </svg>
+        </button>
+      )}
       {/* Context menu trigger */}
       <div ref={menuRef} className="absolute top-3 right-3">
         <button
@@ -194,7 +211,7 @@ export function ProjectCard({ project, userGroups, onGroupChange }: { project: P
               </svg>
               Renommer
             </button>
-            {userGroups && userGroups.length > 0 && (
+            {canGroup && userGroups && userGroups.length > 0 && (
               <>
                 <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
                 <p className="px-3 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Déplacer vers</p>
@@ -319,6 +336,7 @@ export function ProjectCard({ project, userGroups, onGroupChange }: { project: P
             onBlur={handleRename}
             className="w-full text-sm font-semibold border-b border-indigo-400 outline-none bg-transparent text-gray-900 dark:text-gray-50 pr-2"
           />
+          {renameError && <p className="text-[10px] text-red-500 mt-0.5">{renameError}</p>}
           <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Entrée pour valider, Échap pour annuler</p>
         </div>
       )}

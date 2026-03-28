@@ -29,9 +29,11 @@ type UserGroup = { id: string; name: string; position: number };
 export function HomePageClient({
   projects: initialProjects,
   userGroups: initialGroups,
+  isSuperAdmin,
 }: {
   projects: ProjectWithStats[];
   userGroups: UserGroup[];
+  isSuperAdmin: boolean;
 }) {
   const [groups, setGroups] = useState(initialGroups);
   const [, startTransition] = useTransition();
@@ -130,14 +132,14 @@ export function HomePageClient({
       {pinnedUngrouped.length > 0 && (
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <svg className="w-3 h-3 text-indigo-500" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+            <svg className="w-3 h-3 text-indigo-500" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M16 4a1 1 0 011 1v1.5l1.5 3H18v4h-5v5a1 1 0 01-2 0v-5H6v-4H6.5L8 6.5V5a1 1 0 011-1h7z"/>
             </svg>
             <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Épinglés</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {pinnedUngrouped.map((project) => (
-              <ProjectCard key={project.id} project={project} userGroups={groups} />
+              <ProjectCard key={project.id} project={project} userGroups={groups} canPin={!isSuperAdmin} canGroup={!isSuperAdmin} />
             ))}
           </div>
         </section>
@@ -185,7 +187,7 @@ export function HomePageClient({
             {!isCollapsed && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {groupProjects.map((project) => (
-                  <ProjectCard key={project.id} project={project} userGroups={groups} />
+                  <ProjectCard key={project.id} project={project} userGroups={groups} canPin={!isSuperAdmin} canGroup={!isSuperAdmin} />
                 ))}
               </div>
             )}
@@ -203,7 +205,7 @@ export function HomePageClient({
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {unpinnedUngrouped.map((project) => (
-              <ProjectCard key={project.id} project={project} userGroups={groups} />
+              <ProjectCard key={project.id} project={project} userGroups={groups} canPin={!isSuperAdmin} canGroup={!isSuperAdmin} />
             ))}
             {NewProjectCard}
           </div>
@@ -218,8 +220,9 @@ export function HomePageClient({
       )}
 
       {/* Add group */}
-      <div className="pt-2">
-        {addingGroup ? (
+      {!isSuperAdmin && (
+        <div className="pt-2">
+          {addingGroup ? (
           <div className="flex items-center gap-2">
             <input
               ref={addInputRef}
@@ -231,7 +234,7 @@ export function HomePageClient({
               className="text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300 outline-none bg-transparent border-b border-indigo-400 px-0.5 placeholder-gray-400"
             />
           </div>
-        ) : (
+          ) : (
           <button
             onClick={() => { setNewGroupName(""); setAddingGroup(true); }}
             className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors cursor-pointer"
@@ -239,8 +242,9 @@ export function HomePageClient({
             <span className="w-4 h-4 flex items-center justify-center rounded border border-dashed border-gray-300 dark:border-gray-600 hover:border-indigo-400">+</span>
             Nouveau groupe de projets
           </button>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
