@@ -69,6 +69,18 @@ export default async function HomePage() {
             </svg>
             <span className="hidden sm:inline">Nouveau projet</span>
           </Link>
+          {isSuperAdmin && (
+            <a
+              href="/api/admin/tasks-csv"
+              className="inline-flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              title="Exporter toutes les tâches (CSV)"
+            >
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M12 3v12m0 0l4-4m-4 4l-4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="hidden sm:inline">Export CSV global</span>
+            </a>
+          )}
           <div className="flex items-center gap-2 pl-2 sm:pl-3 border-l border-gray-200 dark:border-gray-700">
             <Link href="/me" className="w-7 h-7 rounded-full flex-shrink-0 overflow-hidden block">
               {session.user.image ? (

@@ -19,10 +19,16 @@ const LABEL_W = 180;    // px for left label column
 function recurrenceLabel(recurrence: string | null): string | null {
   if (!recurrence) return null;
   try {
-    const { frequency, interval } = JSON.parse(recurrence) as { frequency: string; interval: number };
+    const { frequency, interval, endDate } = JSON.parse(recurrence) as {
+      frequency: string;
+      interval: number;
+      endDate?: string | null;
+    };
     const labels: Record<string, string> = { daily: "jour", weekly: "semaine", monthly: "mois" };
     const unit = labels[frequency] ?? frequency;
-    return interval === 1 ? `Récurrent · chaque ${unit}` : `Récurrent · tous les ${interval} ${unit}s`;
+    const base = interval === 1 ? `Récurrent · chaque ${unit}` : `Récurrent · tous les ${interval} ${unit}s`;
+    if (!endDate) return base;
+    return `${base} (jusqu'au ${new Date(`${endDate}T00:00:00`).toLocaleDateString("fr-FR")})`;
   } catch { return "Récurrent"; }
 }
 
@@ -65,7 +71,7 @@ function diffDays(a: Date, b: Date) {
 }
 
 // ---- Recurrence helpers ----
-interface RecurrenceConfig { frequency: "daily" | "weekly" | "monthly"; interval: number }
+interface RecurrenceConfig { frequency: "daily" | "weekly" | "monthly"; interval: number; endDate?: string | null }
 function parseRecurrence(r: string | null): RecurrenceConfig | null {
   if (!r) return null;
   try { return JSON.parse(r) as RecurrenceConfig; } catch { return null; }
@@ -781,14 +787,17 @@ export function ProjectTimelineView({
                       // Ghost recurrence bars
                       if (task.recurrence) {
                         const cfg = parseRecurrence(task.recurrence ?? null);
+                        const recurrenceEnd = cfg?.endDate ? new Date(`${cfg.endDate}T00:00:00`) : null;
                         if (cfg) {
                           for (let i = 1; i <= 24; i++) {
                             if (tl) {
                               const gs = shiftByRecurrence(tl.start, cfg, i);
+                              if (recurrenceEnd && gs > recurrenceEnd) break;
                               if (gs > viewEnd) break;
                               const ge = shiftByRecurrence(tl.end, cfg, i);
+                              const clampedGe = recurrenceEnd && ge > recurrenceEnd ? recurrenceEnd : ge;
                               const gStartOff = diffDays(viewStart, gs);
-                              const gEndOff = diffDays(viewStart, ge);
+                              const gEndOff = diffDays(viewStart, clampedGe);
                               const gX = gStartOff * DAY_PX;
                               const gW = Math.max((gEndOff - gStartOff + 1) * DAY_PX - 2, DAY_PX);
                               items.push(
@@ -800,6 +809,7 @@ export function ProjectTimelineView({
                               );
                             } else if (dd) {
                               const gd = shiftByRecurrence(dd, cfg, i);
+                              if (recurrenceEnd && gd > recurrenceEnd) break;
                               if (gd > viewEnd) break;
                               const gOff = diffDays(viewStart, gd);
                               items.push(

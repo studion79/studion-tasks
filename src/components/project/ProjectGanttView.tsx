@@ -16,10 +16,16 @@ const LABEL_W = 220; // px for left label column
 function recurrenceLabel(recurrence: string | null): string | null {
   if (!recurrence) return null;
   try {
-    const { frequency, interval } = JSON.parse(recurrence) as { frequency: string; interval: number };
+    const { frequency, interval, endDate } = JSON.parse(recurrence) as {
+      frequency: string;
+      interval: number;
+      endDate?: string | null;
+    };
     const labels: Record<string, string> = { daily: "jour", weekly: "semaine", monthly: "mois" };
     const unit = labels[frequency] ?? frequency;
-    return interval === 1 ? `Récurrent · chaque ${unit}` : `Récurrent · tous les ${interval} ${unit}s`;
+    const base = interval === 1 ? `Récurrent · chaque ${unit}` : `Récurrent · tous les ${interval} ${unit}s`;
+    if (!endDate) return base;
+    return `${base} (jusqu'au ${new Date(`${endDate}T00:00:00`).toLocaleDateString("fr-FR")})`;
   } catch { return "Récurrent"; }
 }
 
@@ -62,7 +68,7 @@ function diffDays(a: Date, b: Date) {
 }
 
 // ---- Recurrence helpers ----
-interface RecurrenceConfig { frequency: "daily" | "weekly" | "monthly"; interval: number }
+interface RecurrenceConfig { frequency: "daily" | "weekly" | "monthly"; interval: number; endDate?: string | null }
 function parseRecurrence(r: string | null): RecurrenceConfig | null {
   if (!r) return null;
   try { return JSON.parse(r) as RecurrenceConfig; } catch { return null; }
@@ -608,15 +614,18 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                     {task.recurrence && barStart !== null && (() => {
                       const cfg = parseRecurrence(task.recurrence ?? null);
                       if (!cfg) return null;
+                      const recurrenceEnd = cfg.endDate ? new Date(`${cfg.endDate}T00:00:00`) : null;
                       const veDate = addDays(viewStart, totalDays - 1);
                       const ghosts: React.ReactNode[] = [];
                       for (let i = 1; i <= 24; i++) {
                         if (tl) {
                           const gs = shiftByRecurrence(tl.start, cfg, i);
+                          if (recurrenceEnd && gs > recurrenceEnd) break;
                           if (gs > veDate) break;
                           const ge = shiftByRecurrence(tl.end, cfg, i);
+                          const clampedGe = recurrenceEnd && ge > recurrenceEnd ? recurrenceEnd : ge;
                           const gStart = diffDays(viewStart, gs);
-                          const gDays = Math.max(diffDays(gs, ge), 1);
+                          const gDays = Math.max(diffDays(gs, clampedGe), 1);
                           ghosts.push(
                             <div
                               key={i}
@@ -626,6 +635,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                           );
                         } else if (dd) {
                           const gd = shiftByRecurrence(dd, cfg, i);
+                          if (recurrenceEnd && gd > recurrenceEnd) break;
                           if (gd > veDate) break;
                           const gOff = diffDays(viewStart, gd);
                           ghosts.push(

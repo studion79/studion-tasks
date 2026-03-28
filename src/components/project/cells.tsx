@@ -17,12 +17,19 @@ export function getFieldValue(
 export function recurrenceLabel(recurrence: string | null): string | null {
   if (!recurrence) return null;
   try {
-    const { frequency, interval } = JSON.parse(recurrence) as { frequency: string; interval: number };
+    const { frequency, interval, endDate } = JSON.parse(recurrence) as {
+      frequency: string;
+      interval: number;
+      endDate?: string | null;
+    };
     const labels: Record<string, string> = { daily: "jour", weekly: "semaine", monthly: "mois" };
     const unit = labels[frequency] ?? frequency;
-    return interval === 1
+    const base = interval === 1
       ? `Récurrent · chaque ${unit}`
       : `Récurrent · tous les ${interval} ${unit}s`;
+    if (!endDate) return base;
+    const formattedEnd = new Date(`${endDate}T00:00:00`).toLocaleDateString("fr-FR");
+    return `${base} (jusqu'au ${formattedEnd})`;
   } catch {
     return "Récurrent";
   }

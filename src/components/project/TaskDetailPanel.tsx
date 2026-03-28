@@ -67,6 +67,8 @@ function RecurrenceSection({ taskId, initialRecurrence }: { taskId: string; init
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const FREQ_LABELS: Record<string, string> = { daily: "Jour(s)", weekly: "Semaine(s)", monthly: "Mois" };
+  const formatFrDate = (date: string | null | undefined) =>
+    date ? new Date(`${date}T00:00:00`).toLocaleDateString("fr-FR") : null;
 
   const persist = (newConfig: RecurrenceConfig | null) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -111,6 +113,7 @@ function RecurrenceSection({ taskId, initialRecurrence }: { taskId: string; init
         {config && (
           <span className="ml-1 text-[10px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-full px-2 py-0.5">
             Tous les {config.interval} {FREQ_LABELS[config.frequency]}
+            {config.endDate ? ` · fin ${formatFrDate(config.endDate)}` : ""}
           </span>
         )}
         <svg className={`w-3 h-3 ml-auto transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -148,7 +151,25 @@ function RecurrenceSection({ taskId, initialRecurrence }: { taskId: string; init
                   Supprimer
                 </button>
               </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-gray-600 dark:text-gray-400">Date de fin</label>
+                <input
+                  type="date"
+                  value={config.endDate ?? ""}
+                  onChange={(e) => handleChange({ ...config, endDate: e.target.value || null })}
+                  className="text-xs text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 outline-none focus:border-indigo-400"
+                />
+                {config.endDate && (
+                  <button
+                    onClick={() => handleChange({ ...config, endDate: null })}
+                    className="text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
+                  >
+                    Infinie
+                  </button>
+                )}
+              </div>
               <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                {!config.endDate && "Sans date de fin : récurrence infinie. "}
                 {status === "saving" && "Sauvegarde…"}
                 {status === "saved" && "✓ Sauvegardé"}
                 {status === "error" && "Erreur lors de la sauvegarde"}

@@ -5,13 +5,25 @@ import { prisma, revalidatePath, requireMember, projectIdFromTask, notifyUser, f
 export type RecurrenceConfig = {
   frequency: "daily" | "weekly" | "monthly";
   interval: number; // every N days/weeks/months
+  endDate?: string | null; // YYYY-MM-DD, null/undefined = infinite
 };
+
+function sanitizeRecurrenceConfig(config: RecurrenceConfig): RecurrenceConfig {
+  const interval = Math.max(1, Math.floor(Number(config.interval) || 1));
+  const endDate = config.endDate?.trim() || null;
+  return {
+    frequency: config.frequency,
+    interval,
+    endDate,
+  };
+}
 
 export async function setTaskRecurrence(taskId: string, config: RecurrenceConfig | null) {
   await requireMember(await projectIdFromTask(taskId));
+  const safeConfig = config ? sanitizeRecurrenceConfig(config) : null;
   const task = await prisma.task.update({
     where: { id: taskId },
-    data: { recurrence: config ? JSON.stringify(config) : null },
+    data: { recurrence: safeConfig ? JSON.stringify(safeConfig) : null },
     include: { group: true },
   });
   revalidatePath(`/projects/${task.group.projectId}`);
@@ -51,6 +63,7 @@ export async function generateRecurringTasks(projectId: string) {
   for (const group of groups) {
     for (const task of group.tasks) {
       const config = JSON.parse(task.recurrence!) as RecurrenceConfig;
+      const safeConfig = sanitizeRecurrenceConfig(config);
       const dueFv = task.fieldValues.find((fv) => fv.columnId === dueDateColId);
       if (!dueFv?.value) continue;
 
@@ -59,9 +72,17 @@ export async function generateRecurringTasks(projectId: string) {
 
       // Compute next due date
       const next = new Date(dueDate);
-      if (config.frequency === "daily") next.setDate(next.getDate() + config.interval);
-      else if (config.frequency === "weekly") next.setDate(next.getDate() + config.interval * 7);
-      else next.setMonth(next.getMonth() + config.interval);
+      if (safeConfig.frequency === "daily") next.setDate(next.getDate() + safeConfig.interval);
+      else if (safeConfig.frequency === "weekly") next.setDate(next.getDate() + safeConfig.interval * 7);
+      else next.setMonth(next.getMonth() + safeConfig.interval);
+
+      const recurrenceEnd = safeConfig.endDate
+        ? new Date(`${safeConfig.endDate}T00:00:00`)
+        : null;
+      if (recurrenceEnd && next > recurrenceEnd) {
+        await prisma.task.update({ where: { id: task.id }, data: { archivedAt: new Date(), recurrence: null } });
+        continue;
+      }
 
       // Create new task instance
       const position = await prisma.task.count({ where: { groupId: group.id, archivedAt: null, parentId: null } });
@@ -70,7 +91,7 @@ export async function generateRecurringTasks(projectId: string) {
           groupId: group.id,
           title: task.title,
           position,
-          recurrence: task.recurrence,
+          recurrence: JSON.stringify(safeConfig),
           fieldValues: {
             create: task.fieldValues
               .filter((fv) => fv.columnId !== dueDateColId)

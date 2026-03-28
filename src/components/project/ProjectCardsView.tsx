@@ -275,17 +275,17 @@ function AddTaskCard({ onAdd, columns }: { onAdd: (title: string, owner?: string
 export function ProjectCardsView({ project }: { project: ProjectWithRelations }) {
   const { columns } = project;
   const [groups, setGroups] = useState<GroupWithTasks[]>(project.groups);
-  const [isGridLayout, setIsGridLayout] = useState(false);
+  const [isRowsLayout, setIsRowsLayout] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem(`cards-layout-${project.id}`);
-    setIsGridLayout(saved === "grid");
+    setIsRowsLayout(saved === "rows" || saved === "grid");
   }, [project.id]);
 
   const toggleLayout = () => {
-    const next = !isGridLayout;
-    setIsGridLayout(next);
-    localStorage.setItem(`cards-layout-${project.id}`, next ? "grid" : "columns");
+    const next = !isRowsLayout;
+    setIsRowsLayout(next);
+    localStorage.setItem(`cards-layout-${project.id}`, next ? "rows" : "columns");
   };
 
   useEffect(() => {
@@ -399,10 +399,10 @@ export function ProjectCardsView({ project }: { project: ProjectWithRelations })
       <div className="flex justify-end px-4 pt-3 pb-1">
         <button
           onClick={toggleLayout}
-          title={isGridLayout ? "Vue par colonnes" : "Vue grille"}
+          title={isRowsLayout ? "Vue par colonnes" : "Vue en lignes"}
           className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
         >
-          {isGridLayout ? (
+          {isRowsLayout ? (
             <>
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <rect x="3" y="5" width="8" height="14" rx="1.5" strokeWidth="1.5" />
@@ -413,35 +413,51 @@ export function ProjectCardsView({ project }: { project: ProjectWithRelations })
           ) : (
             <>
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <rect x="3" y="3" width="7" height="7" rx="1" strokeWidth="1.5" />
-                <rect x="14" y="3" width="7" height="7" rx="1" strokeWidth="1.5" />
-                <rect x="3" y="14" width="7" height="7" rx="1" strokeWidth="1.5" />
-                <rect x="14" y="14" width="7" height="7" rx="1" strokeWidth="1.5" />
+                <path d="M3 6h18M3 12h18M3 18h18" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
-              Grille
+              Lignes
             </>
           )}
         </button>
       </div>
 
-      {isGridLayout ? (
-        /* Grid layout: flat wrapping grid of all cards */
-        <div className="p-4 pt-2">
-          <div className="flex flex-wrap gap-4">
-            {groups.flatMap((group) =>
-              group.tasks.map((task) => (
-                <div key={task.id} className="w-72 flex-shrink-0">
-                  <TaskCard
-                    task={task}
-                    columns={columns}
-                    groupColor={group.color}
-                    onOpen={() => setOpenTaskId(task.id)}
-                    onDelete={() => setArchiveConfirmId(task.id)}
-                  />
+      {isRowsLayout ? (
+        /* Rows layout: transposed from columns -> each category becomes one horizontal row */
+        <div className="p-4 pt-2 space-y-4 overflow-y-auto h-full">
+          {groups.map((group) => (
+            <div key={group.id} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-800/70 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: group.color }} />
+                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">{group.name}</span>
+                <span className="text-[11px] text-gray-400 tabular-nums ml-1">{group.tasks.length}</span>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {group.tasks.map((task) => (
+                  <div key={task.id} className="w-72 flex-shrink-0">
+                    <TaskCard
+                      task={task}
+                      columns={columns}
+                      groupColor={group.color}
+                      onOpen={() => setOpenTaskId(task.id)}
+                      onDelete={() => setArchiveConfirmId(task.id)}
+                    />
+                  </div>
+                ))}
+                <div className="w-72 flex-shrink-0">
+                  <AddTaskCard columns={columns} onAdd={(title, owner, dueDate) => handleAddTask(group.id, title, owner, dueDate)} />
                 </div>
-              ))
-            )}
-          </div>
+              </div>
+            </div>
+          ))}
+          {groups.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-24 text-gray-400 w-full">
+              <svg className="w-10 h-10 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <rect x="3" y="5" width="8" height="10" rx="1.5" strokeWidth="1.5" />
+                <rect x="13" y="5" width="8" height="10" rx="1.5" strokeWidth="1.5" />
+              </svg>
+              <p className="text-sm">Aucun groupe dans ce projet.</p>
+            </div>
+          )}
         </div>
       ) : (
       <div className="flex gap-4 p-4 pt-2 overflow-x-auto h-full items-start pb-4">

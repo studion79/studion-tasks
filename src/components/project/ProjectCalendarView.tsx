@@ -60,7 +60,7 @@ function toLocalDateStr(d: Date) {
 }
 
 // --- Recurrence helpers ---
-interface RecurrenceConfig { frequency: "daily" | "weekly" | "monthly"; interval: number }
+interface RecurrenceConfig { frequency: "daily" | "weekly" | "monthly"; interval: number; endDate?: string | null }
 function parseRecurrence(r: string | null): RecurrenceConfig | null {
   if (!r) return null;
   try { return JSON.parse(r) as RecurrenceConfig; } catch { return null; }
@@ -162,8 +162,10 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
       const cfg = parseRecurrence(task.recurrence ?? null);
       if (cfg) {
         const baseDate = new Date(dueVal + "T00:00:00");
+        const recurrenceEnd = cfg.endDate ? new Date(`${cfg.endDate}T00:00:00`) : null;
         for (let i = 1; i <= 366; i++) {
           const ghostDate = shiftByRecurrence(baseDate, cfg, i);
+          if (recurrenceEnd && ghostDate > recurrenceEnd) break;
           if (ghostDate > gridEnd) break;
           if (ghostDate < gridStart) continue;
           const ghostKey = toLocalDateStr(ghostDate);
