@@ -10,6 +10,8 @@ import { useProjectContext } from "./ProjectContext";
 const DAY_PX = 32; // pixels per day
 const ROW_H = 36; // px per task row
 const LABEL_W = 220; // px for left label column
+const MONTH_HEADER_H = 30; // px
+const DAY_HEADER_H = 26; // px
 
 // ---- helpers ----
 
@@ -334,8 +336,9 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
         className="flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-10"
         style={{ width: LABEL_W }}
       >
-        {/* Header spacer */}
-        <div className="h-[56px] border-b border-gray-200 dark:border-gray-700" />
+        {/* Header spacers aligned with timeline headers */}
+        <div className="border-b border-gray-200 dark:border-gray-700" style={{ height: MONTH_HEADER_H }} />
+        <div className="border-b border-gray-200 dark:border-gray-700" style={{ height: DAY_HEADER_H }} />
 
         {/* Group rows */}
         {project.groups.map((group) => (
@@ -378,8 +381,8 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
             {monthGroups.map((m, i) => (
               <div
                 key={i}
-                className="border-r border-gray-100 dark:border-gray-700 px-2 py-1.5 flex-shrink-0"
-                style={{ width: m.days * DAY_PX }}
+                className="border-r border-gray-100 dark:border-gray-700 px-2 flex items-center flex-shrink-0"
+                style={{ width: m.days * DAY_PX, height: MONTH_HEADER_H }}
               >
                 <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   {m.label}
@@ -389,7 +392,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
           </div>
 
           {/* Day sub-header */}
-          <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 sticky top-[30px] z-10">
+          <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 sticky z-10" style={{ top: MONTH_HEADER_H }}>
             {days.map((d, i) => {
               const isToday = diffDays(viewStart, d) === todayOffset;
               const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -404,7 +407,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                       ? "bg-gray-50 dark:bg-gray-900/40 border-gray-100 dark:border-gray-700 text-gray-400 dark:text-gray-600"
                       : "border-gray-100 dark:border-gray-700 text-gray-400 dark:text-gray-500",
                   ].join(" ")}
-                  style={{ width: DAY_PX, height: 26 }}
+                  style={{ width: DAY_PX, height: DAY_HEADER_H }}
                 >
                   <span>{formatWeekDay(d)}</span>
                   <span className="mt-0.5">{formatDay(d)}</span>
