@@ -19,7 +19,9 @@ model User {
   comments              Comment[]
   notifications         Notification[]
   notificationPrefs     UserNotificationPreference[]
+  notificationSettings  UserNotificationSettings?
   projectGroups         UserProjectGroup[]
+  personalProjectsOwned Project[]                   @relation("PersonalProjectOwner")
 }
 
 model UserProjectGroup {
@@ -36,12 +38,27 @@ model UserProjectGroup {
 model UserNotificationPreference {
   id      String  @id @default(cuid())
   userId  String
-  type    String  // TASK_ASSIGNED | COMMENT_ADDED | MENTIONED | DUE_DATE_SOON | AUTOMATION
+  type    String  // TASK_ASSIGNED | COMMENT_ADDED | MENTIONED | DUE_DATE_SOON | OVERDUE | DAILY_SUMMARY | AUTOMATION
   enabled Boolean @default(true)
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, type])
+}
+
+model UserNotificationSettings {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  emailEnabled     Boolean  @default(false)
+  dndEnabled       Boolean  @default(false)
+  dndStart         String   @default("22:00") // HH:mm
+  dndEnd           String   @default("08:00") // HH:mm
+  dndWeekendsOnly  Boolean  @default(false)
+  dailySummaryTime String   @default("08:00") // HH:mm
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ProjectMember {
@@ -64,6 +81,10 @@ model Project {
   id          String   @id @default(cuid())
   name        String
   description String?
+  avatar      String?
+  isPersonal  Boolean  @default(false)
+  personalOwnerId String?
+  archivedAt  DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -76,6 +97,10 @@ model Project {
   linksAsA         ProjectLink[] @relation("ProjectLinkA")
   linksAsB         ProjectLink[] @relation("ProjectLinkB")
   automations      Automation[]
+  personalOwner    User?         @relation("PersonalProjectOwner", fields: [personalOwnerId], references: [id], onDelete: SetNull)
+
+  @@index([isPersonal])
+  @@unique([personalOwnerId])
 }
 
 model Automation {
@@ -159,6 +184,8 @@ model Task {
   position   Int       @default(0)
   archivedAt  DateTime?
   completedAt DateTime?
+  reminderOffsetMinutes Int?
+  reminderSentFor       String?
   recurrence  String?   // JSON: { frequency: "daily"|"weekly"|"monthly", interval: number }
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -267,7 +294,7 @@ model ProjectInvitation {
 model Notification {
   id        String   @id @default(cuid())
   userId    String
-  type      String   // TASK_ASSIGNED | COMMENT_ADDED | DUE_DATE_SOON
+  type      String   // TASK_ASSIGNED | COMMENT_ADDED | MENTIONED | DUE_DATE_SOON | OVERDUE | DAILY_SUMMARY | AUTOMATION
   message   String
   taskId    String?
   projectId String?

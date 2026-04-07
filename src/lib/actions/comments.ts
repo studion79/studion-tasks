@@ -1,6 +1,6 @@
 "use server";
 
-import { prisma, requireMember, logActivity, notifyUser, findUserByNameInProject } from "./_helpers";
+import { prisma, requireMember, logActivity, notifyUser, findUserByNameInProject, emitTaskChanged } from "./_helpers";
 
 export async function getTaskComments(taskId: string) {
   return prisma.comment.findMany({
@@ -15,7 +15,7 @@ export async function createComment(taskId: string, content: string, author = "M
     where: { id: taskId },
     include: { group: true, fieldValues: { include: { column: true } } },
   });
-  if (!task) throw new Error("Tâche introuvable");
+  if (!task) throw new Error("Task not found.");
   await requireMember(task.group.projectId);
 
   const comment = await prisma.comment.create({ data: { taskId, content, author } });
@@ -30,7 +30,7 @@ export async function createComment(taskId: string, content: string, author = "M
         await notifyUser(
           ownerUser.id,
           "COMMENT_ADDED",
-          `${author} a commenté sur "${task.title}"`,
+          `${author} commented on "${task.title}"`,
           taskId,
           task.group.projectId
         );
@@ -49,14 +49,14 @@ export async function createComment(taskId: string, content: string, author = "M
         await notifyUser(
           member.user.id,
           "MENTIONED",
-          `${author} vous a mentionné dans un commentaire sur "${task.title}"`,
+          `${author} mentioned you in a comment on "${task.title}"`,
           taskId,
           task.group.projectId
         );
       }
     }
   }
-
+  emitTaskChanged(task.group.projectId, taskId);
   return comment;
 }
 

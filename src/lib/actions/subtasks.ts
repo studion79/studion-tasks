@@ -1,20 +1,26 @@
 "use server";
 
-import { prisma, requireMember, projectIdFromTask, projectIdFromGroup } from "./_helpers";
+import { prisma, requireMember, projectIdFromTask, projectIdFromGroup, emitTaskChanged } from "./_helpers";
 import { upsertTaskField } from "./tasks";
 
 export async function createSubtask(parentId: string, groupId: string, title: string) {
-  await requireMember(await projectIdFromGroup(groupId));
+  const projectId = await projectIdFromGroup(groupId);
+  await requireMember(projectId);
   const count = await prisma.task.count({ where: { parentId, archivedAt: null } });
-  return prisma.task.create({
+  const created = await prisma.task.create({
     data: { groupId, parentId, title, position: count },
     include: { fieldValues: true },
   });
+  emitTaskChanged(projectId, parentId);
+  return created;
 }
 
 export async function updateSubtaskTitle(subtaskId: string, title: string) {
-  await requireMember(await projectIdFromTask(subtaskId));
-  return prisma.task.update({ where: { id: subtaskId }, data: { title } });
+  const projectId = await projectIdFromTask(subtaskId);
+  await requireMember(projectId);
+  const updated = await prisma.task.update({ where: { id: subtaskId }, data: { title } });
+  emitTaskChanged(projectId, subtaskId);
+  return updated;
 }
 
 export async function toggleSubtaskDone(subtaskId: string, isDone: boolean, statusColumnId: string) {
@@ -23,6 +29,9 @@ export async function toggleSubtaskDone(subtaskId: string, isDone: boolean, stat
 }
 
 export async function deleteSubtask(subtaskId: string) {
-  await requireMember(await projectIdFromTask(subtaskId));
-  return prisma.task.delete({ where: { id: subtaskId } });
+  const projectId = await projectIdFromTask(subtaskId);
+  await requireMember(projectId);
+  const deleted = await prisma.task.delete({ where: { id: subtaskId } });
+  emitTaskChanged(projectId, subtaskId);
+  return deleted;
 }

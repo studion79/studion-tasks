@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { prisma, getAuthUserId, requireAdmin } from "./_helpers";
+import { prisma, getAuthUserId, requireAdmin, emitProjectChanged, emitAdminDataChanged } from "./_helpers";
 import { isSuperAdminUserId } from "@/lib/super-admin";
 
 type TemplateTask = {
@@ -29,9 +29,9 @@ export async function saveProjectAsTemplate(
   includeTasks = false
 ) {
   await requireAdmin(projectId);
-  if (!templateName.trim()) throw new Error("Le nom du template est requis");
+  if (!templateName.trim()) throw new Error("Template name is required.");
   const existingTpl = await prisma.projectTemplate.findFirst({ where: { name: templateName.trim() } });
-  if (existingTpl) throw new Error(`Un template nommé "${templateName.trim()}" existe déjà`);
+  if (existingTpl) throw new Error(`A template named "${templateName.trim()}" already exists.`);
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: {
@@ -52,7 +52,7 @@ export async function saveProjectAsTemplate(
       },
     },
   });
-  if (!project) throw new Error("Projet introuvable");
+  if (!project) throw new Error("Project not found.");
 
   const priorityTypes = ["PRIORITY"];
   const notesTypes = ["NOTES"];
@@ -82,7 +82,7 @@ export async function saveProjectAsTemplate(
   return prisma.projectTemplate.create({
     data: {
       name: templateName.trim(),
-      description: `Basé sur "${project.name}"`,
+      description: `Based on "${project.name}"`,
       snapshot: JSON.stringify(snapshot),
     },
   });
@@ -93,7 +93,7 @@ export async function listProjectTemplates() {
 }
 
 export async function saveGroupAsTemplate(groupId: string, templateName: string) {
-  if (!templateName.trim()) throw new Error("Le nom du template est requis");
+  if (!templateName.trim()) throw new Error("Template name is required.");
   const group = await prisma.group.findUnique({
     where: { id: groupId },
     include: {
@@ -104,9 +104,9 @@ export async function saveGroupAsTemplate(groupId: string, templateName: string)
       },
     },
   });
-  if (!group) throw new Error("Groupe introuvable");
+  if (!group) throw new Error("Group not found.");
   const existing = await prisma.groupTemplate.findFirst({ where: { name: templateName.trim() } });
-  if (existing) throw new Error(`Un template de groupe nommé "${templateName.trim()}" existe déjà`);
+  if (existing) throw new Error(`A group template named "${templateName.trim()}" already exists.`);
 
   const snapshot: GroupTemplateSnapshot = {
     name: group.name,
@@ -133,7 +133,7 @@ export async function deleteGroupTemplate(templateId: string) {
 export async function importGroupTemplate(projectId: string, templateId: string) {
   await requireAdmin(projectId);
   const template = await prisma.groupTemplate.findUnique({ where: { id: templateId } });
-  if (!template) throw new Error("Template introuvable");
+  if (!template) throw new Error("Template not found.");
   const snapshot = JSON.parse(template.snapshot) as GroupTemplateSnapshot;
 
   const maxPos = await prisma.group.aggregate({ where: { projectId }, _max: { position: true } });
@@ -143,7 +143,7 @@ export async function importGroupTemplate(projectId: string, templateId: string)
     where: { id: projectId },
     include: { columns: true },
   });
-  if (!project) throw new Error("Projet introuvable");
+  if (!project) throw new Error("Project not found.");
 
   const priorityCol = project.columns.find((c) => c.type === "PRIORITY");
   const notesCol = project.columns.find((c) => c.type === "NOTES");
@@ -172,7 +172,7 @@ export async function importGroupTemplate(projectId: string, templateId: string)
     });
   }
 
-  return prisma.group.findUnique({
+  const imported = await prisma.group.findUnique({
     where: { id: group.id },
     include: {
       tasks: {
@@ -182,6 +182,8 @@ export async function importGroupTemplate(projectId: string, templateId: string)
       },
     },
   });
+  emitProjectChanged(projectId);
+  return imported;
 }
 
 export async function deleteProjectTemplate(templateId: string) {
@@ -189,12 +191,12 @@ export async function deleteProjectTemplate(templateId: string) {
 }
 
 export async function createProjectFromTemplate(templateId: string, name: string) {
-  if (!name.trim()) throw new Error("Le nom du projet est requis");
+  if (!name.trim()) throw new Error("Project name is required.");
   const existing = await prisma.project.findFirst({ where: { name: name.trim() } });
-  if (existing) throw new Error(`Un projet nommé "${name.trim()}" existe déjà`);
+  if (existing) throw new Error(`A project named "${name.trim()}" already exists.`);
   const userId = await getAuthUserId();
   const template = await prisma.projectTemplate.findUnique({ where: { id: templateId } });
-  if (!template) throw new Error("Template introuvable");
+  if (!template) throw new Error("Template not found.");
 
   const snapshot = JSON.parse(template.snapshot) as TemplateSnapshot;
 
@@ -274,6 +276,7 @@ export async function createProjectFromTemplate(templateId: string, name: string
       data: { projectId: project.id, userId, role: "ADMIN" },
     });
   }
-
+  emitProjectChanged(project.id);
+  emitAdminDataChanged();
   redirect(`/projects/${project.id}`);
 }

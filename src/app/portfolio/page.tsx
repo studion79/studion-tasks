@@ -4,10 +4,16 @@ import { listProjects } from "@/lib/actions";
 import { auth } from "@/auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { DEFAULT_LOCALE, isLocale } from "@/i18n/config";
 
 export default async function PortfolioPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
+  const headerStore = await headers();
+  const headerLocale = headerStore.get("x-taskapp-locale") ?? "";
+  const locale = isLocale(headerLocale) ? headerLocale : DEFAULT_LOCALE;
+  const t = (fr: string, en: string) => (locale === "en" ? en : fr);
 
   const projects = await listProjects();
 
@@ -42,27 +48,27 @@ export default async function PortfolioPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 h-14 flex items-center justify-between">
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 h-14 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link href="/" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors text-sm flex items-center gap-1">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M15 19l-7-7 7-7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Projets
+            {t("Projets", "Projects")}
           </Link>
           <span className="text-gray-200 dark:text-gray-700">/</span>
-          <h1 className="text-base font-semibold text-gray-900 dark:text-gray-50">Portefeuille</h1>
+          <h1 className="text-base font-semibold text-gray-900 dark:text-gray-50">{t("Portefeuille", "Portfolio")}</h1>
         </div>
       </header>
 
-      <main className="px-6 py-8 max-w-6xl mx-auto space-y-6">
+      <main className="px-4 sm:px-6 py-6 sm:py-8 max-w-6xl mx-auto space-y-6">
         {/* Summary cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { label: "Projets", value: projects.length, color: "text-indigo-600 bg-indigo-50" },
-            { label: "Tâches totales", value: globalTotal, color: "text-gray-700 bg-gray-100" },
-            { label: "Terminées", value: `${globalDone} (${globalPct}%)`, color: "text-emerald-600 bg-emerald-50" },
-            { label: "En retard", value: globalOverdue, color: globalOverdue > 0 ? "text-red-600 bg-red-50" : "text-gray-400 bg-gray-50" },
+            { label: t("Projets", "Projects"), value: projects.length, color: "text-indigo-600 bg-indigo-50" },
+            { label: t("Tâches totales", "Total tasks"), value: globalTotal, color: "text-gray-700 bg-gray-100" },
+            { label: t("Terminées", "Completed"), value: `${globalDone} (${globalPct}%)`, color: "text-emerald-600 bg-emerald-50" },
+            { label: t("En retard", "Late"), value: globalOverdue, color: globalOverdue > 0 ? "text-red-600 bg-red-50" : "text-gray-400 bg-gray-50" },
           ].map((stat) => (
             <div key={stat.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 px-5 py-4">
               <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{stat.label}</p>
@@ -76,13 +82,13 @@ export default async function PortfolioPage() {
           <table className="w-full text-sm min-w-[600px]">
             <thead>
               <tr className="border-b border-gray-100 dark:border-gray-700 text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                <th className="text-left px-5 py-3">Projet</th>
-                <th className="text-center px-4 py-3 w-16">Tâches</th>
-                <th className="text-center px-4 py-3 w-16">En cours</th>
-                <th className="text-center px-4 py-3 w-16">Terminées</th>
-                <th className="text-center px-4 py-3 w-20">En retard</th>
-                <th className="px-4 py-3 w-44">Progression</th>
-                <th className="text-right px-5 py-3 w-32">Mis à jour</th>
+                <th className="text-left px-5 py-3">{t("Projet", "Project")}</th>
+                <th className="text-center px-4 py-3 w-16">{t("Tâches", "Tasks")}</th>
+                <th className="text-center px-4 py-3 w-16">{t("En cours", "In progress")}</th>
+                <th className="text-center px-4 py-3 w-16">{t("Terminées", "Completed")}</th>
+                <th className="text-center px-4 py-3 w-20">{t("En retard", "Late")}</th>
+                <th className="px-4 py-3 w-44">{t("Progression", "Progress")}</th>
+                <th className="text-right px-5 py-3 w-32">{t("Mis à jour", "Updated")}</th>
               </tr>
             </thead>
             <tbody>
@@ -125,14 +131,14 @@ export default async function PortfolioPage() {
                     </div>
                   </td>
                   <td className="text-right px-5 py-3 text-[11px] text-gray-400 dark:text-gray-500">
-                    {new Date(lastUpdated).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                    {new Date(lastUpdated).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR", { day: "numeric", month: "short" })}
                   </td>
                 </tr>
               ))}
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={7} className="text-center py-12 text-sm text-gray-400 dark:text-gray-500">
-                    Aucun projet
+                    {t("Aucun projet", "No project")}
                   </td>
                 </tr>
               )}

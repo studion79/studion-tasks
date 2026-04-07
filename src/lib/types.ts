@@ -63,40 +63,38 @@ export type WidgetMeta = {
 };
 
 export const AVAILABLE_COLUMNS: ColumnMeta[] = [
-  { type: "OWNER", label: "Owner", description: "Responsable de la tâche", defaultActive: true },
-  { type: "STATUS", label: "Status", description: "État d'avancement", defaultActive: true },
-  { type: "DUE_DATE", label: "Due date", description: "Date d'échéance", defaultActive: true },
-  { type: "PRIORITY", label: "Priority", description: "Niveau de priorité", defaultActive: true },
-  { type: "TIMELINE", label: "Timeline", description: "Période de réalisation", defaultActive: false },
-  { type: "BUDGET", label: "Budget", description: "Budget alloué", defaultActive: false },
-  { type: "NOTES", label: "Notes", description: "Notes libres", defaultActive: false },
+  { type: "OWNER", label: "Owner", description: "Task owner", defaultActive: true },
+  { type: "STATUS", label: "Status", description: "Progress status", defaultActive: true },
+  { type: "DUE_DATE", label: "Due date", description: "Deadline date", defaultActive: true },
+  { type: "PRIORITY", label: "Priority", description: "Priority level", defaultActive: true },
+  { type: "TIMELINE", label: "Timeline", description: "Execution period", defaultActive: false },
+  { type: "BUDGET", label: "Budget", description: "Allocated budget", defaultActive: false },
+  { type: "NOTES", label: "Notes", description: "Free-form notes", defaultActive: false },
 ];
 
 export const AVAILABLE_VIEWS: ViewMeta[] = [
-  { type: "SPREADSHEET", label: "Tableur", description: "Vue tableau classique", icon: "grid" },
-  { type: "CARDS", label: "Fiches", description: "Vue cartes visuelles", icon: "card" },
-  { type: "KANBAN", label: "Kanban", description: "Vue colonnes par statut", icon: "kanban" },
-  { type: "CALENDAR", label: "Calendrier", description: "Vue calendrier", icon: "calendar" },
+  { type: "SPREADSHEET", label: "Spreadsheet", description: "Classic table view", icon: "grid" },
+  { type: "CARDS", label: "Cards", description: "Visual card view", icon: "card" },
+  { type: "KANBAN", label: "Kanban", description: "Columns by status view", icon: "kanban" },
+  { type: "CALENDAR", label: "Calendar", description: "Calendar view", icon: "calendar" },
 ];
 
 export const AVAILABLE_WIDGETS: WidgetMeta[] = [
-  { type: "TASK_OVERVIEW", label: "Vue d'ensemble", description: "Total et répartition générale", defaultActive: true },
-  { type: "BY_STATUS", label: "Par statut", description: "Répartition par état", defaultActive: true },
-  { type: "BY_OWNER", label: "Par responsable", description: "Répartition par personne", defaultActive: false },
-  { type: "OVERDUE", label: "Tâches en retard", description: "Tâches dépassant la date d'échéance", defaultActive: true },
-  { type: "BY_DUE_DATE", label: "Par échéance", description: "Calendrier des échéances", defaultActive: false },
-  { type: "PRIORITY_BREAKDOWN", label: "Par priorité", description: "Répartition par niveau de priorité", defaultActive: false },
-  { type: "COMPLETION_BY_GROUP", label: "Avancement par groupe", description: "Progression par groupe de tâches", defaultActive: false },
-  { type: "BUDGET_TOTAL", label: "Budget total", description: "Somme des budgets de toutes les tâches", defaultActive: false },
-  { type: "BURNDOWN", label: "Burndown", description: "Tâches complétées dans le temps", defaultActive: false },
-  { type: "VELOCITY", label: "Vélocité", description: "Tâches complétées par semaine", defaultActive: false },
+  { type: "TASK_OVERVIEW", label: "Overview", description: "Totals and global split", defaultActive: true },
+  { type: "BY_STATUS", label: "By status", description: "Status distribution", defaultActive: true },
+  { type: "BY_OWNER", label: "By owner", description: "Distribution by person", defaultActive: false },
+  { type: "OVERDUE", label: "Late tasks", description: "Tasks past due date", defaultActive: true },
+  { type: "BY_DUE_DATE", label: "By due date", description: "Deadline calendar", defaultActive: false },
+  { type: "PRIORITY_BREAKDOWN", label: "By priority", description: "Priority level distribution", defaultActive: false },
+  { type: "COMPLETION_BY_GROUP", label: "Completion by group", description: "Progress by task group", defaultActive: false },
+  { type: "BUDGET_TOTAL", label: "Total budget", description: "Sum of all task budgets", defaultActive: false },
+  { type: "BURNDOWN", label: "Burndown", description: "Completed tasks over time", defaultActive: false },
+  { type: "VELOCITY", label: "Velocity", description: "Completed tasks per week", defaultActive: false },
 ];
 
 export type CreateProjectInput = {
   name: string;
-  selectedColumns: ColumnType[];
-  defaultView: ViewType;
-  selectedWidgets: WidgetType[];
+  groupTemplateIds?: string[];
 };
 
 export type SpreadsheetFilters = {

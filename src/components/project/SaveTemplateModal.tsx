@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { usePathname } from "next/navigation";
 import { saveProjectAsTemplate } from "@/lib/actions";
+import { localeFromPathname, tr } from "@/lib/i18n/client";
 
 export function SaveTemplateModal({
   projectId,
@@ -12,6 +14,8 @@ export function SaveTemplateModal({
   projectName: string;
   onClose: () => void;
 }) {
+  const pathname = usePathname();
+  const locale = localeFromPathname(pathname);
   const [name, setName] = useState(projectName);
   const [includeTasks, setIncludeTasks] = useState(false);
   const [done, setDone] = useState(false);
@@ -26,7 +30,7 @@ export function SaveTemplateModal({
         await saveProjectAsTemplate(projectId, name.trim(), includeTasks);
         setDone(true);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Erreur lors de la sauvegarde");
+        setError(err instanceof Error ? err.message : tr(locale, "Erreur lors de la sauvegarde", "Save failed"));
       }
     });
   };
@@ -34,11 +38,11 @@ export function SaveTemplateModal({
   return (
     <>
       <div className="fixed inset-0 z-50 bg-black/20" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl p-6 w-full max-w-sm pointer-events-auto">
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center pointer-events-none">
+        <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl p-4 sm:p-6 w-full sm:max-w-sm pointer-events-auto">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Sauvegarder comme template</h2>
-            <button onClick={onClose} className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">{tr(locale, "Sauvegarder comme template", "Save as template")}</h2>
+            <button aria-label={tr(locale, "Fermer", "Close")} onClick={onClose} className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M6 18L18 6M6 6l12 12" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
@@ -51,26 +55,26 @@ export function SaveTemplateModal({
                   <path d="M5 13l4 4L19 7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Template sauvegardé !</p>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-200">{tr(locale, "Template sauvegardé !", "Template saved!")}</p>
               <div className="flex gap-2 w-full">
                 <button onClick={onClose} className="flex-1 border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-300 rounded-lg py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
-                  Fermer
+                  {tr(locale, "Fermer", "Close")}
                 </button>
                 <a href="/templates" className="flex-1 text-center bg-indigo-600 text-white text-sm font-medium rounded-lg py-2 hover:bg-indigo-700 transition-colors">
-                  Voir les templates
+                  {tr(locale, "Voir les templates", "See templates")}
                 </a>
               </div>
             </div>
           ) : (
             <form onSubmit={handleSubmit}>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1.5">Nom du template</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1.5">{tr(locale, "Nom du template", "Template name")}</label>
               <input
                 autoFocus
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 mb-4 placeholder-gray-400 dark:placeholder-gray-500"
-                placeholder="Nom du template"
+                placeholder={tr(locale, "Nom du template", "Template name")}
               />
               <label className="flex items-center gap-2.5 py-2 mb-3 cursor-pointer select-none">
                 <div
@@ -81,7 +85,7 @@ export function SaveTemplateModal({
                     className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${includeTasks ? "translate-x-4" : ""}`}
                   />
                 </div>
-                <span className="text-sm text-gray-700 dark:text-gray-200">Inclure les tâches</span>
+                <span className="text-sm text-gray-700 dark:text-gray-200">{tr(locale, "Inclure les tâches", "Include tasks")}</span>
               </label>
               {error && (
                 <p className="text-xs text-red-500 mb-3">{error}</p>
@@ -91,7 +95,7 @@ export function SaveTemplateModal({
                 disabled={isPending || !name.trim()}
                 className="w-full bg-indigo-600 text-white text-sm font-medium py-2 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-60 cursor-pointer"
               >
-                {isPending ? "Sauvegarde…" : "Sauvegarder"}
+                {isPending ? tr(locale, "Sauvegarde…", "Saving...") : tr(locale, "Sauvegarder", "Save")}
               </button>
             </form>
           )}

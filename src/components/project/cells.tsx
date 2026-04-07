@@ -1,9 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { getUiLocale } from "@/lib/ui-locale";
+import { usePathname } from "next/navigation";
 import { STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/lib/constants";
 import type { ProjectColumn, TaskFieldValue } from "@/lib/types";
 import { useProjectContext } from "./ProjectContext";
+import { localeFromPathname, tr } from "@/lib/i18n/client";
+import { setTaskReminderPreference } from "@/lib/actions";
+import { composeDateTimeValue, composeTimelineValue, parseTimelineValue, splitDateTimeValue } from "@/lib/task-schedule";
 
 export function getFieldValue(
   fieldValues: TaskFieldValue[],
@@ -14,30 +19,34 @@ export function getFieldValue(
 
 // ---- Recurrence helpers ----
 
-export function recurrenceLabel(recurrence: string | null): string | null {
+export function recurrenceLabel(recurrence: string | null, locale: "fr" | "en"): string | null {
   if (!recurrence) return null;
+  const isEn = locale === "en";
   try {
     const { frequency, interval, endDate } = JSON.parse(recurrence) as {
       frequency: string;
       interval: number;
       endDate?: string | null;
     };
-    const labels: Record<string, string> = { daily: "jour", weekly: "semaine", monthly: "mois" };
+    const labels: Record<string, string> = isEn
+      ? { daily: "day", weekly: "week", monthly: "month" }
+      : { daily: "jour", weekly: "semaine", monthly: "mois" };
     const unit = labels[frequency] ?? frequency;
     const base = interval === 1
-      ? `Récurrent · chaque ${unit}`
-      : `Récurrent · tous les ${interval} ${unit}s`;
+      ? (isEn ? `Recurring · every ${unit}` : `Récurrent · chaque ${unit}`)
+      : (isEn ? `Recurring · every ${interval} ${unit}s` : `Récurrent · tous les ${interval} ${unit}s`);
     if (!endDate) return base;
-    const formattedEnd = new Date(`${endDate}T00:00:00`).toLocaleDateString("fr-FR");
-    return `${base} (jusqu'au ${formattedEnd})`;
+    const formattedEnd = new Date(`${endDate}T00:00:00`).toLocaleDateString(getUiLocale());
+    return isEn ? `${base} (until ${formattedEnd})` : `${base} (jusqu'au ${formattedEnd})`;
   } catch {
-    return "Récurrent";
+    return isEn ? "Recurring" : "Recurrent";
   }
 }
 
 /** Small repeat icon badge — drop it next to any task title */
 export function RecurrenceIcon({ recurrence }: { recurrence: string | null }) {
-  const label = recurrenceLabel(recurrence);
+  const locale = localeFromPathname(usePathname());
+  const label = recurrenceLabel(recurrence, locale);
   if (!label) return null;
   return (
     <span title={label} className="inline-flex flex-shrink-0 text-indigo-400 hover:text-indigo-600 transition-colors cursor-default">
@@ -201,66 +210,171 @@ export function TextCell({
 export function DateCell({
   value,
   onSave,
+  taskId,
+  reminderOffsetMinutes,
 }: {
   value: string | null;
   onSave: (v: string | null) => void;
+  taskId?: string;
+  reminderOffsetMinutes?: number | null;
 }) {
+  const locale = localeFromPathname(usePathname());
   const [editing, setEditing] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [dateDraft, setDateDraft] = useState("");
+  const [timeDraft, setTimeDraft] = useState("");
+  const [customReminder, setCustomReminder] = useState("");
+  const [reminderChoice, setReminderChoice] = useState("0");
 
   useEffect(() => {
-    if (editing) inputRef.current?.focus();
-  }, [editing]);
+    if (!editing) return;
+    const parsed = splitDateTimeValue(value);
+    setDateDraft(parsed.date);
+    setTimeDraft(parsed.time);
+    const reminder = reminderOffsetMinutes ?? 0;
+    if ([0, 2, 5, 15, 30].includes(reminder)) {
+      setReminderChoice(String(reminder));
+      setCustomReminder("");
+    } else {
+      setReminderChoice("custom");
+      setCustomReminder(String(reminder));
+    }
+  }, [editing, value, reminderOffsetMinutes]);
 
+  const parsedForDisplay = splitDateTimeValue(value);
   const isOverdue =
-    value
-      ? new Date(value) < new Date(new Date().toDateString())
+    parsedForDisplay.date
+      ? new Date((parsedForDisplay.date || "") + (parsedForDisplay.hasTime ? `T${parsedForDisplay.time}:00` : "T00:00:00")) < new Date()
       : false;
 
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        type="date"
-        defaultValue={value ?? ""}
-        onBlur={(e) => {
-          onSave(e.target.value || null);
-          setEditing(false);
-        }}
-        onChange={(e) => {
-          if (e.target.value) {
-            onSave(e.target.value);
-            setEditing(false);
-          }
-        }}
-        className="bg-white dark:bg-gray-700 dark:text-gray-100 border border-indigo-400 rounded px-2 py-0.5 text-xs outline-none w-full"
-      />
-    );
-  }
+  const handleReminderSave = async () => {
+    if (!taskId || !timeDraft) return;
+    const minutes =
+      reminderChoice === "custom"
+        ? Math.max(0, Math.min(24 * 60, Number.parseInt(customReminder || "0", 10) || 0))
+        : Number.parseInt(reminderChoice, 10);
+    await setTaskReminderPreference(taskId, Number.isFinite(minutes) ? minutes : 0);
+  };
+
+  const saveAndClose = async () => {
+    const composed = dateDraft ? composeDateTimeValue(dateDraft, timeDraft || null) : "";
+    onSave(composed || null);
+    if (taskId) {
+      if (timeDraft) await handleReminderSave();
+      else await setTaskReminderPreference(taskId, null);
+    }
+    setEditing(false);
+  };
 
   return (
-    <button
-      onClick={() => setEditing(true)}
-      className="w-full px-1 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer min-h-[24px] flex items-center"
-    >
-      {value ? (
-        <span
-          className={`text-xs ${
-            isOverdue ? "text-red-500 font-medium" : "text-gray-700 dark:text-gray-300"
-          }`}
-        >
-          {new Date(value + "T12:00:00").toLocaleDateString("fr-FR", {
-            day: "numeric",
-            month: "short",
-          })}
-          {isOverdue && (
-            <span className="ml-1 text-red-400 text-[10px]">retard</span>
-          )}
-        </span>
-      ) : (
-        <span className="text-gray-300 text-xs select-none">—</span>
+    <div className="relative">
+      <button
+        onClick={() => setEditing(true)}
+        className="w-full px-1 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer min-h-[24px] flex items-center"
+      >
+        {value ? (
+          <span
+            className={`text-xs ${
+              isOverdue ? "text-red-500 font-medium" : "text-gray-700 dark:text-gray-300"
+            }`}
+          >
+            {new Date((parsedForDisplay.date || value) + "T12:00:00").toLocaleDateString(getUiLocale(), {
+              day: "numeric",
+              month: "short",
+            })}
+            {parsedForDisplay.hasTime && (
+              <span className="ml-1 text-[10px] text-gray-500 dark:text-gray-400">{parsedForDisplay.time}</span>
+            )}
+            {isOverdue && (
+              <span className="ml-1 text-red-400 text-[10px]">retard</span>
+            )}
+          </span>
+        ) : (
+          <span className="text-gray-300 text-xs select-none">—</span>
+        )}
+      </button>
+
+      {editing && (
+        <>
+          <div
+            className="fixed inset-0 z-[90] bg-transparent"
+            onMouseDown={() => {
+              void saveAndClose();
+            }}
+          />
+          <div
+            onMouseDown={(e) => e.stopPropagation()}
+            className="absolute right-0 sm:right-auto sm:left-0 top-full mt-1 z-[91] rounded-lg border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-gray-800 p-2 space-y-2 w-[min(12.5rem,calc(100vw-1rem))] sm:w-[15.5rem] max-w-[calc(100vw-1rem)] overflow-x-hidden shadow-xl"
+          >
+            <div className="grid grid-cols-1 gap-1.5">
+              <input
+                type="date"
+                value={dateDraft}
+                onChange={(e) => setDateDraft(e.target.value)}
+                className="datetime-field mx-auto block w-[9rem] max-w-full min-w-0"
+              />
+              <input
+                type="time"
+                value={timeDraft}
+                onChange={(e) => setTimeDraft(e.target.value)}
+                className="datetime-field mx-auto block w-[9rem] max-w-full min-w-0"
+              />
+            </div>
+            {timeDraft && taskId && (
+              <div className="space-y-1 min-w-0">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">{tr(locale, "Rappel", "Reminder")}</p>
+                <div className="flex flex-col gap-1.5 min-w-0">
+                  <select
+                    value={reminderChoice}
+                    onChange={(e) => setReminderChoice(e.target.value)}
+                    className="w-full min-w-0 select-unified select-unified-sm"
+                  >
+                    <option value="0">{tr(locale, "À l'heure", "At time")}</option>
+                    <option value="2">{tr(locale, "2 min avant", "2 min before")}</option>
+                    <option value="5">{tr(locale, "5 min avant", "5 min before")}</option>
+                    <option value="15">{tr(locale, "15 min avant", "15 min before")}</option>
+                    <option value="30">{tr(locale, "30 min avant", "30 min before")}</option>
+                    <option value="custom">{tr(locale, "Personnalisé", "Custom")}</option>
+                  </select>
+                  {reminderChoice === "custom" && (
+                    <input
+                      type="number"
+                      min={0}
+                      max={1440}
+                      value={customReminder}
+                      onChange={(e) => setCustomReminder(e.target.value)}
+                      className="datetime-field mx-auto block w-[9rem] max-w-full min-w-0"
+                      placeholder="min"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  setDateDraft("");
+                  setTimeDraft("");
+                  onSave(null);
+                  if (taskId) void setTaskReminderPreference(taskId, null);
+                  setEditing(false);
+                }}
+                className="text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors cursor-pointer"
+              >
+                {tr(locale, "Effacer", "Clear")}
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveAndClose()}
+                className="text-[11px] text-indigo-600 hover:text-indigo-700 transition-colors cursor-pointer"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -272,82 +386,139 @@ export function TimelineCell({
   value: string | null;
   onSave: (v: string | null) => void;
 }) {
-  const parsed = value
-    ? (() => {
-        try {
-          return JSON.parse(value) as { start?: string; end?: string };
-        } catch {
-          return null;
-        }
-      })()
-    : null;
+  const locale = localeFromPathname(usePathname());
+  const parsed = parseTimelineValue(value);
 
   const [editing, setEditing] = useState(false);
-  const [start, setStart] = useState(parsed?.start ?? "");
-  const [end, setEnd] = useState(parsed?.end ?? "");
+  const [startDate, setStartDate] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [endTime, setEndTime] = useState("");
 
   const save = () => {
-    if (start || end) {
-      onSave(JSON.stringify({ start, end }));
-    } else {
-      onSave(null);
-    }
+    const normalizedStart = startDate ? composeDateTimeValue(startDate, startTime || null) : "";
+    const normalizedEnd = endDate ? composeDateTimeValue(endDate, endTime || null) : "";
+    onSave(composeTimelineValue(normalizedStart, normalizedEnd));
     setEditing(false);
   };
 
-  if (editing) {
-    return (
-      <div className="flex items-center gap-1">
-        <input
-          type="date"
-          value={start}
-          onChange={(e) => setStart(e.target.value)}
-          autoFocus
-          className="border border-indigo-400 rounded px-1 py-0.5 text-xs outline-none w-[110px]"
-        />
-        <span className="text-gray-400 text-xs">→</span>
-        <input
-          type="date"
-          value={end}
-          onChange={(e) => setEnd(e.target.value)}
-          onBlur={save}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") save();
-            if (e.key === "Escape") setEditing(false);
-          }}
-          className="border border-indigo-400 rounded px-1 py-0.5 text-xs outline-none w-[110px]"
-        />
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!editing) return;
+    const start = splitDateTimeValue(parsed?.start ?? "");
+    const end = splitDateTimeValue(parsed?.end ?? "");
+    setStartDate(start.date);
+    setStartTime(start.time);
+    setEndDate(end.date);
+    setEndTime(end.time);
+  }, [editing, parsed?.end, parsed?.start]);
 
   return (
-    <button
-      onClick={() => {
-        setStart(parsed?.start ?? "");
-        setEnd(parsed?.end ?? "");
-        setEditing(true);
-      }}
-      className="w-full px-1 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer min-h-[24px] flex items-center"
-    >
-      {parsed?.start || parsed?.end ? (
-        <span className="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
-          {parsed.start &&
-            new Date(parsed.start + "T12:00:00").toLocaleDateString("fr-FR", {
-              day: "numeric",
-              month: "short",
-            })}
-          {parsed.start && parsed.end && " → "}
-          {parsed.end &&
-            new Date(parsed.end + "T12:00:00").toLocaleDateString("fr-FR", {
-              day: "numeric",
-              month: "short",
-            })}
-        </span>
-      ) : (
-        <span className="text-gray-300 text-xs select-none">—</span>
+    <div className="relative">
+      <button
+        onClick={() => {
+          setEditing(true);
+        }}
+        className="w-full px-1 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer min-h-[24px] flex items-center"
+      >
+        {parsed?.start || parsed?.end ? (
+          <span className="text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
+            {parsed.start && (() => {
+              const startParts = splitDateTimeValue(parsed.start);
+              if (!startParts.date) return null;
+              return new Date(startParts.date + "T12:00:00").toLocaleDateString(getUiLocale(), {
+                day: "numeric",
+                month: "short",
+              });
+            })()}
+            {parsed.start && splitDateTimeValue(parsed.start).hasTime && (
+              <span className="ml-1 text-[10px] text-gray-500 dark:text-gray-400">{splitDateTimeValue(parsed.start).time}</span>
+            )}
+            {parsed.start && parsed.end && " → "}
+            {parsed.end && (() => {
+              const endParts = splitDateTimeValue(parsed.end);
+              if (!endParts.date) return null;
+              return new Date(endParts.date + "T12:00:00").toLocaleDateString(getUiLocale(), {
+                day: "numeric",
+                month: "short",
+              });
+            })()}
+            {parsed.end && splitDateTimeValue(parsed.end).hasTime && (
+              <span className="ml-1 text-[10px] text-gray-500 dark:text-gray-400">{splitDateTimeValue(parsed.end).time}</span>
+            )}
+          </span>
+        ) : (
+          <span className="text-gray-300 text-xs select-none">—</span>
+        )}
+      </button>
+
+      {editing && (
+        <>
+          <div
+            className="fixed inset-0 z-[90] bg-transparent"
+            onMouseDown={() => save()}
+          />
+          <div
+            onMouseDown={(e) => e.stopPropagation()}
+            className="absolute right-0 sm:right-auto sm:left-0 top-full mt-1 z-[91] rounded-lg border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-gray-800 p-2 space-y-2 w-[min(12.75rem,calc(100vw-1rem))] sm:w-[17rem] max-w-[calc(100vw-1rem)] overflow-x-hidden shadow-xl"
+          >
+            <div className="grid grid-cols-1 gap-1 items-center">
+              <div className="grid grid-cols-1 gap-1">
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="datetime-field mx-auto block w-[9rem] max-w-full min-w-0"
+                />
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="datetime-field mx-auto block w-[9rem] max-w-full min-w-0"
+                />
+              </div>
+              <span className="text-gray-400 text-xs text-center">→</span>
+              <div className="grid grid-cols-1 gap-1">
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="datetime-field mx-auto block w-[9rem] max-w-full min-w-0"
+                />
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") save();
+                    if (e.key === "Escape") setEditing(false);
+                  }}
+                  className="datetime-field mx-auto block w-[9rem] max-w-full min-w-0"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  onSave(null);
+                  setEditing(false);
+                }}
+                className="text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors cursor-pointer"
+              >
+                {tr(locale, "Effacer", "Clear")}
+              </button>
+              <button
+                type="button"
+                onClick={save}
+                className="text-[11px] text-indigo-600 hover:text-indigo-700 transition-colors cursor-pointer"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -479,14 +650,18 @@ export function OwnerCell({
 // --- CellRenderer ---
 export function CellRenderer({
   column,
+  task,
   fieldValues,
   onSave,
   memberNames,
+  readOnlyOwner = false,
 }: {
   column: ProjectColumn;
+  task?: { id: string; reminderOffsetMinutes?: number | null };
   fieldValues: TaskFieldValue[];
   onSave: (columnId: string, value: string | null) => void;
   memberNames?: string[];
+  readOnlyOwner?: boolean;
 }) {
   const value = getFieldValue(fieldValues, column.id);
   const save = (v: string | null) => onSave(column.id, v);
@@ -497,12 +672,30 @@ export function CellRenderer({
     case "PRIORITY":
       return <SelectCell value={value} options={PRIORITY_OPTIONS} onSave={save} />;
     case "DUE_DATE":
-      return <DateCell value={value} onSave={save} />;
+      return (
+        <DateCell
+          value={value}
+          onSave={save}
+          taskId={task?.id}
+          reminderOffsetMinutes={task?.reminderOffsetMinutes ?? null}
+        />
+      );
     case "TIMELINE":
       return <TimelineCell value={value} onSave={save} />;
     case "BUDGET":
       return <TextCell value={value} onSave={save} prefix="€ " />;
     case "OWNER":
+      if (readOnlyOwner) {
+        return (
+          <div className="w-full px-1 py-1 min-h-[24px] flex items-center">
+            {value ? (
+              <span className="text-xs text-gray-700 dark:text-gray-300 truncate">{value}</span>
+            ) : (
+              <span className="text-gray-300 text-xs select-none">—</span>
+            )}
+          </div>
+        );
+      }
       return memberNames && memberNames.length > 0
         ? <OwnerCell value={value} onSave={save} memberNames={memberNames} />
         : <TextCell value={value} onSave={save} />;

@@ -10,7 +10,9 @@ export const authConfig: NextAuthConfig = {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const isAuthPage =
-        nextUrl.pathname === "/login" || nextUrl.pathname === "/register";
+        nextUrl.pathname === "/login" ||
+        nextUrl.pathname === "/register" ||
+        /^\/(fr|en)\/(login|register)$/.test(nextUrl.pathname);
       if (isAuthPage) return true;
       return isLoggedIn;
     },

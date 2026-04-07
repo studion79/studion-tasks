@@ -1,5 +1,15 @@
 import { notFound } from "next/navigation";
-import { getProject, getAllProjectColumns, getProjectMembers, listNotifications, getUnreadNotificationCount, generateRecurringTasks, generateDueDateReminders } from "@/lib/actions";
+import {
+  generateDueDateReminders,
+  generateOverdueReminders,
+  generateRecurringTasks,
+  getAllProjectColumns,
+  getMyDisplaySettings,
+  getProject,
+  getProjectMembers,
+  getUnreadNotificationCount,
+  listNotifications,
+} from "@/lib/actions";
 import { ProjectPageClient } from "@/components/project/ProjectPageClient";
 import { auth } from "@/auth";
 
@@ -18,13 +28,16 @@ export default async function ProjectPage({
   await generateRecurringTasks(id).catch(() => {});
   // Send due-date reminders for tasks due within 2 days (idempotent)
   await generateDueDateReminders(id).catch(() => {});
+  // Send overdue reminders (idempotent, once/day/task)
+  await generateOverdueReminders(id).catch(() => {});
 
-  const [project, allColumns, members, notifications, unreadCount] = await Promise.all([
+  const [project, allColumns, members, notifications, unreadCount, displaySettings] = await Promise.all([
     getProject(id),
     getAllProjectColumns(id),
     getProjectMembers(id),
     currentUserId ? listNotifications(currentUserId) : Promise.resolve([]),
     currentUserId ? getUnreadNotificationCount(currentUserId) : Promise.resolve(0),
+    currentUserId ? getMyDisplaySettings().catch(() => null) : Promise.resolve(null),
   ]);
 
   if (!project) notFound();
@@ -38,6 +51,7 @@ export default async function ProjectPage({
       isGlobalAdmin={isGlobalAdmin}
       initialNotifications={notifications}
       initialUnreadCount={unreadCount}
+      initialDisplaySettings={displaySettings}
     />
   );
 }

@@ -1,21 +1,27 @@
 "use client";
 
 import React, { useState, useMemo, useCallback, useTransition, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { getUiLocale } from "@/lib/ui-locale";
+import { usePathname, useRouter } from "next/navigation";
 import type { ProjectWithRelations, TaskWithFields } from "@/lib/types";
 import { upsertTaskField, updateTaskTitle } from "@/lib/actions";
 import { TaskDetailPanel } from "./TaskDetailPanel";
 import { useProjectContext } from "./ProjectContext";
+import { toCanonicalStatus } from "@/lib/status";
+import { localeFromPathname, tr } from "@/lib/i18n/client";
+import type { AppLocale } from "@/i18n/config";
+import { parseDateTimeToDate, parseTimelineValue } from "@/lib/task-schedule";
 
 const DAY_PX = 32; // pixels per day
 const ROW_H = 36; // px per task row
 const LABEL_W = 220; // px for left label column
 const MONTH_HEADER_H = 30; // px
 const DAY_HEADER_H = 26; // px
+const HEADER_BORDER_PX = 1; // px, aligns left/right header stacks
 
 // ---- helpers ----
 
-function recurrenceLabel(recurrence: string | null): string | null {
+function recurrenceLabel(recurrence: string | null, locale: AppLocale): string | null {
   if (!recurrence) return null;
   try {
     const { frequency, interval, endDate } = JSON.parse(recurrence) as {
@@ -23,12 +29,18 @@ function recurrenceLabel(recurrence: string | null): string | null {
       interval: number;
       endDate?: string | null;
     };
-    const labels: Record<string, string> = { daily: "jour", weekly: "semaine", monthly: "mois" };
+    const labels: Record<string, string> = {
+      daily: tr(locale, "jour", "day"),
+      weekly: tr(locale, "semaine", "week"),
+      monthly: tr(locale, "mois", "month"),
+    };
     const unit = labels[frequency] ?? frequency;
-    const base = interval === 1 ? `Récurrent · chaque ${unit}` : `Récurrent · tous les ${interval} ${unit}s`;
+    const base = interval === 1
+      ? `${tr(locale, "Récurrent", "Recurring")} · ${tr(locale, "chaque", "every")} ${unit}`
+      : `${tr(locale, "Récurrent", "Recurring")} · ${tr(locale, "tous les", "every")} ${interval} ${unit}s`;
     if (!endDate) return base;
-    return `${base} (jusqu'au ${new Date(`${endDate}T00:00:00`).toLocaleDateString("fr-FR")})`;
-  } catch { return "Récurrent"; }
+    return `${base} (${tr(locale, "jusqu'au", "until")} ${new Date(`${endDate}T00:00:00`).toLocaleDateString(getUiLocale())})`;
+  } catch { return tr(locale, "Récurrent", "Recurring"); }
 }
 
 /** Safe local-date serializer — avoids UTC offset shifting YYYY-MM-DD by 1 day */
@@ -37,22 +49,16 @@ function toLocalDateStr(d: Date): string {
 }
 
 function parseTimeline(value: string | null): { start: Date; end: Date } | null {
-  if (!value) return null;
-  try {
-    const { start, end } = JSON.parse(value) as { start?: string; end?: string };
-    if (!start || !end) return null;
-    return {
-      start: new Date(start + "T00:00:00"),
-      end: new Date(end + "T00:00:00"),
-    };
-  } catch {
-    return null;
-  }
+  const parsed = parseTimelineValue(value);
+  if (!parsed?.start || !parsed?.end) return null;
+  const start = parseDateTimeToDate(parsed.start);
+  const end = parseDateTimeToDate(parsed.end);
+  if (!start || !end) return null;
+  return { start, end };
 }
 
 function parseDueDate(value: string | null): Date | null {
-  if (!value) return null;
-  return new Date(value + "T00:00:00");
+  return parseDateTimeToDate(value);
 }
 
 function startOfDay(d: Date) {
@@ -84,7 +90,7 @@ function shiftByRecurrence(d: Date, cfg: RecurrenceConfig, times: number): Date 
 }
 
 function formatMonthYear(d: Date) {
-  return d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  return d.toLocaleDateString(getUiLocale(), { month: "long", year: "numeric" });
 }
 
 function formatDay(d: Date) {
@@ -92,7 +98,7 @@ function formatDay(d: Date) {
 }
 
 function formatWeekDay(d: Date) {
-  return d.toLocaleDateString("fr-FR", { weekday: "short" }).slice(0, 2);
+  return d.toLocaleDateString(getUiLocale(), { weekday: "short" }).slice(0, 2);
 }
 
 // Group consecutive days by month for the header
@@ -129,19 +135,16 @@ function getGroupBg(color: string) {
 
 // ---- Period options ----
 
-const PERIOD_OPTIONS = [
-  { label: "2 sem.", days: 14 },
-  { label: "1 mois", days: 30 },
-  { label: "3 mois", days: 90 },
-  { label: "6 mois", days: 180 },
-  { label: "1 an", days: 365 },
-];
+const PERIOD_OPTIONS = [14, 30, 90, 180, 365] as const;
 
 // ---- Main component ----
 
 export function ProjectGanttView({ project }: { project: ProjectWithRelations }) {
+  const pathname = usePathname();
+  const locale = localeFromPathname(pathname);
   const { allColumns } = useProjectContext();
   const [selectedTask, setSelectedTask] = useState<{ task: TaskWithFields; groupName: string; groupColor: string } | null>(null);
+  const [showCompleted, setShowCompleted] = useState(true);
   const [, startTransition] = useTransition();
   const router = useRouter();
 
@@ -174,14 +177,30 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
   // even when TIMELINE/DUE_DATE are hidden in the spreadsheet view
   const timelineCol = allColumns.find((c) => c.type === "TIMELINE");
   const dueDateCol = allColumns.find((c) => c.type === "DUE_DATE");
+  const statusCol = allColumns.find((c) => c.type === "STATUS");
+
+  const displayGroups = useMemo(
+    () =>
+      project.groups.map((g) => ({
+        ...g,
+        tasks: g.tasks.filter((t) => {
+          if (showCompleted) return true;
+          const rawStatus = statusCol
+            ? t.fieldValues.find((f) => f.columnId === statusCol.id)?.value ?? null
+            : null;
+          return toCanonicalStatus(rawStatus) !== "DONE";
+        }),
+      })),
+    [project, showCompleted, statusCol]
+  );
 
   // Flatten all tasks
   const allTasks = useMemo(
     () =>
-      project.groups.flatMap((g) =>
+      displayGroups.flatMap((g) =>
         g.tasks.map((t) => ({ task: t as TaskWithFields, group: g }))
       ),
-    [project]
+    [displayGroups]
   );
 
   // ---- Period / navigation ----
@@ -257,7 +276,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
   const { ganttArrows, ganttTotalH } = useMemo(() => {
     const meta = new Map<string, { x1: number; x2: number; yMid: number }>();
     let y = 0;
-    for (const group of project.groups) {
+    for (const group of displayGroups) {
       y += ROW_H; // group header row
       for (const task of group.tasks) {
         const tField = timelineCol
@@ -284,7 +303,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
       }
     }
     const arrows: { x1: number; y1: number; x2: number; y2: number }[] = [];
-    for (const group of project.groups) {
+    for (const group of displayGroups) {
       for (const task of group.tasks as TaskWithFields[]) {
         const from = meta.get(task.id);
         if (!from || from.x2 < 0) continue;
@@ -296,41 +315,126 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
       }
     }
     return { ganttArrows: arrows, ganttTotalH: y };
-  }, [project, viewStart, timelineCol, dueDateCol]);
+  }, [displayGroups, viewStart, timelineCol, dueDateCol]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-white dark:bg-gray-900">
       {/* ── Toolbar ── */}
-      <div className="flex items-center gap-1 px-4 py-2 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
-        <button onClick={handlePrev} title="Période précédente" className="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
+      <div className="hidden sm:flex items-center gap-1 px-4 py-2 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
+        <button onClick={handlePrev} title={tr(locale, "Période précédente", "Previous period")} className="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
         <button onClick={handleGoToday} className="text-xs text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md px-2.5 py-1 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer mx-0.5">
-          Aujourd&apos;hui
+          {tr(locale, "Aujourd'hui", "Today")}
         </button>
-        <button onClick={handleNext} title="Période suivante" className="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
+        <button onClick={handleNext} title={tr(locale, "Période suivante", "Next period")} className="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
         <div className="w-px h-4 bg-gray-200 dark:bg-gray-600 mx-2 flex-shrink-0" />
-        {PERIOD_OPTIONS.map((opt) => (
+        {PERIOD_OPTIONS.map((days) => (
           <button
-            key={opt.days}
-            onClick={() => handlePeriod(opt.days)}
-            className={`text-xs px-2.5 py-1 rounded-md transition-colors cursor-pointer ${activePeriodDays === opt.days ? "bg-indigo-600 text-white" : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
+            key={days}
+            onClick={() => handlePeriod(days)}
+            className={`text-xs px-2.5 py-1 rounded-md transition-colors cursor-pointer ${activePeriodDays === days ? "bg-indigo-600 text-white" : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
           >
-            {opt.label}
+            {days === 14 ? tr(locale, "2 sem.", "2 weeks")
+              : days === 30 ? tr(locale, "1 mois", "1 month")
+              : days === 90 ? tr(locale, "3 mois", "3 months")
+              : days === 180 ? tr(locale, "6 mois", "6 months")
+              : tr(locale, "1 an", "1 year")}
           </button>
         ))}
         <button
           onClick={() => setManualView(null)}
-          title="Ajuster à l'étendue des tâches"
+          title={tr(locale, "Ajuster à l'étendue des tâches", "Fit to task range")}
           className={`text-xs px-2.5 py-1 rounded-md transition-colors cursor-pointer ml-1 ${!manualView ? "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-medium" : "text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
         >
           Auto
         </button>
+        <button
+          onClick={() => setShowCompleted((prev) => !prev)}
+          className={`text-xs px-2.5 py-1 rounded-md transition-colors cursor-pointer ml-1 ${
+            showCompleted
+              ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700"
+              : "text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+          }`}
+        >
+          {showCompleted ? tr(locale, "Masquer cochées", "Hide completed") : tr(locale, "Afficher cochées", "Show completed")}
+        </button>
+      </div>
+      <div className="sm:hidden px-3 py-2 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className="flex items-center gap-1">
+          <button onClick={handlePrev} className="p-2 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+          <button onClick={handleGoToday} className="text-xs px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300">{tr(locale, "Aujourd'hui", "Today")}</button>
+          <button onClick={handleNext} className="p-2 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+          <button
+            onClick={() => setShowCompleted((prev) => !prev)}
+            className={`ml-auto text-xs px-3 py-1.5 rounded-md border transition-colors ${
+              showCompleted
+                ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-700"
+                : "text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600"
+            }`}
+          >
+            {showCompleted ? tr(locale, "Masquer cochées", "Hide completed") : tr(locale, "Afficher cochées", "Show completed")}
+          </button>
+        </div>
+      </div>
+      <div className="sm:hidden flex-1 overflow-y-auto p-3 space-y-3">
+        {displayGroups.map((group) => (
+          <section key={group.id} className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <header className="px-3 py-2 text-xs font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2" style={{ background: getGroupBg(group.color) }}>
+              <span className="w-2 h-2 rounded-full" style={{ background: group.color }} />
+              <span className="truncate">{group.name}</span>
+              <span className="ml-auto text-[10px] text-gray-500 dark:text-gray-400">{group.tasks.length}</span>
+            </header>
+            <div className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-900">
+              {group.tasks.length === 0 && (
+                <div className="px-3 py-4 text-xs text-gray-400">{tr(locale, "Aucune tâche", "No tasks")}</div>
+              )}
+              {group.tasks.map((task) => {
+                const tl = timelineCol
+                  ? parseTimeline(task.fieldValues.find((f) => f.columnId === timelineCol.id)?.value ?? null)
+                  : null;
+                const dd = dueDateCol
+                  ? parseDueDate(task.fieldValues.find((f) => f.columnId === dueDateCol.id)?.value ?? null)
+                  : null;
+                const rawStatus = statusCol
+                  ? task.fieldValues.find((f) => f.columnId === statusCol.id)?.value ?? null
+                  : null;
+                const isDone = toCanonicalStatus(rawStatus) === "DONE";
+                return (
+                  <button
+                    key={task.id}
+                    onClick={() => setSelectedTask({ task: task as TaskWithFields, groupName: group.name, groupColor: group.color })}
+                    className={`w-full text-left px-3 py-3 space-y-1.5 ${isDone ? "opacity-50" : ""}`}
+                  >
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{task.title}</p>
+                    {tl && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {tr(locale, "Période", "Period")}: {tl.start.toLocaleDateString(getUiLocale())} - {tl.end.toLocaleDateString(getUiLocale())}
+                      </p>
+                    )}
+                    {dd && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {tr(locale, "Échéance", "Due date")}: {dd.toLocaleDateString(getUiLocale())}
+                      </p>
+                    )}
+                    {task.recurrence && (
+                      <p className="text-[11px] text-indigo-600 dark:text-indigo-300">{recurrenceLabel(task.recurrence, locale)}</p>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ))}
       </div>
       {/* ── Main ── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="hidden sm:flex flex-1 overflow-hidden">
       {/* ── Left label column (fixed) ── */}
       <div
         className="flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-10"
@@ -341,7 +445,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
         <div className="border-b border-gray-200 dark:border-gray-700" style={{ height: DAY_HEADER_H }} />
 
         {/* Group rows */}
-        {project.groups.map((group) => (
+        {displayGroups.map((group) => (
           <div key={group.id}>
             {/* Group header */}
             <div
@@ -357,18 +461,23 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
             </div>
 
             {/* Task rows */}
-            {group.tasks.map((task) => (
+            {group.tasks.map((task) => {
+              const rawStatus = statusCol
+                ? task.fieldValues.find((f) => f.columnId === statusCol.id)?.value ?? null
+                : null;
+              const isDone = toCanonicalStatus(rawStatus) === "DONE";
+              return (
               <div
                 key={task.id}
                 onClick={() => setSelectedTask({ task: task as TaskWithFields, groupName: group.name, groupColor: group.color })}
-                className="flex items-center px-4 border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors group"
+                className={`flex items-center px-4 border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors group ${isDone ? "opacity-50" : ""}`}
                 style={{ height: ROW_H }}
               >
                 <span className="text-xs text-gray-700 dark:text-gray-300 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                   {task.title}
                 </span>
               </div>
-            ))}
+            )})}
           </div>
         ))}
       </div>
@@ -382,7 +491,10 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
               <div
                 key={i}
                 className="border-r border-gray-100 dark:border-gray-700 px-2 flex items-center flex-shrink-0"
-                style={{ width: m.days * DAY_PX, height: MONTH_HEADER_H }}
+                style={{
+                  width: m.days * DAY_PX,
+                  height: MONTH_HEADER_H - HEADER_BORDER_PX,
+                }}
               >
                 <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   {m.label}
@@ -407,7 +519,10 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                       ? "bg-gray-50 dark:bg-gray-900/40 border-gray-100 dark:border-gray-700 text-gray-400 dark:text-gray-600"
                       : "border-gray-100 dark:border-gray-700 text-gray-400 dark:text-gray-500",
                   ].join(" ")}
-                  style={{ width: DAY_PX, height: DAY_HEADER_H }}
+                  style={{
+                    width: DAY_PX,
+                    height: DAY_HEADER_H - HEADER_BORDER_PX,
+                  }}
                 >
                   <span>{formatWeekDay(d)}</span>
                   <span className="mt-0.5">{formatDay(d)}</span>
@@ -418,7 +533,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
 
           {/* Rows */}
           <div className="relative">
-          {project.groups.map((group) => (
+          {displayGroups.map((group) => (
             <div key={group.id}>
               {/* Group header row */}
               <div
@@ -439,6 +554,10 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
 
               {/* Task rows */}
               {group.tasks.map((task) => {
+                const rawStatus = statusCol
+                  ? task.fieldValues.find((f) => f.columnId === statusCol.id)?.value ?? null
+                  : null;
+                const isDone = toCanonicalStatus(rawStatus) === "DONE";
                 const tField = timelineCol
                   ? task.fieldValues.find((f) => f.columnId === timelineCol.id)?.value ?? null
                   : null;
@@ -519,6 +638,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                             isMilestone
                               ? "bg-amber-400 border border-amber-500"
                               : "bg-indigo-500 border border-indigo-600 hover:bg-indigo-600",
+                            isDone ? "opacity-40" : "",
                             isDraggingThis ? "opacity-80 shadow-lg" : "",
                           ].join(" ")}
                           style={{
@@ -592,7 +712,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                                 {task.title}
                               </span>
                               {task.recurrence && (
-                                <span title={recurrenceLabel(task.recurrence) ?? undefined} className="flex-shrink-0">
+                                <span title={recurrenceLabel(task.recurrence, locale) ?? undefined} className="flex-shrink-0">
                                   <svg className="w-2.5 h-2.5 text-white/80" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M17 2l4 4-4 4" /><path d="M3 11V9a4 4 0 014-4h14" />
                                     <path d="M7 22l-4-4 4-4" /><path d="M21 13v2a4 4 0 01-4 4H3" />
@@ -660,7 +780,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                       const isDraggingDd = dragDelta?.taskId === task.id && dragDelta.type === "duedate";
                       return (
                         <div
-                          className={`absolute z-[21] bg-amber-400 border border-amber-500 select-none ${isDraggingDd ? "opacity-80 shadow-lg" : ""}`}
+                          className={`absolute z-[21] bg-amber-400 border border-amber-500 select-none ${isDone ? "opacity-40" : ""} ${isDraggingDd ? "opacity-80 shadow-lg" : ""}`}
                           style={{
                             left: ddOff * DAY_PX + DAY_PX / 2 - 5,
                             top: "50%",
@@ -671,7 +791,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                             cursor: isDraggingDd ? "grabbing" : "grab",
                             userSelect: "none",
                           }}
-                          title={`Échéance : ${dd.toLocaleDateString("fr-FR")}`}
+                          title={`${tr(locale, "Échéance", "Due date")}: ${dd.toLocaleDateString(getUiLocale())}`}
                           onPointerDown={(e) => {
                             if (e.button !== 0) return;
                             e.stopPropagation();

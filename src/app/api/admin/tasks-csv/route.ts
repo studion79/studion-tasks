@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { isSuperAdminUserId } from "@/lib/super-admin";
+import { getRequestLocale } from "@/lib/i18n/server";
 
 type SessionUser = {
   id?: string;
@@ -14,7 +15,7 @@ function escapeCsv(value: string): string {
   return value;
 }
 
-function recurrenceLabel(recurrence: string | null): { rule: string; endDate: string } {
+function recurrenceLabel(recurrence: string | null, isEn: boolean): { rule: string; endDate: string } {
   if (!recurrence) return { rule: "", endDate: "" };
   try {
     const parsed = JSON.parse(recurrence) as {
@@ -24,13 +25,19 @@ function recurrenceLabel(recurrence: string | null): { rule: string; endDate: st
     };
     const interval = Math.max(1, Number(parsed.interval ?? 1));
     const frequency = parsed.frequency ?? "weekly";
-    const unitMap: Record<string, string> = {
+    const unitMap: Record<string, string> = isEn ? {
+      daily: "day(s)",
+      weekly: "week(s)",
+      monthly: "month(s)",
+    } : {
       daily: "jour(s)",
       weekly: "semaine(s)",
       monthly: "mois",
     };
     return {
-      rule: `tous les ${interval} ${unitMap[frequency] ?? frequency}`,
+      rule: isEn
+        ? `every ${interval} ${unitMap[frequency] ?? frequency}`
+        : `tous les ${interval} ${unitMap[frequency] ?? frequency}`,
       endDate: parsed.endDate ?? "",
     };
   } catch {
@@ -38,12 +45,14 @@ function recurrenceLabel(recurrence: string | null): { rule: string; endDate: st
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const locale = getRequestLocale(request);
+  const isEn = locale === "en";
   const session = await auth();
   const user = session?.user as SessionUser | undefined;
   const isSuperAdmin = Boolean(user?.isSuperAdmin) || isSuperAdminUserId(user?.id);
   if (!isSuperAdmin) {
-    return new Response("Accès refusé", { status: 403 });
+    return new Response(isEn ? "Access denied" : "Accès refusé", { status: 403 });
   }
 
   const tasks = await prisma.task.findMany({
@@ -85,7 +94,7 @@ export async function GET() {
   const rows = tasks.map((task) => {
     const byType = (type: string) =>
       task.fieldValues.find((fv) => fv.column.type === type)?.value ?? "";
-    const recurrence = recurrenceLabel(task.recurrence);
+    const recurrence = recurrenceLabel(task.recurrence, isEn);
     return [
       task.group.project.id,
       task.group.project.name,

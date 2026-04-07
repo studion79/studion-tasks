@@ -4,7 +4,9 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import bcrypt from "bcryptjs";
 import sharp from "sharp";
-import { prisma, revalidatePath, getAuthUserId } from "./_helpers";
+import { randomUUID } from "crypto";
+import { prisma, revalidatePath, getAuthUserId, emitPreferencesChanged, emitProfileChanged, emitTaskChanged, emitArchiveChanged } from "./_helpers";
+import { toCanonicalStatus } from "@/lib/status";
 
 const ALLOWED_AVATAR_TYPES = new Set([
   "image/jpeg",
@@ -16,6 +18,177 @@ const ALLOWED_AVATAR_TYPES = new Set([
 ]);
 const MAX_AVATAR_UPLOAD_BYTES = 20 * 1024 * 1024; // 20MB
 
+type DisplaySettings = {
+  syncAcrossDevices: boolean;
+  defaultView: "SPREADSHEET" | "KANBAN" | "CARDS" | "GANTT" | "TIMELINE" | "CALENDAR";
+  density: "compact" | "comfortable";
+  mondayFirst: boolean;
+  dateFormat: "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD";
+  language: "fr" | "en";
+};
+
+const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
+  syncAcrossDevices: false,
+  defaultView: "SPREADSHEET",
+  density: "comfortable",
+  mondayFirst: true,
+  dateFormat: "DD/MM/YYYY",
+  language: "fr",
+};
+
+let displaySettingsTableEnsured = false;
+async function ensureDisplaySettingsTable() {
+  if (displaySettingsTableEnsured) return;
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "UserDisplaySettings" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "userId" TEXT NOT NULL,
+      "syncAcrossDevices" BOOLEAN NOT NULL DEFAULT false,
+      "defaultView" TEXT NOT NULL DEFAULT 'SPREADSHEET',
+      "density" TEXT NOT NULL DEFAULT 'comfortable',
+      "mondayFirst" BOOLEAN NOT NULL DEFAULT true,
+      "dateFormat" TEXT NOT NULL DEFAULT 'DD/MM/YYYY',
+      "language" TEXT NOT NULL DEFAULT 'fr',
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "UserDisplaySettings_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "UserDisplaySettings_userId_key" ON "UserDisplaySettings"("userId")`
+  );
+  try {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "UserDisplaySettings" ADD COLUMN "syncAcrossDevices" BOOLEAN NOT NULL DEFAULT false`
+    );
+  } catch {
+    // already exists
+  }
+  try {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "UserDisplaySettings" ADD COLUMN "defaultView" TEXT NOT NULL DEFAULT 'SPREADSHEET'`
+    );
+  } catch {
+    // already exists
+  }
+  try {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "UserDisplaySettings" ADD COLUMN "density" TEXT NOT NULL DEFAULT 'comfortable'`
+    );
+  } catch {
+    // already exists
+  }
+  try {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "UserDisplaySettings" ADD COLUMN "mondayFirst" BOOLEAN NOT NULL DEFAULT true`
+    );
+  } catch {
+    // already exists
+  }
+  try {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "UserDisplaySettings" ADD COLUMN "dateFormat" TEXT NOT NULL DEFAULT 'DD/MM/YYYY'`
+    );
+  } catch {
+    // already exists
+  }
+  try {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "UserDisplaySettings" ADD COLUMN "language" TEXT NOT NULL DEFAULT 'fr'`
+    );
+  } catch {
+    // already exists
+  }
+  displaySettingsTableEnsured = true;
+}
+
+function normalizeDisplaySettings(input: {
+  syncAcrossDevices?: unknown;
+  defaultView?: unknown;
+  density?: unknown;
+  mondayFirst?: unknown;
+  dateFormat?: unknown;
+  language?: unknown;
+}): DisplaySettings {
+  const defaultView = ["SPREADSHEET", "KANBAN", "CARDS", "GANTT", "TIMELINE", "CALENDAR"].includes(String(input.defaultView))
+    ? (input.defaultView as DisplaySettings["defaultView"])
+    : DEFAULT_DISPLAY_SETTINGS.defaultView;
+  const density = input.density === "compact" ? "compact" : "comfortable";
+  const mondayFirst = input.mondayFirst === undefined ? DEFAULT_DISPLAY_SETTINGS.mondayFirst : Boolean(input.mondayFirst);
+  const dateFormat = ["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"].includes(String(input.dateFormat))
+    ? (input.dateFormat as DisplaySettings["dateFormat"])
+    : DEFAULT_DISPLAY_SETTINGS.dateFormat;
+  const language = input.language === "en" ? "en" : "fr";
+  const syncAcrossDevices = input.syncAcrossDevices === undefined
+    ? DEFAULT_DISPLAY_SETTINGS.syncAcrossDevices
+    : Boolean(input.syncAcrossDevices);
+
+  return {
+    syncAcrossDevices,
+    defaultView,
+    density,
+    mondayFirst,
+    dateFormat,
+    language,
+  };
+}
+
+export async function getMyDisplaySettings(): Promise<DisplaySettings> {
+  const userId = await getAuthUserId();
+  await ensureDisplaySettingsTable();
+  const rows = await prisma.$queryRawUnsafe<Array<{
+    syncAcrossDevices: boolean;
+    defaultView: string;
+    density: string;
+    mondayFirst: boolean;
+    dateFormat: string;
+    language: string;
+  }>>(
+    `SELECT "syncAcrossDevices","defaultView","density","mondayFirst","dateFormat","language"
+     FROM "UserDisplaySettings"
+     WHERE "userId" = ?
+     LIMIT 1`,
+    userId
+  );
+  if (!rows[0]) return DEFAULT_DISPLAY_SETTINGS;
+  return normalizeDisplaySettings(rows[0]);
+}
+
+export async function updateMyDisplaySettings(input: Partial<DisplaySettings>) {
+  const userId = await getAuthUserId();
+  await ensureDisplaySettingsTable();
+  const normalized = normalizeDisplaySettings(input);
+
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "UserDisplaySettings"
+      ("id","userId","syncAcrossDevices","defaultView","density","mondayFirst","dateFormat","language","createdAt","updatedAt")
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+     ON CONFLICT("userId") DO UPDATE SET
+      "syncAcrossDevices" = COALESCE(?, "syncAcrossDevices"),
+      "defaultView" = COALESCE(?, "defaultView"),
+      "density" = COALESCE(?, "density"),
+      "mondayFirst" = COALESCE(?, "mondayFirst"),
+      "dateFormat" = COALESCE(?, "dateFormat"),
+      "language" = COALESCE(?, "language"),
+      "updatedAt" = CURRENT_TIMESTAMP`,
+    randomUUID(),
+    userId,
+    normalized.syncAcrossDevices,
+    normalized.defaultView,
+    normalized.density,
+    normalized.mondayFirst,
+    normalized.dateFormat,
+    normalized.language,
+    input.syncAcrossDevices === undefined ? null : normalized.syncAcrossDevices,
+    input.defaultView === undefined ? null : normalized.defaultView,
+    input.density === undefined ? null : normalized.density,
+    input.mondayFirst === undefined ? null : normalized.mondayFirst,
+    input.dateFormat === undefined ? null : normalized.dateFormat,
+    input.language === undefined ? null : normalized.language
+  );
+  emitPreferencesChanged(userId);
+}
+
 export async function getMyTasks() {
   const userId = await getAuthUserId();
 
@@ -24,7 +197,6 @@ export async function getMyTasks() {
 
   const tasks = await prisma.task.findMany({
     where: {
-      archivedAt: null,
       fieldValues: {
         some: {
           value: user.name,
@@ -59,7 +231,7 @@ export async function getMyTasks() {
       projectId: task.group.project.id,
       projectName: task.group.project.name,
       groupName: task.group.name,
-      status: getField("STATUS"),
+      status: toCanonicalStatus(getField("STATUS")),
       priority: getField("PRIORITY"),
       dueDate: getField("DUE_DATE"),
     };
@@ -118,20 +290,22 @@ export async function getMyProjects() {
 
 export async function updateMyProfile(name: string) {
   const userId = await getAuthUserId();
-  if (!name.trim()) throw new Error("Le nom ne peut pas être vide");
+  if (!name.trim()) throw new Error("Name cannot be empty.");
   await prisma.user.update({ where: { id: userId }, data: { name: name.trim() } });
+  emitProfileChanged(userId);
   revalidatePath("/me");
 }
 
 export async function updateMyPassword(currentPassword: string, newPassword: string) {
   const userId = await getAuthUserId();
-  if (newPassword.length < 8) throw new Error("Le mot de passe doit faire au moins 8 caractères");
+  if (newPassword.length < 8) throw new Error("Password must be at least 8 characters.");
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) throw new Error("Utilisateur introuvable");
+  if (!user) throw new Error("User not found.");
   const valid = await bcrypt.compare(currentPassword, user.password);
-  if (!valid) throw new Error("Mot de passe actuel incorrect");
+  if (!valid) throw new Error("Current password is incorrect.");
   const hashed = await bcrypt.hash(newPassword, 12);
   await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
+  emitProfileChanged(userId);
 }
 
 export async function updateMyAvatar(formData: FormData) {
@@ -139,16 +313,16 @@ export async function updateMyAvatar(formData: FormData) {
   const file = formData.get("avatar");
 
   if (!(file instanceof File) || file.size === 0) {
-    return { ok: false as const, error: "Aucun fichier fourni" };
+    return { ok: false as const, error: "No file provided." };
   }
   if (!ALLOWED_AVATAR_TYPES.has(file.type)) {
     return {
       ok: false as const,
-      error: "Format non supporté. Utilisez JPG, PNG, WebP, GIF ou AVIF.",
+      error: "Unsupported format. Use JPG, PNG, WebP, GIF or AVIF.",
     };
   }
   if (file.size > MAX_AVATAR_UPLOAD_BYTES) {
-    return { ok: false as const, error: "Image trop volumineuse (maximum 20MB)." };
+    return { ok: false as const, error: "Image too large (maximum 20MB)." };
   }
 
   try {
@@ -169,13 +343,14 @@ export async function updateMyAvatar(formData: FormData) {
 
     const avatarUrl = `/uploads/avatars/${filename}?t=${Date.now()}`;
     await prisma.user.update({ where: { id: userId }, data: { avatar: avatarUrl } });
+    emitProfileChanged(userId);
     revalidatePath("/me");
     return { ok: true as const, url: avatarUrl };
   } catch (error) {
     console.error("updateMyAvatar failed:", error);
     return {
       ok: false as const,
-      error: "Impossible de traiter cette image. Essayez une image JPG, PNG ou WebP.",
+      error: "Unable to process this image. Try JPG, PNG or WebP.",
     };
   }
 }
@@ -199,19 +374,27 @@ export async function toggleMyTask(taskId: string) {
     },
   });
 
-  if (!task) throw new Error("Tâche introuvable");
-  if (!task.group.project.members.length) throw new Error("Accès refusé");
+  if (!task) throw new Error("Task not found.");
+  if (!task.group.project.members.length) throw new Error("Access denied.");
 
   const nowDone = !task.completedAt;
-  await prisma.task.update({ where: { id: taskId }, data: { completedAt: nowDone ? new Date() : null } });
+  await prisma.task.update({
+    where: { id: taskId },
+    data: {
+      completedAt: nowDone ? new Date() : null,
+      ...(task.parentId === null ? { archivedAt: nowDone ? new Date() : null } : {}),
+    },
+  });
 
   // Sync STATUS field if a STATUS column exists for this project
   const statusCol = task.group.project.columns[0];
   if (statusCol) {
     await prisma.taskFieldValue.upsert({
       where: { taskId_columnId: { taskId, columnId: statusCol.id } },
-      create: { taskId, columnId: statusCol.id, value: nowDone ? "Done" : "Not started" },
-      update: { value: nowDone ? "Done" : "Not started" },
+      create: { taskId, columnId: statusCol.id, value: nowDone ? "DONE" : "NOT_STARTED" },
+      update: { value: nowDone ? "DONE" : "NOT_STARTED" },
     });
   }
+  emitTaskChanged(task.group.project.id, taskId);
+  emitArchiveChanged(task.group.project.id, taskId);
 }

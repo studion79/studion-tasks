@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
+import { usePathname } from "next/navigation";
 import type { ProjectWithRelations, TaskWithFields } from "@/lib/types";
+import { localeFromPathname, tr } from "@/lib/i18n/client";
 
 type Action = {
   id: string;
@@ -27,6 +29,8 @@ interface Props {
 }
 
 export function CommandPalette({ project, onClose, onOpenTask, onSwitchTab, onAddTask }: Props) {
+  const pathname = usePathname();
+  const locale = localeFromPathname(pathname);
   const [query, setQuery] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -46,56 +50,56 @@ export function CommandPalette({ project, onClose, onOpenTask, onSwitchTab, onAd
   const actions: Action[] = useMemo(() => [
     {
       id: "tab-spreadsheet",
-      label: "Ouvrir le Tableur",
+      label: tr(locale, "Ouvrir le Tableur", "Open Spreadsheet"),
       icon: <TabIcon type="spreadsheet" />,
       onSelect: () => { onSwitchTab("spreadsheet"); onClose(); },
-      group: "Vues",
+      group: tr(locale, "Vues", "Views"),
     },
     {
       id: "tab-cards",
-      label: "Ouvrir les Fiches",
+      label: tr(locale, "Ouvrir les Fiches", "Open Cards"),
       icon: <TabIcon type="cards" />,
       onSelect: () => { onSwitchTab("cards"); onClose(); },
-      group: "Vues",
+      group: tr(locale, "Vues", "Views"),
     },
     {
       id: "tab-kanban",
-      label: "Ouvrir le Kanban",
+      label: tr(locale, "Ouvrir le Kanban", "Open Kanban"),
       icon: <TabIcon type="kanban" />,
       onSelect: () => { onSwitchTab("kanban"); onClose(); },
-      group: "Vues",
+      group: tr(locale, "Vues", "Views"),
     },
     {
       id: "tab-calendar",
-      label: "Ouvrir le Calendrier",
+      label: tr(locale, "Ouvrir le Calendrier", "Open Calendar"),
       icon: <TabIcon type="calendar" />,
       onSelect: () => { onSwitchTab("calendar"); onClose(); },
-      group: "Vues",
+      group: tr(locale, "Vues", "Views"),
     },
     {
       id: "tab-gantt",
-      label: "Ouvrir le Gantt",
+      label: tr(locale, "Ouvrir le Gantt", "Open Gantt"),
       icon: <TabIcon type="gantt" />,
       onSelect: () => { onSwitchTab("gantt"); onClose(); },
-      group: "Vues",
+      group: tr(locale, "Vues", "Views"),
     },
     {
       id: "tab-timeline",
-      label: "Ouvrir l'Échéancier",
+      label: tr(locale, "Ouvrir l'Échéancier", "Open Timeline"),
       icon: <TabIcon type="timeline" />,
       onSelect: () => { onSwitchTab("timeline"); onClose(); },
-      group: "Vues",
+      group: tr(locale, "Vues", "Views"),
     },
     {
       id: "tab-dashboard",
-      label: "Ouvrir le Dashboard",
+      label: tr(locale, "Ouvrir le Dashboard", "Open Dashboard"),
       icon: <TabIcon type="dashboard" />,
       onSelect: () => { onSwitchTab("dashboard"); onClose(); },
-      group: "Vues",
+      group: tr(locale, "Vues", "Views"),
     },
     ...project.groups.map((g) => ({
       id: `add-task-${g.id}`,
-      label: `Ajouter une tâche dans "${g.name}"`,
+      label: `${tr(locale, "Ajouter une tâche dans", "Add a task in")} "${g.name}"`,
       description: g.name,
       icon: (
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -103,11 +107,11 @@ export function CommandPalette({ project, onClose, onOpenTask, onSwitchTab, onAd
         </svg>
       ),
       onSelect: () => { onAddTask(g.id); onClose(); },
-      group: "Actions",
+      group: tr(locale, "Actions", "Actions"),
     })),
     {
       id: "goto-templates",
-      label: "Voir les templates",
+      label: tr(locale, "Voir les templates", "See templates"),
       icon: (
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <rect x="3" y="3" width="8" height="8" rx="1" strokeWidth="1.5" />
@@ -117,20 +121,20 @@ export function CommandPalette({ project, onClose, onOpenTask, onSwitchTab, onAd
         </svg>
       ),
       onSelect: () => { window.location.href = "/templates"; },
-      group: "Navigation",
+      group: tr(locale, "Navigation", "Navigation"),
     },
     {
       id: "goto-home",
-      label: "Retour à l'accueil",
+      label: tr(locale, "Retour à l'accueil", "Back to home"),
       icon: (
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       ),
       onSelect: () => { window.location.href = "/"; },
-      group: "Navigation",
+      group: tr(locale, "Navigation", "Navigation"),
     },
-  ], [project.groups, onSwitchTab, onAddTask, onClose]);
+  ], [locale, project.groups, onSwitchTab, onAddTask, onClose]);
 
   // Task search results
   const taskResults: SearchResult[] = useMemo(() => {
@@ -218,8 +222,8 @@ export function CommandPalette({ project, onClose, onOpenTask, onSwitchTab, onAd
       <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm" onClick={onClose} />
 
       {/* Palette */}
-      <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] pointer-events-none px-4">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-xl pointer-events-auto overflow-hidden">
+      <div className="fixed inset-0 z-50 flex items-end sm:items-start justify-center sm:pt-[15vh] pointer-events-none px-0 sm:px-4">
+        <div className="bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full sm:max-w-xl pointer-events-auto overflow-hidden h-[92dvh] sm:h-auto">
           {/* Search input */}
           <div className="flex items-center gap-3 px-4 py-3.5 border-b border-gray-100 dark:border-gray-700">
             <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -231,23 +235,23 @@ export function CommandPalette({ project, onClose, onOpenTask, onSwitchTab, onAd
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Rechercher une tâche, une action…"
+              placeholder={tr(locale, "Rechercher une tâche, une action…", "Search for a task, an action...")}
               className="flex-1 text-sm text-gray-900 dark:text-gray-50 bg-transparent outline-none placeholder-gray-400 dark:placeholder-gray-500"
             />
-            <kbd className="text-[10px] text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-600 rounded px-1.5 py-0.5 font-mono">Échap</kbd>
+            <kbd className="text-[10px] text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-600 rounded px-1.5 py-0.5 font-mono">{tr(locale, "Échap", "Esc")}</kbd>
           </div>
 
           {/* Results */}
-          <div ref={listRef} className="max-h-[60vh] overflow-y-auto py-1.5">
+          <div ref={listRef} className="h-[calc(92dvh-112px)] sm:max-h-[60vh] sm:h-auto overflow-y-auto py-1.5">
             {flatItems.length === 0 && (
-              <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8 italic">Aucun résultat</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8 italic">{tr(locale, "Aucun résultat", "No result")}</p>
             )}
 
             {/* Task results */}
             {taskResults.length > 0 && (
               <div>
                 <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider px-4 py-1.5 pt-2">
-                  Tâches
+                  {tr(locale, "Tâches", "Tasks")}
                 </p>
                 {taskResults.map((r, i) => (
                   <button
@@ -297,9 +301,9 @@ export function CommandPalette({ project, onClose, onOpenTask, onSwitchTab, onAd
 
           {/* Footer hint */}
           <div className="border-t border-gray-100 dark:border-gray-700 px-4 py-2 flex items-center gap-4 text-[10px] text-gray-400 dark:text-gray-500">
-            <span><kbd className="font-mono border border-gray-200 dark:border-gray-600 rounded px-1">↑↓</kbd> Naviguer</span>
-            <span><kbd className="font-mono border border-gray-200 dark:border-gray-600 rounded px-1">↵</kbd> Sélectionner</span>
-            <span><kbd className="font-mono border border-gray-200 dark:border-gray-600 rounded px-1">Échap</kbd> Fermer</span>
+            <span><kbd className="font-mono border border-gray-200 dark:border-gray-600 rounded px-1">↑↓</kbd> {tr(locale, "Naviguer", "Navigate")}</span>
+            <span><kbd className="font-mono border border-gray-200 dark:border-gray-600 rounded px-1">↵</kbd> {tr(locale, "Sélectionner", "Select")}</span>
+            <span><kbd className="font-mono border border-gray-200 dark:border-gray-600 rounded px-1">{tr(locale, "Échap", "Esc")}</kbd> {tr(locale, "Fermer", "Close")}</span>
           </div>
         </div>
       </div>

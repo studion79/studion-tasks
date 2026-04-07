@@ -8,11 +8,39 @@ services:
     environment:
       NODE_ENV: production
       AUTH_SECRET: "change-me-with-a-strong-secret"
+      CRON_SECRET: "${CRON_SECRET:-}"
       NEXTAUTH_URL: "http://localhost:3000"
       AUTH_TRUST_HOST: "true"
       LIBSQL_DATABASE_URL: "file:/app/prisma/dev.db"
+      EMAIL_FROM: "Task App <contact@studio-n.fr>"
+      SMTP_HOST: "host.docker.internal"
+      SMTP_PORT: "587"
+      SMTP_SECURE: "false"
+      SMTP_TLS_SERVERNAME: "studion.ynh.fr"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - task-app-data:/app/prisma
+
+  cron:
+    image: curlimages/curl:8.13.0
+    container_name: task-app-cron
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      CRON_SECRET: "${CRON_SECRET:-}"
+    command: >
+      sh -c '
+        while true; do
+          if [ -n "$$CRON_SECRET" ]; then
+            curl -fsS "http://app:3000/api/cron?secret=$$CRON_SECRET" >/dev/null || true
+          else
+            curl -fsS "http://app:3000/api/cron" >/dev/null || true
+          fi
+          sleep 60
+        done
+      '
 
 volumes:
   task-app-data:

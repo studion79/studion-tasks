@@ -5,8 +5,14 @@ import { auth, signOut } from "@/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { MySpacePage } from "@/components/me/MySpacePage";
+import { prisma } from "@/lib/db";
+import { headers } from "next/headers";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
+import { RealtimeAutoRefresh } from "@/components/realtime/RealtimeAutoRefresh";
 
 export default async function MePage() {
+  const headerStore = await headers();
+  const locale = headerStore.get("x-taskapp-locale") === "en" ? "en" : "fr";
   const session = await auth();
   if (!session?.user) redirect("/login");
   const sessionUser = session.user as { isSuperAdmin?: boolean; id?: string; name?: string | null; email?: string | null; image?: string | null };
@@ -15,12 +21,18 @@ export default async function MePage() {
   const [tasks, projects] = isSuperAdmin
     ? [[], []]
     : await Promise.all([getMyTasks(), getMyProjects()]);
+  const dbUser = sessionUser.id
+    ? await prisma.user.findUnique({
+        where: { id: sessionUser.id },
+        select: { name: true, email: true, avatar: true },
+      })
+    : null;
 
   const user = {
     id: sessionUser.id ?? "",
-    name: sessionUser.name ?? "",
-    email: sessionUser.email ?? "",
-    avatar: sessionUser.image ?? null,
+    name: dbUser?.name ?? sessionUser.name ?? "",
+    email: dbUser?.email ?? sessionUser.email ?? "",
+    avatar: dbUser?.avatar ?? sessionUser.image ?? null,
   };
 
   return (
@@ -34,10 +46,10 @@ export default async function MePage() {
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M15 19l-7-7 7-7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Projets
+            {locale === "en" ? "Projects" : "Projets"}
           </Link>
           <span className="text-gray-200 dark:text-gray-700">|</span>
-          <span className="text-sm font-semibold text-gray-900 dark:text-gray-50">Mon espace</span>
+          <span className="text-sm font-semibold text-gray-900 dark:text-gray-50">{locale === "en" ? "My Space" : "Mon espace"}</span>
         </div>
         <div className="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-3">
           {user.avatar ? (
@@ -50,7 +62,7 @@ export default async function MePage() {
           <span className="hidden sm:block text-sm text-gray-700 dark:text-gray-200 max-w-[140px] truncate">{user.name}</span>
           <form action={async () => { "use server"; await signOut({ redirectTo: "/login" }); }}>
             <button type="submit" className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer ml-1">
-              <span className="hidden sm:inline">Déconnexion</span>
+              <span className="hidden sm:inline">{locale === "en" ? "Sign out" : "Déconnexion"}</span>
               <svg className="sm:hidden w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -59,7 +71,12 @@ export default async function MePage() {
         </div>
       </header>
 
+      <RealtimeAutoRefresh
+        projectIds={projects.map((project) => project.id)}
+        includeUserScope
+      />
       <MySpacePage tasks={tasks} projects={projects} user={user} />
+      <MobileBottomNav />
     </div>
   );
 }

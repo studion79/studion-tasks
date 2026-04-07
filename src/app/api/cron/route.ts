@@ -4,7 +4,10 @@
  * Triggered by an external cron job (e.g. server crontab or Vercel cron).
  * Runs for every project:
  *  - generateDueDateReminders — creates DUE_DATE_SOON in-app notifications
+ *  - generateOverdueReminders — creates OVERDUE in-app notifications
  *  - generateRecurringTasks   — creates next occurrence of recurring tasks
+ * Then globally:
+ *  - generateDailySummaries   — creates DAILY_SUMMARY in-app notifications
  *
  * Config via env vars:
  *   CRON_SECRET — shared secret to authenticate the request (required in production)
@@ -15,7 +18,13 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { generateRecurringTasks, generateDueDateReminders } from "@/lib/actions";
+import {
+  generateDailySummaries,
+  generateDueDateReminders,
+  generateOverdueReminders,
+  generateRecurringTasks,
+  generateTaskTimeReminders,
+} from "@/lib/actions";
 
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -31,6 +40,8 @@ export async function GET(req: NextRequest) {
   const projects = await prisma.project.findMany({ select: { id: true, name: true } });
 
   let remindersTotal = 0;
+  let timeRemindersTotal = 0;
+  let overdueTotal = 0;
   let recurringTotal = 0;
   const errors: string[] = [];
 
@@ -42,6 +53,18 @@ export async function GET(req: NextRequest) {
       errors.push(`reminders[${project.id}]: ${String(e)}`);
     }
     try {
+      await generateTaskTimeReminders(project.id);
+      timeRemindersTotal++;
+    } catch (e) {
+      errors.push(`time-reminders[${project.id}]: ${String(e)}`);
+    }
+    try {
+      await generateOverdueReminders(project.id);
+      overdueTotal++;
+    } catch (e) {
+      errors.push(`overdue[${project.id}]: ${String(e)}`);
+    }
+    try {
       await generateRecurringTasks(project.id);
       recurringTotal++;
     } catch (e) {
@@ -49,9 +72,17 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  let dailySummaryDone = false;
+  try {
+    await generateDailySummaries();
+    dailySummaryDone = true;
+  } catch (e) {
+    errors.push(`daily-summary: ${String(e)}`);
+  }
+
   console.log(
     `[cron] ${new Date().toISOString()} — ${projects.length} projects processed` +
-    ` (reminders: ${remindersTotal}, recurring: ${recurringTotal})` +
+    ` (reminders: ${remindersTotal}, time-reminders: ${timeRemindersTotal}, overdue: ${overdueTotal}, recurring: ${recurringTotal}, daily: ${dailySummaryDone ? "ok" : "err"})` +
     (errors.length ? `\nErrors: ${errors.join(", ")}` : "")
   );
 
@@ -59,7 +90,10 @@ export async function GET(req: NextRequest) {
     ok: true,
     projects: projects.length,
     remindersProcessed: remindersTotal,
+    timeRemindersProcessed: timeRemindersTotal,
+    overdueProcessed: overdueTotal,
     recurringProcessed: recurringTotal,
+    dailySummaryDone,
     errors,
   });
 }

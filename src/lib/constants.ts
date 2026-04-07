@@ -1,4 +1,5 @@
 import type { ColumnType } from "@/lib/types";
+import type { AppLocale } from "@/i18n/config";
 
 export const STATUS_OPTIONS = [
   { value: "NOT_STARTED", label: "Not started", color: "bg-gray-100 text-gray-600" },
@@ -24,11 +25,35 @@ export const COLUMN_WIDTHS: Partial<Record<ColumnType, number>> = {
 };
 
 export const NOTIF_TYPES = [
-  { type: "TASK_ASSIGNED",  label: "Tâche assignée" },
-  { type: "COMMENT_ADDED",  label: "Nouveau commentaire" },
-  { type: "MENTIONED",      label: "Mention (@)" },
-  { type: "DUE_DATE_SOON",  label: "Échéance proche" },
-  { type: "AUTOMATION",     label: "Automatisations" },
+  { type: "TASK_ASSIGNED" },
+  { type: "COMMENT_ADDED" },
+  { type: "MENTIONED" },
+  { type: "DUE_DATE_SOON" },
+  { type: "OVERDUE" },
+  { type: "DAILY_SUMMARY" },
+  { type: "AUTOMATION" },
 ] as const;
 
 export type NotifType = (typeof NOTIF_TYPES)[number]["type"];
+
+export function getNotifTypeLabel(type: NotifType, locale: AppLocale): string {
+  const isEn = locale === "en";
+  switch (type) {
+    case "TASK_ASSIGNED":
+      return isEn ? "Task assigned" : "Tâche assignée";
+    case "COMMENT_ADDED":
+      return isEn ? "New comment" : "Nouveau commentaire";
+    case "MENTIONED":
+      return "Mention (@)";
+    case "DUE_DATE_SOON":
+      return isEn ? "Due soon" : "Échéance proche";
+    case "OVERDUE":
+      return isEn ? "Overdue" : "Échéance dépassée";
+    case "DAILY_SUMMARY":
+      return isEn ? "Daily summary" : "Résumé quotidien";
+    case "AUTOMATION":
+      return isEn ? "Automations" : "Automatisations";
+    default:
+      return type;
+  }
+}

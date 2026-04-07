@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { prisma } from "./_helpers";
+import { ensurePersonalProjectForUser } from "./projects";
 
 export async function registerUser(
   email: string,
@@ -11,15 +12,16 @@ export async function registerUser(
   inviteToken?: string
 ) {
   if (!email.trim() || !name.trim() || password.length < 6) {
-    throw new Error("Données invalides");
+    throw new Error("Invalid data.");
   }
   const normalizedEmail = email.toLowerCase().trim();
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
-  if (existing) throw new Error("Un compte existe déjà avec cet email");
+  if (existing) throw new Error("An account already exists with this email.");
   const hash = await bcrypt.hash(password, 10);
   const user = await prisma.user.create({
     data: { email: normalizedEmail, name: name.trim(), password: hash },
   });
+  await ensurePersonalProjectForUser(user.id);
 
   // Si un token d'invitation est fourni, on accepte automatiquement
   if (inviteToken) {

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { auth } from "@/auth";
 import { getInvitationByToken, acceptInvitation } from "@/lib/actions";
 import InviteClient from "./InviteClient";
@@ -8,6 +9,8 @@ interface Props {
 }
 
 export default async function InvitePage({ params }: Props) {
+  const headerStore = await headers();
+  const locale = headerStore.get("x-taskapp-locale") === "en" ? "en" : "fr";
   const { token } = await params;
   const invitation = await getInvitationByToken(token);
 
@@ -20,12 +23,12 @@ export default async function InvitePage({ params }: Props) {
               <path d="M6 18L18 6M6 6l12 12" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </div>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-2">Invitation invalide</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-2">{locale === "en" ? "Invalid invitation" : "Invitation invalide"}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-            Ce lien d&apos;invitation est invalide ou a expiré.
+            {locale === "en" ? "This invitation link is invalid or has expired." : "Ce lien d'invitation est invalide ou a expiré."}
           </p>
           <a href="/" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
-            Retour à l&apos;accueil
+            {locale === "en" ? "Back to home" : "Retour à l'accueil"}
           </a>
         </div>
       </div>
@@ -41,12 +44,12 @@ export default async function InvitePage({ params }: Props) {
               <path d="M5 13l4 4L19 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-2">Déjà acceptée</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-2">{locale === "en" ? "Already accepted" : "Déjà acceptée"}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-            Cette invitation a déjà été acceptée.
+            {locale === "en" ? "This invitation has already been accepted." : "Cette invitation a déjà été acceptée."}
           </p>
           <a href={`/projects/${invitation.projectId}`} className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
-            Ouvrir le projet
+            {locale === "en" ? "Open project" : "Ouvrir le projet"}
           </a>
         </div>
       </div>
@@ -62,12 +65,12 @@ export default async function InvitePage({ params }: Props) {
               <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </div>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-2">Invitation expirée</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-2">{locale === "en" ? "Invitation expired" : "Invitation expirée"}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-            Ce lien d&apos;invitation a expiré. Demandez à être réinvité.
+            {locale === "en" ? "This invitation link has expired. Ask to be invited again." : "Ce lien d'invitation a expiré. Demandez à être réinvité."}
           </p>
           <a href="/" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
-            Retour à l&apos;accueil
+            {locale === "en" ? "Back to home" : "Retour à l'accueil"}
           </a>
         </div>
       </div>

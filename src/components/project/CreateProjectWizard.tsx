@@ -1,68 +1,22 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { createProject } from "@/lib/actions";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { createProject, inviteMember, listUserGroups, listGroupTemplates } from "@/lib/actions";
 import { Button } from "@/components/ui/Button";
-import type { ColumnType, ViewType, WidgetType } from "@/lib/types";
-import {
-  AVAILABLE_COLUMNS,
-  AVAILABLE_VIEWS,
-  AVAILABLE_WIDGETS,
-} from "@/lib/types";
+import { localeFromPathname, tr } from "@/lib/i18n/client";
+
+type UserGroupRow = { id: string; name: string; emails: string };
 
 const STEPS = [
   { id: 1, label: "Informations" },
-  { id: 2, label: "Colonnes" },
-  { id: 3, label: "Vue" },
-  { id: 4, label: "Dashboard" },
+  { id: 2, label: "Task groups" },
+  { id: 3, label: "Invitations" },
 ];
 
-// --- Icons ---
-function GridIcon() {
-  return (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <rect x="3" y="3" width="7" height="7" rx="1" strokeWidth="1.5" />
-      <rect x="14" y="3" width="7" height="7" rx="1" strokeWidth="1.5" />
-      <rect x="3" y="14" width="7" height="7" rx="1" strokeWidth="1.5" />
-      <rect x="14" y="14" width="7" height="7" rx="1" strokeWidth="1.5" />
-    </svg>
-  );
-}
-function CardIcon() {
-  return (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <rect x="3" y="5" width="8" height="10" rx="1.5" strokeWidth="1.5" />
-      <rect x="13" y="5" width="8" height="10" rx="1.5" strokeWidth="1.5" />
-    </svg>
-  );
-}
-function KanbanIcon() {
-  return (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <rect x="3" y="4" width="5" height="14" rx="1" strokeWidth="1.5" />
-      <rect x="9.5" y="4" width="5" height="9" rx="1" strokeWidth="1.5" />
-      <rect x="16" y="4" width="5" height="6" rx="1" strokeWidth="1.5" />
-    </svg>
-  );
-}
-function CalendarIcon() {
-  return (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <rect x="3" y="5" width="18" height="16" rx="2" strokeWidth="1.5" />
-      <path d="M3 10h18M8 3v4M16 3v4" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
-}
+type GroupTemplateRow = { id: string; name: string; snapshot: string };
 
-const VIEW_ICONS: Record<string, React.FC> = {
-  grid: GridIcon,
-  card: CardIcon,
-  kanban: KanbanIcon,
-  calendar: CalendarIcon,
-};
-
-// --- Step indicator ---
-function StepIndicator({ current }: { current: number }) {
+function StepIndicator({ current, locale }: { current: number; locale: "fr" | "en" }) {
   return (
     <div className="flex items-center gap-0 mb-8 sm:mb-10">
       {STEPS.map((step, i) => (
@@ -92,7 +46,7 @@ function StepIndicator({ current }: { current: number }) {
                 step.id <= current ? "text-indigo-600" : "text-gray-400",
               ].join(" ")}
             >
-              {step.label}
+              {tr(locale, step.label, step.id === 1 ? "Information" : step.id === 2 ? "Task groups" : "Invitations")}
             </span>
           </div>
           {i < STEPS.length - 1 && (
@@ -109,29 +63,41 @@ function StepIndicator({ current }: { current: number }) {
   );
 }
 
-// --- Step 1: Basic info ---
-function Step1({
-  name,
-  onChange,
-}: {
-  name: string;
-  onChange: (v: string) => void;
-}) {
+function normalizeEmails(raw: string): string[] {
+  return raw
+    .split(/[\n,;\s]+/)
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+}
+
+function parseGroupEmails(raw: string): string[] {
+  try {
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data)) return [];
+    return data
+      .map((email) => String(email).trim().toLowerCase())
+      .filter((email) => email.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+function Step1({ name, onChange, locale }: { name: string; onChange: (v: string) => void; locale: "fr" | "en" }) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">Informations de base</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Donnez un nom à votre projet.</p>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">{tr(locale, "Informations de base", "Basic information")}</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{tr(locale, "Donnez un nom à votre projet.", "Give your project a name.")}</p>
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-          Nom du projet <span className="text-red-500">*</span>
+          {tr(locale, "Nom du projet", "Project name")} <span className="text-red-500">*</span>
         </label>
         <input
           type="text"
           value={name}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Ex : Campagne Q2, Refonte site, Lancement produit…"
+          placeholder={tr(locale, "Ex : Campagne Q2, Refonte site, Lancement produit…", "E.g. Q2 campaign, website redesign, product launch...")}
           autoFocus
           className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2.5 text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900 transition-all"
         />
@@ -140,234 +106,228 @@ function Step1({
   );
 }
 
-// --- Step 2: Columns ---
 function Step2({
-  selected,
-  onChange,
+  templates,
+  selectedTemplateIds,
+  onToggleTemplate,
+  locale,
 }: {
-  selected: ColumnType[];
-  onChange: (v: ColumnType[]) => void;
+  templates: GroupTemplateRow[];
+  selectedTemplateIds: string[];
+  onToggleTemplate: (templateId: string) => void;
+  locale: "fr" | "en";
 }) {
-  const toggle = (type: ColumnType) => {
-    onChange(
-      selected.includes(type)
-        ? selected.filter((c) => c !== type)
-        : [...selected, type]
-    );
+  const getTaskCount = (snapshotRaw: string): number => {
+    try {
+      const snapshot = JSON.parse(snapshotRaw) as { tasks?: unknown[] };
+      return Array.isArray(snapshot.tasks) ? snapshot.tasks.length : 0;
+    } catch {
+      return 0;
+    }
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">Colonnes du tableau</h2>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">{tr(locale, "Démarrer avec des groupes existants", "Start with existing groups")}</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Choisissez les informations à afficher pour chaque tâche.
+          {tr(locale, "Sélectionnez un ou plusieurs groupes de tâches enregistrés à importer dès la création du projet.", "Select one or more saved task groups to import when creating the project.")}
         </p>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {AVAILABLE_COLUMNS.map((col) => {
-          const isSelected = selected.includes(col.type);
-          return (
-            <button
-              key={col.type}
-              type="button"
-              onClick={() => toggle(col.type)}
-              className={[
-                "flex items-start gap-3 rounded-lg border p-4 text-left transition-all cursor-pointer",
-                isSelected
-                  ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 ring-1 ring-indigo-200 dark:ring-indigo-700"
-                  : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700",
-              ].join(" ")}
-            >
-              <div
+
+      {templates.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 px-4 py-6 text-sm text-gray-500 dark:text-gray-400 text-center">
+          {tr(locale, "Aucun groupe de tâches enregistré pour le moment.", "No saved task groups yet.")}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {templates.map((template) => {
+            const checked = selectedTemplateIds.includes(template.id);
+            const taskCount = getTaskCount(template.snapshot);
+            return (
+              <button
+                key={template.id}
+                type="button"
+                onClick={() => onToggleTemplate(template.id)}
                 className={[
-                  "mt-0.5 w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-all",
-                  isSelected ? "bg-indigo-600 border-indigo-600" : "border-gray-300 dark:border-gray-600",
+                  "w-full flex items-center gap-3 rounded-lg border p-3 text-left transition-all cursor-pointer",
+                  checked
+                    ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 ring-1 ring-indigo-200 dark:ring-indigo-700"
+                    : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700",
                 ].join(" ")}
               >
-                {isSelected && (
-                  <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path d="M5 13l4 4L19 7" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </div>
-              <div>
-                <p className={["text-sm font-medium", isSelected ? "text-indigo-700 dark:text-indigo-300" : "text-gray-800 dark:text-gray-100"].join(" ")}>
-                  {col.label}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{col.description}</p>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-      {selected.length === 0 && (
-        <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">
-          Sélectionnez au moins une colonne.
-        </p>
+                <div
+                  className={[
+                    "w-4 h-4 rounded border-2 flex items-center justify-center transition-all",
+                    checked ? "bg-indigo-600 border-indigo-600" : "border-gray-300 dark:border-gray-600",
+                  ].join(" ")}
+                >
+                  {checked && (
+                    <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path d="M5 13l4 4L19 7" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </div>
+                <div>
+                  <p className={checked ? "text-indigo-700 dark:text-indigo-300 text-sm font-medium" : "text-gray-800 dark:text-gray-100 text-sm font-medium"}>{template.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{taskCount} {tr(locale, "tâche", "task")}{taskCount > 1 ? "s" : ""} {tr(locale, "modèle", "template")}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
       )}
     </div>
   );
 }
 
-// --- Step 3: View ---
 function Step3({
-  selected,
-  onChange,
+  inviteInput,
+  onInviteInputChange,
+  groups,
+  selectedGroupIds,
+  onToggleGroup,
+  locale,
 }: {
-  selected: ViewType;
-  onChange: (v: ViewType) => void;
+  inviteInput: string;
+  onInviteInputChange: (value: string) => void;
+  groups: UserGroupRow[];
+  selectedGroupIds: string[];
+  onToggleGroup: (groupId: string) => void;
+  locale: "fr" | "en";
 }) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">Vue principale</h2>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">{tr(locale, "Inviter des membres", "Invite members")}</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Choisissez comment vous voulez visualiser vos tâches par défaut.
+          {tr(locale, "Facultatif. Vous pouvez inviter des emails ou des groupes juste après la création du projet.", "Optional. You can invite emails or groups right after project creation.")}
         </p>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {AVAILABLE_VIEWS.map((view) => {
-          const Icon = VIEW_ICONS[view.icon];
-          const isSelected = selected === view.type;
-          return (
-            <button
-              key={view.type}
-              type="button"
-              onClick={() => onChange(view.type)}
-              className={[
-                "flex flex-col items-center gap-3 rounded-xl border p-5 text-center transition-all cursor-pointer",
-                isSelected
-                  ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 ring-1 ring-indigo-200 dark:ring-indigo-700"
-                  : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700",
-              ].join(" ")}
-            >
-              <div
-                className={[
-                  "w-10 h-10 rounded-lg flex items-center justify-center",
-                  isSelected ? "bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400",
-                ].join(" ")}
-              >
-                <Icon />
-              </div>
-              <div>
-                <p className={["text-sm font-semibold", isSelected ? "text-indigo-700 dark:text-indigo-300" : "text-gray-800 dark:text-gray-100"].join(" ")}>
-                  {view.label}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{view.description}</p>
-              </div>
-              {isSelected && (
-                <span className="text-xs font-medium text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full">
-                  Par défaut
-                </span>
-              )}
-            </button>
-          );
-        })}
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+          {tr(locale, "Emails à inviter", "Emails to invite")}
+        </label>
+        <textarea
+          value={inviteInput}
+          onChange={(e) => onInviteInputChange(e.target.value)}
+          rows={4}
+          placeholder="alice@studio.fr, bob@studio.fr"
+          className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900 transition-all"
+        />
+        <p className="mt-1 text-xs text-gray-400">{tr(locale, "Séparez par virgule, espace ou retour à la ligne.", "Separate with comma, space, or line break.")}</p>
+      </div>
+
+      <div>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{tr(locale, "Groupes de membres", "Member groups")}</p>
+        {groups.length === 0 ? (
+          <p className="text-xs text-gray-400">{tr(locale, "Aucun groupe disponible.", "No group available.")}</p>
+        ) : (
+          <div className="space-y-2">
+            {groups.map((group) => {
+              const checked = selectedGroupIds.includes(group.id);
+              const count = parseGroupEmails(group.emails).length;
+              return (
+                <button
+                  key={group.id}
+                  type="button"
+                  onClick={() => onToggleGroup(group.id)}
+                  className={[
+                    "w-full flex items-center gap-3 rounded-lg border p-3 text-left transition-all cursor-pointer",
+                    checked
+                      ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 ring-1 ring-indigo-200 dark:ring-indigo-700"
+                      : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700",
+                  ].join(" ")}
+                >
+                  <div
+                    className={[
+                      "w-4 h-4 rounded border-2 flex items-center justify-center transition-all",
+                      checked ? "bg-indigo-600 border-indigo-600" : "border-gray-300 dark:border-gray-600",
+                    ].join(" ")}
+                  >
+                    {checked && (
+                      <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path d="M5 13l4 4L19 7" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </div>
+                  <div>
+                    <p className={checked ? "text-indigo-700 dark:text-indigo-300 text-sm font-medium" : "text-gray-800 dark:text-gray-100 text-sm font-medium"}>{group.name}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{count} {tr(locale, "membre", "member")}{count > 1 ? "s" : ""}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// --- Step 4: Dashboard ---
-function Step4({
-  selected,
-  onChange,
-}: {
-  selected: WidgetType[];
-  onChange: (v: WidgetType[]) => void;
-}) {
-  const toggle = (type: WidgetType) => {
-    onChange(
-      selected.includes(type)
-        ? selected.filter((w) => w !== type)
-        : [...selected, type]
-    );
-  };
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">Dashboard initial</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Sélectionnez les indicateurs à afficher dans le dashboard du projet.
-        </p>
-      </div>
-      <div className="space-y-2">
-        {AVAILABLE_WIDGETS.map((widget) => {
-          const isSelected = selected.includes(widget.type);
-          return (
-            <button
-              key={widget.type}
-              type="button"
-              onClick={() => toggle(widget.type)}
-              className={[
-                "w-full flex items-center gap-4 rounded-lg border p-4 text-left transition-all cursor-pointer",
-                isSelected
-                  ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 ring-1 ring-indigo-200 dark:ring-indigo-700"
-                  : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700",
-              ].join(" ")}
-            >
-              <div
-                className={[
-                  "w-4 h-4 rounded flex-shrink-0 border-2 flex items-center justify-center transition-all",
-                  isSelected ? "bg-indigo-600 border-indigo-600" : "border-gray-300 dark:border-gray-600",
-                ].join(" ")}
-              >
-                {isSelected && (
-                  <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path d="M5 13l4 4L19 7" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={["text-sm font-medium", isSelected ? "text-indigo-700 dark:text-indigo-300" : "text-gray-800 dark:text-gray-100"].join(" ")}>
-                  {widget.label}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{widget.description}</p>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// --- Main wizard ---
 export function CreateProjectWizard() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const locale = localeFromPathname(pathname);
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
-  const [selectedColumns, setSelectedColumns] = useState<ColumnType[]>(
-    AVAILABLE_COLUMNS.filter((c) => c.defaultActive).map((c) => c.type)
-  );
-  const [defaultView, setDefaultView] = useState<ViewType>("SPREADSHEET");
-  const [selectedWidgets, setSelectedWidgets] = useState<WidgetType[]>(
-    AVAILABLE_WIDGETS.filter((w) => w.defaultActive).map((w) => w.type)
-  );
+  const [groupTemplates, setGroupTemplates] = useState<GroupTemplateRow[]>([]);
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
+  const [inviteInput, setInviteInput] = useState("");
+  const [groups, setGroups] = useState<UserGroupRow[]>([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const canNext =
-    step === 1 ? name.trim().length > 0 :
-    step === 2 ? selectedColumns.length > 0 :
-    step === 3 ? true :
-    true;
+  useEffect(() => {
+    Promise.all([listUserGroups(), listGroupTemplates()])
+      .then(([memberGroups, templates]) => {
+        setGroups(memberGroups as UserGroupRow[]);
+        setGroupTemplates(templates as GroupTemplateRow[]);
+      })
+      .catch(() => {
+        setGroups([]);
+        setGroupTemplates([]);
+      });
+  }, []);
+
+  const selectedGroupEmails = useMemo(() => {
+    const emails = new Set<string>();
+    for (const group of groups) {
+      if (!selectedGroupIds.includes(group.id)) continue;
+      for (const email of parseGroupEmails(group.emails)) {
+        emails.add(email);
+      }
+    }
+    return emails;
+  }, [groups, selectedGroupIds]);
+
+  const canNext = step === 1 ? name.trim().length > 0 : true;
 
   const handleNext = () => {
-    if (step < 4) setStep((s) => s + 1);
-    else handleSubmit();
-  };
+    if (step < STEPS.length) {
+      setStep((s) => s + 1);
+      return;
+    }
 
-  const handleSubmit = () => {
     setError(null);
     startTransition(async () => {
       try {
-        await createProject({ name, selectedColumns, defaultView, selectedWidgets });
+        const projectId = await createProject({ name, groupTemplateIds: selectedTemplateIds });
+
+        const inviteEmails = new Set<string>([...normalizeEmails(inviteInput), ...selectedGroupEmails]);
+        for (const email of inviteEmails) {
+          try {
+            await inviteMember(projectId, email);
+          } catch {
+            // Best effort: keep project creation successful even if one invite fails.
+          }
+        }
+
+        router.push(`/projects/${projectId}`);
       } catch (e) {
-        // redirect() throws a special Next.js error — let it propagate
-        if (e instanceof Error && (e as { digest?: string }).digest?.startsWith("NEXT_REDIRECT")) throw e;
-        setError(e instanceof Error ? e.message : "Une erreur est survenue");
+        setError(e instanceof Error ? e.message : tr(locale, "Une erreur est survenue", "An error occurred"));
       }
     });
   };
@@ -375,44 +335,64 @@ export function CreateProjectWizard() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-2xl">
-        {/* Header */}
         <div className="mb-6 sm:mb-8 text-center">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-50">Créer un projet</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-50">{tr(locale, "Créer un projet", "Create a project")}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Configurez votre espace de travail en quelques étapes.
+            {tr(locale, "Configurez votre espace de travail en quelques étapes.", "Set up your workspace in a few steps.")}
           </p>
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-5 sm:p-8">
           <div className="flex justify-center">
-            <StepIndicator current={step} />
+            <StepIndicator current={step} locale={locale} />
           </div>
 
-          {/* Step content */}
-          <div className="min-h-[200px] sm:min-h-[280px]">
-            {step === 1 && <Step1 name={name} onChange={setName} />}
-            {step === 2 && <Step2 selected={selectedColumns} onChange={setSelectedColumns} />}
-            {step === 3 && <Step3 selected={defaultView} onChange={setDefaultView} />}
-            {step === 4 && <Step4 selected={selectedWidgets} onChange={setSelectedWidgets} />}
+          <div className="min-h-[220px] sm:min-h-[280px]">
+            {step === 1 && <Step1 name={name} onChange={setName} locale={locale} />}
+            {step === 2 && (
+              <Step2
+                templates={groupTemplates}
+                selectedTemplateIds={selectedTemplateIds}
+                locale={locale}
+                onToggleTemplate={(templateId) => {
+                  setSelectedTemplateIds((prev) =>
+                    prev.includes(templateId) ? prev.filter((id) => id !== templateId) : [...prev, templateId]
+                  );
+                }}
+              />
+            )}
+            {step === 3 && (
+              <Step3
+                inviteInput={inviteInput}
+                onInviteInputChange={setInviteInput}
+                groups={groups}
+                selectedGroupIds={selectedGroupIds}
+                locale={locale}
+                onToggleGroup={(groupId) => {
+                  setSelectedGroupIds((prev) =>
+                    prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId]
+                  );
+                }}
+              />
+            )}
           </div>
 
-          {error && (
-            <p className="mt-4 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
-          )}
+          {error && <p className="mt-4 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
-          {/* Navigation */}
-          <div className="mt-6 sm:mt-8 flex items-center justify-between border-t border-gray-100 dark:border-gray-700 pt-5 sm:pt-6">
+          <div className="mt-6 sm:mt-8 flex items-center justify-between border-t border-gray-100 dark:border-gray-700 pt-5 sm:pt-6 sticky bottom-0 bg-white dark:bg-gray-800 pb-1">
             <Button
               variant="ghost"
-              onClick={() => step === 1 ? window.location.href = "/" : setStep((s) => s - 1)}
+              onClick={() => (step === 1 ? (window.location.href = "/") : setStep((s) => s - 1))}
               disabled={isPending}
             >
-              ← Retour
+              {tr(locale, "← Retour", "← Back")}
             </Button>
             <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-400 dark:text-gray-500">{step} / {STEPS.length}</span>
+              <span className="text-xs text-gray-400 dark:text-gray-500">
+                {step} / {STEPS.length}
+              </span>
               <Button onClick={handleNext} disabled={!canNext} loading={isPending}>
-                {step === 4 ? "Créer le projet" : "Suivant →"}
+                {step === STEPS.length ? tr(locale, "Créer le projet", "Create project") : tr(locale, "Suivant →", "Next →")}
               </Button>
             </div>
           </div>

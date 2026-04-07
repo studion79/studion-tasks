@@ -1,5 +1,5 @@
 // ⚠️ Mettre à jour ce numéro à chaque release pour invalider le cache SW
-const CACHE_NAME = "task-app-v1.5";
+const CACHE_NAME = "task-app-v1.8";
 
 // Assets statiques immuables à précacher (hors HTML)
 const PRECACHE_URLS = [
@@ -85,4 +85,53 @@ self.addEventListener("fetch", (event) => {
   // Raison : les pages contiennent les hashes de server actions Next.js.
   // Les mettre en cache provoque des erreurs "Server Action not found" après upgrade.
   // Le service worker ne gère pas le fallback offline pour les pages.
+});
+
+self.addEventListener("push", (event) => {
+  let data = {
+    title: "Mise à jour d'équipe",
+    body: "Ouvrez l'application pour consulter les changements.",
+    url: "/",
+    tag: "task-app",
+    actions: [{ action: "open", title: "Ouvrir" }],
+  };
+  try {
+    if (event.data) data = { ...data, ...event.data.json() };
+  } catch {
+    // ignore malformed payload
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      tag: data.tag || "task-app",
+      renotify: false,
+      actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : [],
+      data: { url: data.url || "/" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const action = event.action || "open";
+  if (action !== "open") return;
+  const targetUrl = event.notification?.data?.url || "/";
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        const clientUrl = "url" in client ? client.url : "";
+        if ("focus" in client && clientUrl) {
+          const existing = new URL(clientUrl);
+          const target = new URL(targetUrl, self.location.origin);
+          if (existing.origin === target.origin) {
+            client.navigate?.(target.href);
+            return client.focus();
+          }
+        }
+      }
+      return clients.openWindow(targetUrl);
+    })
+  );
 });

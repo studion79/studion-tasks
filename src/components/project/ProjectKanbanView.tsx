@@ -1,18 +1,23 @@
 "use client";
 
 import { useState, useTransition, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { getUiLocale } from "@/lib/ui-locale";
+import { usePathname, useRouter } from "next/navigation";
 import type { ProjectWithRelations, TaskWithFields } from "@/lib/types";
 import { STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/lib/constants";
 import { getFieldValue, RecurrenceIcon } from "./cells";
 import { TaskDetailPanel } from "./TaskDetailPanel";
 import { useProjectContext } from "./ProjectContext";
+import { toCanonicalStatus } from "@/lib/status";
+import { localeFromPathname, tr } from "@/lib/i18n/client";
+import type { AppLocale } from "@/i18n/config";
 import {
   createTask as createTaskAction,
   updateTaskTitle as updateTaskTitleAction,
   upsertTaskField,
   archiveTask as archiveTaskAction,
 } from "@/lib/actions";
+import { composeDateTimeValue, splitDateTimeValue } from "@/lib/task-schedule";
 
 // --- Kanban card ---
 function KanbanCard({
@@ -22,6 +27,9 @@ function KanbanCard({
   onDragStart,
   onOpen,
   onDelete,
+  locale,
+  draggableEnabled = true,
+  mobile = false,
 }: {
   task: TaskWithFields;
   columns: ProjectWithRelations["columns"];
@@ -29,6 +37,9 @@ function KanbanCard({
   onDragStart: () => void;
   onOpen: () => void;
   onDelete: () => void;
+  locale: AppLocale;
+  draggableEnabled?: boolean;
+  mobile?: boolean;
 }) {
   const priorityCol = columns.find((c) => c.type === "PRIORITY");
   const dueDateCol = columns.find((c) => c.type === "DUE_DATE");
@@ -49,19 +60,23 @@ function KanbanCard({
   const priorityMeta = PRIORITY_OPTIONS.find((o) => o.value === priorityVal);
 
   const isOverdue = dueDateVal
-    ? new Date(dueDateVal) < new Date(new Date().toDateString())
+    ? new Date((splitDateTimeValue(dueDateVal).date || dueDateVal) + "T00:00:00") < new Date(new Date().toDateString())
     : false;
 
-  const formatDate = (d: string) =>
-    new Date(d + "T12:00:00").toLocaleDateString("fr-FR", {
+  const formatDate = (d: string) => {
+    const parsed = splitDateTimeValue(d);
+    const base = new Date((parsed.date || d) + "T12:00:00").toLocaleDateString(getUiLocale(), {
       day: "numeric",
       month: "short",
     });
+    return parsed.hasTime ? `${base} ${parsed.time}` : base;
+  };
 
   return (
     <div
-      draggable
+      draggable={draggableEnabled}
       onDragStart={(e) => {
+        if (!draggableEnabled) return;
         onDragStart();
         e.dataTransfer.effectAllowed = "move";
       }}
@@ -69,6 +84,7 @@ function KanbanCard({
       className={[
         "bg-white dark:bg-gray-800 border rounded-xl p-3.5 cursor-grab active:cursor-grabbing",
         "hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 transition-all group/kcard select-none",
+        mobile ? "cursor-pointer active:cursor-pointer" : "",
         isDragging ? "opacity-40 border-indigo-300 shadow-none" : "border-gray-200 dark:border-gray-700",
       ].join(" ")}
     >
@@ -80,8 +96,8 @@ function KanbanCard({
         </p>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          title="Supprimer"
-          className="opacity-0 group-hover/kcard:opacity-100 p-0.5 rounded text-gray-300 hover:text-red-400 transition-all cursor-pointer flex-shrink-0 mt-0.5"
+          title={tr(locale, "Supprimer", "Delete")}
+          className={`p-0.5 rounded text-gray-300 hover:text-red-400 transition-all cursor-pointer flex-shrink-0 mt-0.5 ${mobile ? "opacity-100" : "opacity-0 group-hover/kcard:opacity-100"}`}
         >
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path d="M6 18L18 6M6 6l12 12" strokeWidth="1.5" strokeLinecap="round" />
@@ -100,7 +116,7 @@ function KanbanCard({
       {(subtaskCount > 0 || attachCount > 0 || depCount > 0 || hasNotes || commentCount > 0) && (
         <div className="flex items-center gap-2 mb-2 text-gray-400 dark:text-gray-500">
           {subtaskCount > 0 && (
-            <span className="flex items-center gap-0.5 text-[10px]" title={`${subtaskCount} sous-tâche${subtaskCount > 1 ? "s" : ""}`}>
+            <span className="flex items-center gap-0.5 text-[10px]" title={`${subtaskCount} ${tr(locale, "sous-tâche", "subtask")}${subtaskCount > 1 ? "s" : ""}`}>
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
@@ -108,7 +124,7 @@ function KanbanCard({
             </span>
           )}
           {attachCount > 0 && (
-            <span className="flex items-center gap-0.5 text-[10px]" title={`${attachCount} pièce${attachCount > 1 ? "s" : ""} jointe${attachCount > 1 ? "s" : ""}`}>
+            <span className="flex items-center gap-0.5 text-[10px]" title={`${attachCount} ${tr(locale, "pièce jointe", "attachment")}${attachCount > 1 ? "s" : ""}`}>
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
@@ -116,7 +132,7 @@ function KanbanCard({
             </span>
           )}
           {depCount > 0 && (
-            <span className="flex items-center gap-0.5 text-[10px]" title={`${depCount} dépendance${depCount > 1 ? "s" : ""}`}>
+            <span className="flex items-center gap-0.5 text-[10px]" title={`${depCount} ${tr(locale, "dépendance", "dependency")}${depCount > 1 ? "s" : ""}`}>
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" strokeWidth="1.5" strokeLinecap="round" />
                 <path d="M10.172 13.828a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.102-1.101" strokeWidth="1.5" strokeLinecap="round" />
@@ -125,14 +141,14 @@ function KanbanCard({
             </span>
           )}
           {hasNotes && (
-            <span title="Note">
+            <span title={tr(locale, "Note", "Note")}>
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </span>
           )}
           {commentCount > 0 && (
-            <span className="flex items-center gap-0.5 text-[10px]" title={`${commentCount} commentaire${commentCount > 1 ? "s" : ""}`}>
+            <span className="flex items-center gap-0.5 text-[10px]" title={`${commentCount} ${tr(locale, "commentaire", "comment")}${commentCount > 1 ? "s" : ""}`}>
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -177,14 +193,17 @@ function KanbanCard({
 function AddTaskInline({
   onAdd,
   columns,
+  locale,
 }: {
   onAdd: (title: string, owner?: string, dueDate?: string) => void;
   columns: ProjectWithRelations["columns"];
+  locale: AppLocale;
 }) {
   const [active, setActive] = useState(false);
   const [draft, setDraft] = useState("");
   const [newOwner, setNewOwner] = useState("");
   const [newDueDate, setNewDueDate] = useState("");
+  const [newDueTime, setNewDueTime] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const { memberNames } = useProjectContext();
 
@@ -200,8 +219,10 @@ function AddTaskInline({
     setDraft("");
     setNewOwner("");
     setNewDueDate("");
+    setNewDueTime("");
     setActive(false);
-    if (t) onAdd(t, newOwner || undefined, newDueDate || undefined);
+    const due = newDueDate ? composeDateTimeValue(newDueDate, newDueTime || null) : "";
+    if (t) onAdd(t, newOwner || undefined, due || undefined);
   };
 
   if (active) {
@@ -213,43 +234,51 @@ function AddTaskInline({
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") submit();
-            if (e.key === "Escape") { setDraft(""); setNewOwner(""); setNewDueDate(""); setActive(false); }
+            if (e.key === "Escape") { setDraft(""); setNewOwner(""); setNewDueDate(""); setNewDueTime(""); setActive(false); }
           }}
-          placeholder="Nom de la tâche…"
+          placeholder={tr(locale, "Nom de la tâche…", "Task name...")}
           className="w-full text-sm text-gray-800 dark:text-gray-100 outline-none placeholder-gray-400 dark:placeholder-gray-500 bg-transparent"
         />
         {ownerColId && memberNames.length > 0 && (
           <select
             value={newOwner}
             onChange={(e) => setNewOwner(e.target.value)}
-            className="w-full text-xs text-gray-600 dark:text-gray-400 bg-transparent border border-gray-200 dark:border-gray-600 rounded-md px-2 py-1 outline-none"
+            className="w-full select-unified select-unified-sm"
           >
-            <option value="">Responsable…</option>
+            <option value="">{tr(locale, "Responsable…", "Owner...")}</option>
             {memberNames.map((name) => (
               <option key={name} value={name}>{name}</option>
             ))}
           </select>
         )}
         {dueDateColId && (
-          <input
-            type="date"
-            value={newDueDate}
-            onChange={(e) => setNewDueDate(e.target.value)}
-            className="w-full text-xs text-gray-600 dark:text-gray-400 bg-transparent border border-gray-200 dark:border-gray-600 rounded-md px-2 py-1 outline-none"
-          />
+          <div className="grid grid-cols-2 gap-1.5">
+            <input
+              type="date"
+              value={newDueDate}
+              onChange={(e) => setNewDueDate(e.target.value)}
+              className="w-full datetime-field"
+            />
+            <input
+              type="time"
+              value={newDueTime}
+              onChange={(e) => setNewDueTime(e.target.value)}
+              className="w-full datetime-field"
+            />
+          </div>
         )}
         <div className="flex gap-2">
           <button
             onClick={submit}
             className="flex-1 text-xs bg-indigo-500 text-white rounded-md py-1 hover:bg-indigo-600 transition-colors cursor-pointer"
           >
-            Ajouter
+            {tr(locale, "Ajouter", "Add")}
           </button>
           <button
-            onClick={() => { setDraft(""); setNewOwner(""); setNewDueDate(""); setActive(false); }}
+            onClick={() => { setDraft(""); setNewOwner(""); setNewDueDate(""); setNewDueTime(""); setActive(false); }}
             className="text-xs text-gray-400 hover:text-gray-600 px-2 cursor-pointer"
           >
-            Annuler
+            {tr(locale, "Annuler", "Cancel")}
           </button>
         </div>
       </div>
@@ -264,13 +293,15 @@ function AddTaskInline({
       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path d="M12 4v16m8-8H4" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
-      Ajouter une tâche
+      {tr(locale, "Ajouter une tâche", "Add task")}
     </button>
   );
 }
 
 // --- Main ---
 export function ProjectKanbanView({ project }: { project: ProjectWithRelations }) {
+  const pathname = usePathname();
+  const locale = localeFromPathname(pathname);
   const { columns } = project;
   const statusCol = columns.find((c) => c.type === "STATUS") ?? null;
 
@@ -302,7 +333,8 @@ export function ProjectKanbanView({ project }: { project: ProjectWithRelations }
 
   const getStatus = (task: TaskWithFields): string => {
     if (!statusCol) return "NOT_STARTED";
-    return getFieldValue(task.fieldValues, statusCol.id) ?? "NOT_STARTED";
+    const raw = getFieldValue(task.fieldValues, statusCol.id);
+    return toCanonicalStatus(raw) ?? "NOT_STARTED";
   };
 
   const handleDrop = (statusValue: string) => {
@@ -329,6 +361,27 @@ export function ProjectKanbanView({ project }: { project: ProjectWithRelations }
     setDragOverCol(null);
   };
 
+  const handleMoveTask = (taskId: string, statusValue: string) => {
+    if (!statusCol) return;
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id !== taskId) return t;
+        const rest = t.fieldValues.filter((fv) => fv.columnId !== statusCol.id);
+        return {
+          ...t,
+          fieldValues: [
+            ...rest,
+            { id: `opt-${statusCol.id}`, taskId: t.id, columnId: statusCol.id, value: statusValue, updatedAt: new Date() },
+          ],
+        };
+      })
+    );
+    startTransition(async () => {
+      await upsertTaskField(taskId, statusCol.id, statusValue);
+      router.refresh();
+    });
+  };
+
   const handleArchiveTask = (taskId: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     setArchiveConfirmId(null);
@@ -347,14 +400,15 @@ export function ProjectKanbanView({ project }: { project: ProjectWithRelations }
   };
 
   const handleFieldUpdate = (taskId: string, columnId: string, value: string | null) => {
+    const normalized = columnId === statusCol?.id ? toCanonicalStatus(value) : value;
     setTasks((prev) =>
       prev.map((t) => {
         if (t.id !== taskId) return t;
         const rest = t.fieldValues.filter((fv) => fv.columnId !== columnId);
         return {
           ...t,
-          fieldValues: value !== null
-            ? [...rest, { id: `opt-${columnId}`, taskId, columnId, value, updatedAt: new Date() }]
+          fieldValues: normalized !== null
+            ? [...rest, { id: `opt-${columnId}`, taskId, columnId, value: normalized, updatedAt: new Date() }]
             : rest,
         };
       })
@@ -377,7 +431,7 @@ export function ProjectKanbanView({ project }: { project: ProjectWithRelations }
     if (dueDate && dueDateCol) initialFieldValues.push({ id: `opt-${dueDateCol.id}`, taskId: tempId, columnId: dueDateCol.id, value: dueDate, updatedAt: new Date() });
     const tempTask: TaskWithFields = {
       id: tempId, groupId: firstGroupId, parentId: null, title,
-      position: 9999, archivedAt: null, completedAt: null, recurrence: null, createdAt: new Date(), updatedAt: new Date(),
+      position: 9999, archivedAt: null, completedAt: null, reminderOffsetMinutes: null, reminderSentFor: null, recurrence: null, createdAt: new Date(), updatedAt: new Date(),
       fieldValues: initialFieldValues,
     };
     setTasks((prev) => [...prev, tempTask]);
@@ -407,15 +461,73 @@ export function ProjectKanbanView({ project }: { project: ProjectWithRelations }
   if (!statusCol) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-gray-400">
-        <p className="text-sm">La colonne "Status" n'est pas active dans ce projet.</p>
-        <p className="text-xs mt-1 text-gray-300">Activez-la depuis les paramètres du projet.</p>
+        <p className="text-sm">{tr(locale, "La colonne \"Status\" n'est pas active dans ce projet.", "The \"Status\" column is not active in this project.")}</p>
+        <p className="text-xs mt-1 text-gray-300">{tr(locale, "Activez-la depuis les paramètres du projet.", "Enable it from project settings.")}</p>
       </div>
     );
   }
 
   return (
     <>
-      <div className="flex gap-3 p-5 overflow-x-auto h-full items-start">
+      <div className="sm:hidden p-3 overflow-x-auto overflow-y-hidden h-full">
+        <div className="flex gap-3 h-full min-w-max snap-x snap-mandatory pr-1">
+          {STATUS_OPTIONS.map((status) => {
+            const colTasks = tasks.filter((t) => getStatus(t) === status.value);
+            return (
+              <section
+                key={status.value}
+                className="snap-start rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 w-[86vw] max-w-[380px] min-w-[280px] h-full flex flex-col"
+              >
+                <div className="flex items-center gap-2 mb-2.5">
+                  <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-semibold ${status.color}`}>
+                    {status.label}
+                  </span>
+                  <span className="text-xs text-gray-400 tabular-nums">{colTasks.length}</span>
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
+                  {colTasks.map((task) => (
+                    <div key={task.id}>
+                      <KanbanCard
+                        task={task}
+                        columns={columns}
+                        isDragging={false}
+                        onDragStart={() => {}}
+                        onOpen={() => setOpenTaskId(task.id)}
+                        onDelete={() => setArchiveConfirmId(task.id)}
+                        locale={locale}
+                        draggableEnabled={false}
+                        mobile
+                      />
+                      <div className="mt-1.5 px-1">
+                        <select
+                          value={getStatus(task)}
+                          onChange={(e) => handleMoveTask(task.id, e.target.value)}
+                          className="w-full select-unified select-unified-sm"
+                        >
+                          {STATUS_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+
+                  {colTasks.length === 0 && (
+                    <div className="flex items-center justify-center py-4">
+                      <span className="text-xs text-gray-300">{tr(locale, "Aucune tâche", "No task")}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="pt-2.5 mt-2 border-t border-gray-100 dark:border-gray-700">
+                  <AddTaskInline locale={locale} columns={columns} onAdd={handleAddTask(status.value)} />
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="hidden sm:flex gap-3 p-5 overflow-x-auto h-full items-start">
         {STATUS_OPTIONS.map((status) => {
           const colTasks = tasks.filter((t) => getStatus(t) === status.value);
           const isOver = dragOverCol === status.value;
@@ -456,20 +568,21 @@ export function ProjectKanbanView({ project }: { project: ProjectWithRelations }
                     onDragStart={() => setDraggingId(task.id)}
                     onOpen={() => setOpenTaskId(task.id)}
                     onDelete={() => setArchiveConfirmId(task.id)}
+                    locale={locale}
                   />
                 ))}
 
                 {/* Empty state */}
                 {colTasks.length === 0 && !isOver && (
                   <div className="flex items-center justify-center py-4">
-                    <span className="text-xs text-gray-300">Aucune tâche</span>
+                    <span className="text-xs text-gray-300">{tr(locale, "Aucune tâche", "No task")}</span>
                   </div>
                 )}
               </div>
 
               {/* Add task */}
               <div className="mt-2 px-1">
-                <AddTaskInline columns={columns} onAdd={handleAddTask(status.value)} />
+                <AddTaskInline locale={locale} columns={columns} onAdd={handleAddTask(status.value)} />
               </div>
             </div>
           );
@@ -494,11 +607,11 @@ export function ProjectKanbanView({ project }: { project: ProjectWithRelations }
       {archiveConfirmId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setArchiveConfirmId(null)}>
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xl p-5 w-72 mx-4" onClick={(e) => e.stopPropagation()}>
-            <p className="text-sm font-medium text-gray-900 dark:text-gray-50 mb-1">Archiver cette tâche ?</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">La tâche sera déplacée dans les archives du projet.</p>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-50 mb-1">{tr(locale, "Archiver cette tâche ?", "Archive this task?")}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">{tr(locale, "La tâche sera déplacée dans les archives du projet.", "The task will be moved to project archives.")}</p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setArchiveConfirmId(null)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer">Annuler</button>
-              <button onClick={() => handleArchiveTask(archiveConfirmId)} className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors cursor-pointer">Archiver</button>
+              <button onClick={() => setArchiveConfirmId(null)} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer">{tr(locale, "Annuler", "Cancel")}</button>
+              <button onClick={() => handleArchiveTask(archiveConfirmId)} className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors cursor-pointer">{tr(locale, "Archiver", "Archive")}</button>
             </div>
           </div>
         </div>

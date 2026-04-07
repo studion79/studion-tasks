@@ -1,6 +1,6 @@
 {
   "name": "Task App",
-  "short_name": "Tasks",
+  "short_name": "Task App",
   "description": "Gestion de tâches et d'équipes multi-projets",
   "start_url": "/",
   "display": "standalone",
@@ -31,6 +31,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "protocol_handlers": [
+    {
+      "protocol": "web+taskapp",
+      "url": "/?deeplink=%s"
     }
   ],
   "categories": ["productivity", "utilities"],

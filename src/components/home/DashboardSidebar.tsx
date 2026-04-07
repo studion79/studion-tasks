@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { getUiLocale } from "@/lib/ui-locale";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { markAllMyNotificationsRead, markNotificationRead } from "@/lib/actions";
+import { localeFromPathname, tr } from "@/lib/i18n/client";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,15 +44,21 @@ function parseDate(s: string | null): Date | null {
   return new Date(s + (s.includes("T") ? "" : "T00:00:00"));
 }
 
+function toDateKey(s: string | null): string | null {
+  if (!s) return null;
+  return s.slice(0, 10);
+}
+
 function fmtDate(d: string | null) {
   const v = parseDate(d);
   if (!v) return null;
   const now = today();
   const diff = Math.round((v.getTime() - now.getTime()) / 86400000);
-  if (diff === 0) return "Aujourd'hui";
-  if (diff === 1) return "Demain";
-  if (diff < 0) return `Retard ${-diff}j`;
-  return v.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+  const isEn = getUiLocale().startsWith("en");
+  if (diff === 0) return isEn ? "Today" : "Aujourd'hui";
+  if (diff === 1) return isEn ? "Tomorrow" : "Demain";
+  if (diff < 0) return isEn ? `Late ${-diff}d` : `Retard ${-diff}j`;
+  return v.toLocaleDateString(getUiLocale(), { day: "numeric", month: "short" });
 }
 
 function isLate(task: MyTask) {
@@ -81,13 +90,21 @@ const STATUS_DOT: Record<string, string> = {
 
 // ── Mini-calendar ─────────────────────────────────────────────────────────────
 
-function MiniCalendar({ tasks }: { tasks: MyTask[] }) {
+function MiniCalendar({
+  tasks,
+  selectedDate,
+  onSelectDate,
+}: {
+  tasks: MyTask[];
+  selectedDate: string | null;
+  onSelectDate: (value: string | null) => void;
+}) {
   const [offset, setOffset] = useState(0);
   const base = new Date();
   const year = base.getFullYear();
   const month = base.getMonth() + offset;
   const viewDate = new Date(year, month, 1);
-  const monthLabel = viewDate.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  const monthLabel = viewDate.toLocaleDateString(getUiLocale(), { month: "long", year: "numeric" });
 
   const firstDay = viewDate.getDay() === 0 ? 6 : viewDate.getDay() - 1; // Mon=0
   const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
@@ -137,13 +154,28 @@ function MiniCalendar({ tasks }: { tasks: MyTask[] }) {
           if (!day) return <div key={i} />;
           const dayTasks = tasksByDay[day] ?? [];
           const isT = day === todayNum;
+          const dayKey = new Date(viewDate.getFullYear(), viewDate.getMonth(), day).toISOString().slice(0, 10);
+          const isSelected = selectedDate === dayKey;
           const hasLate = dayTasks.some((t) => isLate(t));
           return (
-            <div
+            <button
               key={i}
-              className={`flex flex-col items-center rounded-md py-0.5 ${isT ? "bg-indigo-100 dark:bg-indigo-900/40" : ""}`}
+              onClick={() => onSelectDate(isSelected ? null : dayKey)}
+              className={`flex flex-col items-center rounded-md py-0.5 cursor-pointer transition-colors ${
+                isSelected
+                  ? "bg-indigo-500/20 dark:bg-indigo-700/40"
+                  : isT
+                    ? "bg-indigo-100 dark:bg-indigo-900/40"
+                    : "hover:bg-gray-100 dark:hover:bg-gray-700/40"
+              }`}
             >
-              <span className={`text-[11px] leading-none ${isT ? "font-bold text-indigo-600 dark:text-indigo-400" : "text-gray-600 dark:text-gray-400"}`}>
+              <span className={`text-[11px] leading-none ${
+                isSelected
+                  ? "font-bold text-indigo-700 dark:text-indigo-300"
+                  : isT
+                    ? "font-bold text-indigo-600 dark:text-indigo-400"
+                    : "text-gray-600 dark:text-gray-400"
+              }`}>
                 {day}
               </span>
               {dayTasks.length > 0 && (
@@ -157,7 +189,7 @@ function MiniCalendar({ tasks }: { tasks: MyTask[] }) {
                   ))}
                 </div>
               )}
-            </div>
+            </button>
           );
         })}
       </div>
@@ -174,6 +206,7 @@ function NotificationsPanel({
   notifications: Notification[];
   onClose: () => void;
 }) {
+  const isEn = getUiLocale().startsWith("en");
   const [notifs, setNotifs] = useState(notifications);
   const [, startTransition] = useTransition();
   const unreadCount = notifs.filter((n) => !n.isRead).length;
@@ -191,18 +224,18 @@ function NotificationsPanel({
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl z-50 overflow-hidden">
+      <div className="fixed sm:absolute inset-x-3 bottom-3 sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-full sm:mt-2 w-auto sm:w-80 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl z-50 overflow-hidden max-h-[70vh] sm:max-h-none">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-          <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">Notifications</span>
+          <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{isEn ? "Notifications" : "Notifications"}</span>
           {unreadCount > 0 && (
             <button onClick={handleMarkAll} className="text-xs text-indigo-500 hover:text-indigo-700 cursor-pointer">
-              Tout marquer lu
+              {isEn ? "Mark all read" : "Tout marquer lu"}
             </button>
           )}
         </div>
-        <div className="max-h-80 overflow-y-auto divide-y divide-gray-50 dark:divide-gray-700/50">
+        <div className="max-h-[55vh] sm:max-h-80 overflow-y-auto divide-y divide-gray-50 dark:divide-gray-700/50">
           {notifs.length === 0 ? (
-            <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-6">Aucune notification</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-6">{isEn ? "No notifications" : "Aucune notification"}</p>
           ) : notifs.map((n) => (
             <div
               key={n.id}
@@ -212,7 +245,7 @@ function NotificationsPanel({
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-gray-700 dark:text-gray-300 leading-snug">{n.message}</p>
                 <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">
-                  {new Date(n.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  {new Date(n.createdAt).toLocaleDateString(getUiLocale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                 </p>
               </div>
               {!n.isRead && (
@@ -235,8 +268,11 @@ export function DashboardSidebar({
   tasks: MyTask[];
   notifications: Notification[];
 }) {
+  const pathname = usePathname();
+  const locale = localeFromPathname(pathname);
   const [showNotif, setShowNotif] = useState(false);
   const [taskFilter, setTaskFilter] = useState<"today" | "week" | "late" | "all">("today");
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set());
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
@@ -247,6 +283,7 @@ export function DashboardSidebar({
   const weekCount = activeTasks.filter((t) => isThisWeek(t)).length;
 
   const filtered = activeTasks.filter((t) => {
+    if (selectedDate) return toDateKey(t.dueDate) === selectedDate;
     if (taskFilter === "today") return isToday(t);
     if (taskFilter === "week") return isThisWeek(t);
     if (taskFilter === "late") return isLate(t);
@@ -273,12 +310,12 @@ export function DashboardSidebar({
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Mon tableau de bord</h2>
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">{tr(locale, "Mon tableau de bord", "My dashboard")}</h2>
         <div className="relative">
           <button
             onClick={() => setShowNotif((v) => !v)}
             className="relative p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
-            title="Notifications"
+            title={tr(locale, "Notifications", "Notifications")}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1.5">
               <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" strokeLinecap="round" strokeLinejoin="round" />
@@ -299,39 +336,54 @@ export function DashboardSidebar({
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-3 text-center">
           <p className="text-xl font-bold text-gray-900 dark:text-gray-50">{activeTasks.length}</p>
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">En cours</p>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{tr(locale, "En cours", "In progress")}</p>
         </div>
         <div
           className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-3 text-center cursor-pointer hover:border-indigo-200 dark:hover:border-indigo-700 transition-colors"
-          onClick={() => setTaskFilter("today")}
+          onClick={() => { setSelectedDate(null); setTaskFilter("today"); }}
         >
           <p className={`text-xl font-bold ${todayCount > 0 ? "text-indigo-600 dark:text-indigo-400" : "text-gray-900 dark:text-gray-50"}`}>{todayCount}</p>
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Aujourd&apos;hui</p>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{tr(locale, "Aujourd'hui", "Today")}</p>
         </div>
         <div
           className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-3 text-center cursor-pointer hover:border-red-200 dark:hover:border-red-800 transition-colors"
-          onClick={() => setTaskFilter("late")}
+          onClick={() => { setSelectedDate(null); setTaskFilter("late"); }}
         >
           <p className={`text-xl font-bold ${lateCount > 0 ? "text-red-500" : "text-gray-900 dark:text-gray-50"}`}>{lateCount}</p>
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">En retard</p>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{tr(locale, "En retard", "Late")}</p>
         </div>
       </div>
 
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start">
       {/* My tasks - grouped by project */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
         {/* Header + filters */}
         <div className="flex items-center gap-2 px-4 pt-3 pb-2.5 border-b border-gray-100 dark:border-gray-700">
-          <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 flex-1">Mes tâches</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-gray-800 dark:text-gray-100">
+              {selectedDate
+                ? `${tr(locale, "Mes tâches", "My tasks")} · ${new Date(`${selectedDate}T12:00:00`).toLocaleDateString(getUiLocale(), { day: "numeric", month: "long" })}`
+                : tr(locale, "Mes tâches", "My tasks")}
+            </p>
+            {selectedDate && (
+              <button
+                onClick={() => setSelectedDate(null)}
+                className="text-[11px] text-indigo-500 hover:text-indigo-700 transition-colors cursor-pointer mt-0.5"
+              >
+                {tr(locale, "Effacer la date sélectionnée", "Clear selected date")}
+              </button>
+            )}
+          </div>
           <div className="flex gap-0.5">
             {([
-              { key: "today", label: "Auj.", count: todayCount },
-              { key: "week", label: "Sem.", count: weekCount },
-              { key: "late", label: "Retard", count: lateCount },
-              { key: "all", label: "Tout", count: activeTasks.length },
+              { key: "today", label: tr(locale, "Auj.", "Today"), count: todayCount },
+              { key: "week", label: tr(locale, "Sem.", "Week"), count: weekCount },
+              { key: "late", label: tr(locale, "Retard", "Late"), count: lateCount },
+              { key: "all", label: tr(locale, "Tout", "All"), count: activeTasks.length },
             ] as { key: typeof taskFilter; label: string; count: number }[]).map(({ key, label, count }) => (
               <button
                 key={key}
-                onClick={() => setTaskFilter(key)}
+                onClick={() => { setSelectedDate(null); setTaskFilter(key); }}
                 className={`text-[10px] px-1.5 py-0.5 rounded-md transition-colors cursor-pointer ${taskFilter === key ? "bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-semibold" : "text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
               >
                 {label}{count > 0 ? ` · ${count}` : ""}
@@ -344,7 +396,11 @@ export function DashboardSidebar({
         <div className="max-h-[480px] overflow-y-auto">
           {byProject.length === 0 ? (
             <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-6">
-              {taskFilter === "today" ? "Aucune tâche pour aujourd'hui 🎉" : "Aucune tâche"}
+              {selectedDate
+                ? tr(locale, "Aucune tâche sur cette date", "No tasks on this date")
+                : taskFilter === "today"
+                  ? tr(locale, "Aucune tâche pour aujourd'hui", "No tasks for today")
+                  : tr(locale, "Aucune tâche", "No tasks")}
             </p>
           ) : (
             <div className="divide-y divide-gray-50 dark:divide-gray-700/50">
@@ -403,7 +459,8 @@ export function DashboardSidebar({
 
       {/* Mini calendar */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4">
-        <MiniCalendar tasks={tasks} />
+        <MiniCalendar tasks={tasks} selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+      </div>
       </div>
     </div>
   );

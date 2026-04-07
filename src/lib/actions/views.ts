@@ -1,6 +1,6 @@
 "use server";
 
-import { prisma, requireMember } from "./_helpers";
+import { prisma, requireMember, emitProjectChanged } from "./_helpers";
 
 type SavedViewSnapshot = {
   tab: string;
@@ -17,9 +17,11 @@ export async function createSavedView(
 ) {
   await requireMember(projectId);
   if (!name.trim()) throw new Error("Le nom de la vue est requis");
-  return await prisma.savedView.create({
+  const created = await prisma.savedView.create({
     data: { projectId, name: name.trim(), snapshot: JSON.stringify(snapshot) },
   });
+  emitProjectChanged(projectId);
+  return created;
 }
 
 export async function listSavedViews(projectId: string) {
@@ -33,4 +35,5 @@ export async function deleteSavedView(viewId: string) {
   const v = await prisma.savedView.findUnique({ where: { id: viewId } });
   if (v) await requireMember(v.projectId);
   await prisma.savedView.delete({ where: { id: viewId } });
+  if (v?.projectId) emitProjectChanged(v.projectId);
 }

@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { getUiLocale } from "@/lib/ui-locale";
 import type { ProjectWithRelations, TaskWithFields } from "@/lib/types";
 import { AVAILABLE_WIDGETS } from "@/lib/types";
 import { STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/lib/constants";
-import { toggleDashboardWidget } from "@/lib/actions";
+import { toggleDashboardWidgetByType } from "@/lib/actions";
+import type { WidgetType } from "@/generated/prisma";
+import { localeFromPathname, tr } from "@/lib/i18n/client";
 
 // --- Helpers ---
 function fv(task: TaskWithFields, colId: string | undefined): string | null {
@@ -34,8 +38,8 @@ function Widget({
 }) {
   return (
     <div
-      className={`bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm ${
-        span === 2 ? "col-span-2" : ""
+      className={`bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 sm:p-5 shadow-sm ${
+        span === 2 ? "md:col-span-2" : ""
       }`}
     >
       <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">
@@ -62,12 +66,14 @@ function Bar({ pct, className }: { pct: number; className: string }) {
 function LineChart({
   points,
   idealPoints,
+  locale,
   width = 300,
   height = 100,
   color = "#6366f1",
 }: {
   points: { x: number; y: number }[];
   idealPoints?: { x: number; y: number }[];
+  locale: "fr" | "en";
   width?: number;
   height?: number;
   color?: string;
@@ -75,7 +81,7 @@ function LineChart({
   if (points.length < 2 && (!idealPoints || idealPoints.length < 2)) {
     return (
       <div className="flex items-center justify-center h-24 text-xs text-gray-300 italic">
-        Pas encore de données
+        {tr(locale, "Pas encore de données", "No data yet")}
       </div>
     );
   }
@@ -147,7 +153,7 @@ function LineChart({
             .filter((_, i) => i % step === 0 || i === points.length - 1)
             .map((p, i) => (
               <text key={i} x={px(p.x)} y={height - 6} fontSize="7" fill="#9ca3af" textAnchor="middle">
-                {new Date(p.x).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" })}
+                {new Date(p.x).toLocaleDateString(getUiLocale(), { day: "2-digit", month: "2-digit" })}
               </text>
             ));
         })()}
@@ -158,17 +164,19 @@ function LineChart({
 // --- Mini SVG bar chart ---
 function BarChart({
   bars,
+  locale,
   color = "#6366f1",
   height = 100,
 }: {
   bars: { label: string; value: number }[];
+  locale: "fr" | "en";
   color?: string;
   height?: number;
 }) {
   if (bars.length === 0 || bars.every((b) => b.value === 0)) {
     return (
       <div className="flex items-center justify-center h-24 text-xs text-gray-300 italic">
-        Pas encore de données
+        {tr(locale, "Pas encore de données", "No data yet")}
       </div>
     );
   }
@@ -219,19 +227,71 @@ function BarChart({
 
 // --- Main ---
 export function ProjectDashboard({ project }: { project: ProjectWithRelations }) {
+  const pathname = usePathname();
+  const locale = localeFromPathname(pathname);
+  const router = useRouter();
   const [widgetStates, setWidgetStates] = useState(
-    Object.fromEntries(project.dashboardWidgets.map((w) => [w.id, w.isActive]))
+    Object.fromEntries(
+      AVAILABLE_WIDGETS.map((w) => [
+        w.type,
+        project.dashboardWidgets.find((existing) => existing.type === w.type)?.isActive ?? false,
+      ])
+    ) as Record<WidgetType, boolean>
   );
   const [showConfig, setShowConfig] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showAllWidgetsMobile, setShowAllWidgetsMobile] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPullRefreshing, setIsPullRefreshing] = useState(false);
   const [, startTransition] = useTransition();
+  const pullStartYRef = useRef<number | null>(null);
+  const canPullRef = useRef(false);
 
-  const toggleWidget = (widgetId: string) => {
-    const newState = !widgetStates[widgetId];
-    setWidgetStates((prev) => ({ ...prev, [widgetId]: newState }));
-    startTransition(async () => { await toggleDashboardWidget(widgetId, newState); });
+  useEffect(() => {
+    const sync = () => setIsMobile(window.innerWidth < 640);
+    sync();
+    window.addEventListener("resize", sync);
+    return () => window.removeEventListener("resize", sync);
+  }, []);
+
+  const toggleWidget = (widgetType: WidgetType) => {
+    const newState = !widgetStates[widgetType];
+    setWidgetStates((prev) => ({ ...prev, [widgetType]: newState }));
+    startTransition(async () => {
+      await toggleDashboardWidgetByType(project.id, widgetType, newState);
+    });
   };
 
-  const activeWidgets = project.dashboardWidgets.filter((w) => widgetStates[w.id]);
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isMobile || isPullRefreshing) return;
+    canPullRef.current = e.currentTarget.scrollTop <= 0;
+    pullStartYRef.current = e.touches[0]?.clientY ?? null;
+  };
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isMobile || isPullRefreshing || !canPullRef.current || pullStartYRef.current === null) return;
+    const delta = e.touches[0].clientY - pullStartYRef.current;
+    if (delta <= 0) {
+      setPullDistance(0);
+      return;
+    }
+    setPullDistance(Math.min(88, delta * 0.45));
+  };
+  const handleTouchEnd = () => {
+    if (!isMobile || isPullRefreshing) return;
+    const shouldRefresh = pullDistance > 56;
+    setPullDistance(0);
+    pullStartYRef.current = null;
+    canPullRef.current = false;
+    if (!shouldRefresh) return;
+    setIsPullRefreshing(true);
+    router.refresh();
+    setTimeout(() => setIsPullRefreshing(false), 700);
+  };
+
+  const activeWidgetTypes = AVAILABLE_WIDGETS.filter((w) => widgetStates[w.type]).map((w) => w.type);
+  const displayedWidgetTypes = isMobile && !showAllWidgetsMobile
+    ? activeWidgetTypes.slice(0, 5)
+    : activeWidgetTypes;
   const { groups, columns } = project;
   const allTasks = groups.flatMap((g) => g.tasks);
   const total = allTasks.length;
@@ -351,21 +411,21 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
       const caStr = toDateStr(new Date(ca));
       return caStr >= weekStartStr && caStr <= weekEndStr;
     }).length;
-    const label = weekStart.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+    const label = weekStart.toLocaleDateString(getUiLocale(), { day: "2-digit", month: "2-digit" });
     velocityBars.push({ label, value: count });
   }
 
   const widgetLabels: Record<string, string> = {
-    TASK_OVERVIEW: "Vue d'ensemble",
-    BY_STATUS: "Répartition par statut",
-    BY_OWNER: "Par responsable",
-    OVERDUE: "Tâches en retard",
-    BY_DUE_DATE: "Par échéance",
-    PRIORITY_BREAKDOWN: "Par priorité",
-    COMPLETION_BY_GROUP: "Avancement par groupe",
-    BUDGET_TOTAL: "Budget total",
-    BURNDOWN: "Burndown — tâches complétées",
-    VELOCITY: "Vélocité — tâches/semaine",
+    TASK_OVERVIEW: tr(locale, "Vue d'ensemble", "Overview"),
+    BY_STATUS: tr(locale, "Répartition par statut", "Status breakdown"),
+    BY_OWNER: tr(locale, "Par responsable", "By owner"),
+    OVERDUE: tr(locale, "Tâches en retard", "Late tasks"),
+    BY_DUE_DATE: tr(locale, "Par échéance", "By due date"),
+    PRIORITY_BREAKDOWN: tr(locale, "Par priorité", "By priority"),
+    COMPLETION_BY_GROUP: tr(locale, "Avancement par groupe", "Progress by group"),
+    BUDGET_TOTAL: tr(locale, "Budget total", "Total budget"),
+    BURNDOWN: tr(locale, "Burndown — tâches complétées", "Burndown — completed tasks"),
+    VELOCITY: tr(locale, "Vélocité — tâches/semaine", "Velocity — tasks/week"),
   };
 
   // Widget span (some charts need 2 cols)
@@ -380,17 +440,17 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
         <div className="flex items-end justify-between mb-4">
           <div>
             <p className="text-4xl font-bold text-gray-900 dark:text-gray-50 leading-none">{total}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">tâche{total !== 1 ? "s" : ""} au total</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{total} {tr(locale, "tâche", "task")}{total !== 1 ? "s" : ""} {tr(locale, "au total", "in total")}</p>
           </div>
           <div className="text-right">
             <p className="text-2xl font-bold text-indigo-600 leading-none">{completionPct}%</p>
-            <p className="text-xs text-gray-400 mt-1">complétées</p>
+            <p className="text-xs text-gray-400 mt-1">{tr(locale, "complétées", "completed")}</p>
           </div>
         </div>
         <Bar pct={completionPct} className="bg-indigo-500" />
         <div className="flex items-center justify-between mt-3 text-xs text-gray-500 dark:text-gray-400">
-          <span>{doneCount} terminées</span>
-          <span>{total - doneCount} restantes</span>
+          <span>{doneCount} {tr(locale, "terminées", "completed")}</span>
+          <span>{total - doneCount} {tr(locale, "restantes", "remaining")}</span>
         </div>
       </div>
     ),
@@ -418,14 +478,14 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
             />
           </div>
         ))}
-        {total === 0 && <p className="text-sm text-gray-400 italic">Aucune tâche</p>}
+        {total === 0 && <p className="text-sm text-gray-400 italic">{tr(locale, "Aucune tâche", "No task")}</p>}
       </div>
     ),
 
     BY_OWNER: (
       <div>
         {ownerEntries.length === 0 ? (
-          <p className="text-sm text-gray-400 italic">Aucun responsable assigné</p>
+          <p className="text-sm text-gray-400 italic">{tr(locale, "Aucun responsable assigné", "No assigned owner")}</p>
         ) : (
           <div className="space-y-2.5">
             {ownerEntries.slice(0, 6).map(([name, count]) => (
@@ -479,7 +539,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
             >
               {overdueTasksList.length}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">tâche{overdueTasksList.length !== 1 ? "s" : ""} en retard</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{overdueTasksList.length} {tr(locale, "tâche", "task")}{overdueTasksList.length !== 1 ? "s" : ""} {tr(locale, "en retard", "late")}</p>
           </div>
         </div>
         {overdueTasksList.length > 0 && (
@@ -491,7 +551,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
               </p>
             ))}
             {overdueTasksList.length > 4 && (
-              <p className="text-xs text-gray-400">+{overdueTasksList.length - 4} autres</p>
+              <p className="text-xs text-gray-400">+{overdueTasksList.length - 4} {tr(locale, "autres", "others")}</p>
             )}
           </div>
         )}
@@ -505,10 +565,10 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
         ) : (
           <div className="space-y-2">
             {[
-              { label: "En retard", count: dueGroups.overdue, color: "text-red-600", dot: "bg-red-400" },
-              { label: "Cette semaine", count: dueGroups.thisWeek, color: "text-amber-700", dot: "bg-amber-400" },
-              { label: "Ce mois", count: dueGroups.thisMonth, color: "text-blue-700", dot: "bg-blue-400" },
-              { label: "Plus tard", count: dueGroups.later, color: "text-gray-600", dot: "bg-gray-300" },
+              { label: tr(locale, "En retard", "Late"), count: dueGroups.overdue, color: "text-red-600", dot: "bg-red-400" },
+              { label: tr(locale, "Cette semaine", "This week"), count: dueGroups.thisWeek, color: "text-amber-700", dot: "bg-amber-400" },
+              { label: tr(locale, "Ce mois", "This month"), count: dueGroups.thisMonth, color: "text-blue-700", dot: "bg-blue-400" },
+              { label: tr(locale, "Plus tard", "Later"), count: dueGroups.later, color: "text-gray-600", dot: "bg-gray-300" },
             ].map(({ label, count, color, dot }) => (
               <div key={label} className="flex items-center gap-2.5 py-0.5">
                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} />
@@ -541,18 +601,18 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
         ))}
         {noPriority > 0 && (
           <div className="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500 pt-1 border-t border-gray-100 dark:border-gray-700">
-            <span>Sans priorité</span>
+            <span>{tr(locale, "Sans priorité", "No priority")}</span>
             <span>{noPriority}</span>
           </div>
         )}
-        {total === 0 && <p className="text-sm text-gray-400 italic">Aucune tâche</p>}
+        {total === 0 && <p className="text-sm text-gray-400 italic">{tr(locale, "Aucune tâche", "No task")}</p>}
       </div>
     ),
 
     COMPLETION_BY_GROUP: (
       <div className="space-y-3">
         {groupProgress.length === 0 ? (
-          <p className="text-sm text-gray-400 italic">Aucun groupe</p>
+          <p className="text-sm text-gray-400 italic">{tr(locale, "Aucun groupe", "No group")}</p>
         ) : (
           groupProgress.map((g) => (
             <div key={g.name}>
@@ -592,16 +652,16 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
             <div className="flex items-end justify-between mb-4">
               <div>
                 <p className="text-3xl font-bold text-gray-900 dark:text-gray-50 leading-none">
-                  {budgetTotal.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
+                  {budgetTotal.toLocaleString(getUiLocale(), { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">budget total alloué</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{tr(locale, "budget total alloué", "total allocated budget")}</p>
               </div>
               {budgetTotal > 0 && (
                 <div className="text-right">
                   <p className="text-xl font-bold text-emerald-600 leading-none">
-                    {budgetDone.toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
+                    {budgetDone.toLocaleString(getUiLocale(), { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
                   </p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">tâches terminées</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{tr(locale, "tâches terminées", "completed tasks")}</p>
                 </div>
               )}
             </div>
@@ -609,8 +669,8 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
               <>
                 <Bar pct={(budgetDone / budgetTotal) * 100} className="bg-emerald-500" />
                 <div className="flex items-center justify-between mt-2 text-xs text-gray-400 dark:text-gray-500">
-                  <span>{Math.round((budgetDone / budgetTotal) * 100)}% du budget complété</span>
-                  <span>{(budgetTotal - budgetDone).toLocaleString("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })} restant</span>
+                  <span>{Math.round((budgetDone / budgetTotal) * 100)}% {tr(locale, "du budget complété", "of budget completed")}</span>
+                  <span>{(budgetTotal - budgetDone).toLocaleString(getUiLocale(), { style: "currency", currency: "EUR", maximumFractionDigits: 0 })} {tr(locale, "restant", "remaining")}</span>
                 </div>
               </>
             )}
@@ -624,38 +684,64 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
         <div className="flex items-center gap-4 mb-3 text-xs text-gray-400 dark:text-gray-500">
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-6 border-t-2 border-dashed border-gray-300" />
-            Idéal (linéaire)
+            {tr(locale, "Idéal (linéaire)", "Ideal (linear)")}
           </span>
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-6 border-t-2 border-indigo-500" />
-            Réel
+            {tr(locale, "Réel", "Actual")}
           </span>
         </div>
         <LineChart
           points={burndownPoints}
           idealPoints={idealBurndown}
+          locale={locale}
           width={580}
           height={120}
           color="#6366f1"
         />
         {burndownPoints.length === 0 && total === 0 && (
-          <p className="text-xs text-gray-400 italic text-center -mt-2">Aucune tâche dans ce projet</p>
+          <p className="text-xs text-gray-400 italic text-center -mt-2">{tr(locale, "Aucune tâche dans ce projet", "No task in this project")}</p>
         )}
       </div>
     ),
 
     VELOCITY: (
       <div>
-        <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Tâches complétées par semaine (6 dernières semaines)</p>
-        <BarChart bars={velocityBars} color="#6366f1" height={120} />
+        <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">{tr(locale, "Tâches complétées par semaine (6 dernières semaines)", "Tasks completed per week (last 6 weeks)")}</p>
+        <BarChart bars={velocityBars} locale={locale} color="#6366f1" height={120} />
       </div>
     ),
   };
 
   return (
-    <div className="p-6 overflow-y-auto relative">
+    <div
+      className="p-3 sm:p-6 overflow-y-auto relative touch-pan-y"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {isMobile && (
+        <div className="sticky top-0 z-20 flex justify-center pointer-events-none">
+          <div
+            className={[
+              "text-[11px] px-2.5 py-1 rounded-full border transition-all",
+              isPullRefreshing
+                ? "bg-emerald-50 text-emerald-600 border-emerald-200"
+                : "bg-white/90 dark:bg-gray-800/90 text-gray-400 border-gray-200 dark:border-gray-700",
+              pullDistance > 0 || isPullRefreshing ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-1",
+            ].join(" ")}
+            style={{ transform: `translateY(${Math.min(pullDistance / 3, 10)}px)` }}
+          >
+            {isPullRefreshing
+              ? tr(locale, "Actualisation...", "Refreshing...")
+              : pullDistance > 56
+              ? tr(locale, "Relâchez pour actualiser", "Release to refresh")
+              : tr(locale, "Tirez pour actualiser", "Pull to refresh")}
+          </div>
+        </div>
+      )}
       {/* Config button */}
-      <div className="flex justify-end mb-4">
+      <div className="flex justify-end mb-4 sticky top-0 z-10 bg-white/95 dark:bg-gray-900/95 backdrop-blur py-2 -mx-3 sm:mx-0 px-3 sm:px-0">
         <button
           onClick={() => setShowConfig((v) => !v)}
           className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${showConfig ? "bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400" : "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
@@ -664,22 +750,21 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
             <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" strokeWidth="1.5" />
             <circle cx="12" cy="12" r="3" strokeWidth="1.5" />
           </svg>
-          Configurer
+          {tr(locale, "Configurer", "Configure")}
         </button>
       </div>
 
       {/* Config panel */}
       {showConfig && (
         <div className="mb-5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-sm">
-          <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">Widgets affichés</p>
-          <div className="grid grid-cols-2 gap-2">
-            {project.dashboardWidgets.map((w) => {
-              const meta = AVAILABLE_WIDGETS.find((m) => m.type === w.type);
-              const active = widgetStates[w.id];
+          <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">{tr(locale, "Widgets affichés", "Displayed widgets")}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {AVAILABLE_WIDGETS.map((w) => {
+              const active = widgetStates[w.type];
               return (
                 <button
-                  key={w.id}
-                  onClick={() => toggleWidget(w.id)}
+                  key={w.type}
+                  onClick={() => toggleWidget(w.type)}
                   className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left transition-colors cursor-pointer ${active ? "border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20" : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
                 >
                   <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${active ? "bg-indigo-500 border-indigo-500" : "border-gray-300 dark:border-gray-600"}`}>
@@ -690,7 +775,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
                     )}
                   </div>
                   <span className={`text-xs font-medium ${active ? "text-indigo-700 dark:text-indigo-400" : "text-gray-600 dark:text-gray-400"}`}>
-                    {meta?.label ?? widgetLabels[w.type] ?? w.type}
+                    {widgetLabels[w.type] ?? w.label ?? w.type}
                   </span>
                 </button>
               );
@@ -699,7 +784,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
         </div>
       )}
 
-      {activeWidgets.length === 0 ? (
+      {activeWidgetTypes.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-gray-400">
           <svg className="w-10 h-10 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <rect x="3" y="3" width="8" height="5" rx="1" strokeWidth="1.5" />
@@ -707,25 +792,39 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
             <rect x="3" y="10" width="8" height="11" rx="1" strokeWidth="1.5" />
             <rect x="13" y="14" width="8" height="7" rx="1" strokeWidth="1.5" />
           </svg>
-          <p className="text-sm">Aucun widget actif.</p>
+          <p className="text-sm">{tr(locale, "Aucun widget actif.", "No active widget.")}</p>
           <button onClick={() => setShowConfig(true)} className="mt-2 text-xs text-indigo-600 hover:underline cursor-pointer">
-            Configurer le dashboard
+            {tr(locale, "Configurer le dashboard", "Configure dashboard")}
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-4">
-          {activeWidgets.map((widget) => (
+        <>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+          {displayedWidgetTypes.map((widgetType) => (
             <Widget
-              key={widget.id}
-              title={widgetLabels[widget.type] ?? widget.type}
-              span={widgetSpan[widget.type] ?? 1}
+              key={widgetType}
+              title={widgetLabels[widgetType] ?? widgetType}
+              span={widgetSpan[widgetType] ?? 1}
             >
-              {widgets[widget.type] ?? (
-                <p className="text-sm text-gray-400 italic">Widget non disponible</p>
+              {widgets[widgetType] ?? (
+                <p className="text-sm text-gray-400 italic">{tr(locale, "Widget non disponible", "Widget unavailable")}</p>
               )}
             </Widget>
           ))}
         </div>
+        {isMobile && activeWidgetTypes.length > 5 && (
+          <div className="mt-3 flex justify-center">
+            <button
+              onClick={() => setShowAllWidgetsMobile((prev) => !prev)}
+              className="text-xs px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300"
+            >
+              {showAllWidgetsMobile
+                ? tr(locale, "Afficher moins", "Show less")
+                : tr(locale, "Afficher plus", "Show more")}
+            </button>
+          </div>
+        )}
+        </>
       )}
     </div>
   );

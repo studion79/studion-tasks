@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef, useTransition, useMemo } from "react";
+import { getUiLocale } from "@/lib/ui-locale";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useProjectContext } from "./ProjectContext";
 import type { TaskWithFields, SubtaskWithFields, ProjectColumn } from "@/lib/types";
 import { STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/lib/constants";
@@ -23,6 +24,8 @@ import {
   OwnerCell,
   getFieldValue,
 } from "./cells";
+import { localeFromPathname, tr } from "@/lib/i18n/client";
+import { getDisplayColumnLabel } from "@/lib/i18n/columns";
 
 type Comment = { id: string; author: string; content: string; createdAt: Date };
 
@@ -59,6 +62,7 @@ type DepTask = { id: string; title: string };
 
 // --- Recurrence section ---
 function RecurrenceSection({ taskId, initialRecurrence }: { taskId: string; initialRecurrence: string | null }) {
+  const locale = localeFromPathname(usePathname());
   const [open, setOpen] = useState(false);
   const [config, setConfig] = useState<RecurrenceConfig | null>(
     initialRecurrence ? (JSON.parse(initialRecurrence) as RecurrenceConfig) : null
@@ -66,9 +70,13 @@ function RecurrenceSection({ taskId, initialRecurrence }: { taskId: string; init
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const FREQ_LABELS: Record<string, string> = { daily: "Jour(s)", weekly: "Semaine(s)", monthly: "Mois" };
+  const FREQ_LABELS: Record<string, string> = {
+    daily: tr(locale, "Jour(s)", "Day(s)"),
+    weekly: tr(locale, "Semaine(s)", "Week(s)"),
+    monthly: tr(locale, "Mois", "Month(s)"),
+  };
   const formatFrDate = (date: string | null | undefined) =>
-    date ? new Date(`${date}T00:00:00`).toLocaleDateString("fr-FR") : null;
+    date ? new Date(`${date}T00:00:00`).toLocaleDateString(getUiLocale()) : null;
 
   const persist = (newConfig: RecurrenceConfig | null) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -109,10 +117,10 @@ function RecurrenceSection({ taskId, initialRecurrence }: { taskId: string; init
         <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        Récurrence
+        {tr(locale, "Récurrence", "Recurrence")}
         {config && (
           <span className="ml-1 text-[10px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-full px-2 py-0.5">
-            Tous les {config.interval} {FREQ_LABELS[config.frequency]}
+            {tr(locale, "Tous les", "Every")} {config.interval} {FREQ_LABELS[config.frequency]}
             {config.endDate ? ` · fin ${formatFrDate(config.endDate)}` : ""}
           </span>
         )}
@@ -126,7 +134,7 @@ function RecurrenceSection({ taskId, initialRecurrence }: { taskId: string; init
           {config ? (
             <>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-gray-600 dark:text-gray-400">Répéter tous les</span>
+                <span className="text-xs text-gray-600 dark:text-gray-400">{tr(locale, "Répéter tous les", "Repeat every")}</span>
                 <input
                   type="number"
                   min={1}
@@ -138,41 +146,41 @@ function RecurrenceSection({ taskId, initialRecurrence }: { taskId: string; init
                 <select
                   value={config.frequency}
                   onChange={(e) => handleChange({ ...config, frequency: e.target.value as RecurrenceConfig["frequency"] })}
-                  className="text-xs text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 outline-none focus:border-indigo-400 cursor-pointer"
+                  className="select-unified select-unified-sm"
                 >
-                  <option value="daily">Jour(s)</option>
-                  <option value="weekly">Semaine(s)</option>
-                  <option value="monthly">Mois</option>
+                  <option value="daily">{tr(locale, "Jour(s)", "Day(s)")}</option>
+                  <option value="weekly">{tr(locale, "Semaine(s)", "Week(s)")}</option>
+                  <option value="monthly">{tr(locale, "Mois", "Month(s)")}</option>
                 </select>
                 <button
                   onClick={handleRemove}
                   className="ml-auto text-xs text-red-400 hover:text-red-600 transition-colors cursor-pointer"
                 >
-                  Supprimer
+                  {tr(locale, "Supprimer", "Delete")}
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                <label className="text-xs text-gray-600 dark:text-gray-400">Date de fin</label>
+                <label className="text-xs text-gray-600 dark:text-gray-400">{tr(locale, "Date de fin", "End date")}</label>
                 <input
                   type="date"
                   value={config.endDate ?? ""}
                   onChange={(e) => handleChange({ ...config, endDate: e.target.value || null })}
-                  className="text-xs text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 outline-none focus:border-indigo-400"
+                  className="datetime-field"
                 />
                 {config.endDate && (
                   <button
                     onClick={() => handleChange({ ...config, endDate: null })}
                     className="text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
                   >
-                    Infinie
+                    {tr(locale, "Infinie", "Infinite")}
                   </button>
                 )}
               </div>
               <p className="text-[10px] text-gray-400 dark:text-gray-500">
-                {!config.endDate && "Sans date de fin : récurrence infinie. "}
-                {status === "saving" && "Sauvegarde…"}
-                {status === "saved" && "✓ Sauvegardé"}
-                {status === "error" && "Erreur lors de la sauvegarde"}
+                {!config.endDate && tr(locale, "Sans date de fin : récurrence infinie. ", "Without end date: infinite recurrence. ")}
+                {status === "saving" && tr(locale, "Sauvegarde…", "Saving...")}
+                {status === "saved" && tr(locale, "✓ Sauvegardé", "✓ Saved")}
+                {status === "error" && tr(locale, "Erreur lors de la sauvegarde", "Error while saving")}
               </p>
             </>
           ) : (
@@ -183,7 +191,7 @@ function RecurrenceSection({ taskId, initialRecurrence }: { taskId: string; init
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M12 4v16m8-8H4" strokeWidth="2" strokeLinecap="round" />
               </svg>
-              Configurer une récurrence
+              {tr(locale, "Configurer une récurrence", "Configure recurrence")}
             </button>
           )}
         </div>
@@ -196,6 +204,7 @@ function RecurrenceSection({ taskId, initialRecurrence }: { taskId: string; init
 type AttachmentItem = { id: string; filename: string; filesize: number; mimetype: string; path: string; createdAt: Date };
 
 function AttachmentsSection({ taskId }: { taskId: string }) {
+  const locale = localeFromPathname(usePathname());
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [open, setOpen] = useState(false);
@@ -230,9 +239,9 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
   };
 
   const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} o`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+    if (bytes < 1024) return `${bytes} ${tr(locale, "o", "B")}`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} ${tr(locale, "Ko", "KB")}`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} ${tr(locale, "Mo", "MB")}`;
   };
 
   const isImage = (mime: string) => mime.startsWith("image/");
@@ -246,7 +255,7 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
         <svg className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        Pièces jointes
+        {tr(locale, "Pièces jointes", "Attachments")}
         {loaded && attachments.length > 0 && (
           <span className="ml-1 text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-full px-2 py-0.5 leading-none">
             {attachments.length}
@@ -302,7 +311,7 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M12 4v16m8-8H4" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
-              {uploading ? "Envoi…" : "Ajouter un fichier"}
+              {uploading ? tr(locale, "Envoi…", "Uploading...") : tr(locale, "Ajouter un fichier", "Add a file")}
             </button>
           </div>
         </div>
@@ -312,6 +321,7 @@ function AttachmentsSection({ taskId }: { taskId: string }) {
 }
 
 function DependenciesSection({ taskId, projectId }: { taskId: string; projectId: string }) {
+  const locale = localeFromPathname(usePathname());
   const [blockedBy, setBlockedBy] = useState<DepTask[]>([]);
   const [blocking, setBlocking] = useState<DepTask[]>([]);
   const [allTasks, setAllTasks] = useState<{ id: string; title: string; groupId: string }[]>([]);
@@ -397,7 +407,7 @@ function DependenciesSection({ taskId, projectId }: { taskId: string; projectId:
         <svg className={`w-3 h-3 transition-transform ${expanded ? "rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="M9 18l6-6-6-6" strokeWidth="2" strokeLinecap="round" />
         </svg>
-        Dépendances
+        {tr(locale, "Dépendances", "Dependencies")}
         {(blockedBy.length > 0 || blocking.length > 0) && (
           <span className="ml-1 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold rounded-full px-1.5">
             {blockedBy.length + blocking.length}
@@ -410,16 +420,16 @@ function DependenciesSection({ taskId, projectId }: { taskId: string; projectId:
           {/* Bloqué par */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Bloqué par</span>
+              <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{tr(locale, "Bloqué par", "Blocked by")}</span>
               <button
                 onClick={() => { setAddingMode("blockedBy"); setShowAddBlockedBy((v) => !v); setShowAddBlocking(false); setQuery(""); }}
                 className="text-[10px] text-indigo-500 hover:text-indigo-700 cursor-pointer"
               >
-                + Ajouter
+                + {tr(locale, "Ajouter", "Add")}
               </button>
             </div>
             {blockedBy.length === 0 && !showAddBlockedBy && (
-              <p className="text-xs text-gray-300 dark:text-gray-600 italic">Aucun bloquant</p>
+              <p className="text-xs text-gray-300 dark:text-gray-600 italic">{tr(locale, "Aucun bloquant", "No blocker")}</p>
             )}
             {blockedBy.map((dep) => (
               <div key={dep.id} className="flex items-center gap-1.5 py-0.5 group">
@@ -453,16 +463,16 @@ function DependenciesSection({ taskId, projectId }: { taskId: string; projectId:
           {/* Bloque */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Bloque</span>
+              <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{tr(locale, "Bloque", "Blocks")}</span>
               <button
                 onClick={() => { setAddingMode("blocking"); setShowAddBlocking((v) => !v); setShowAddBlockedBy(false); setQuery(""); }}
                 className="text-[10px] text-indigo-500 hover:text-indigo-700 cursor-pointer"
               >
-                + Ajouter
+                + {tr(locale, "Ajouter", "Add")}
               </button>
             </div>
             {blocking.length === 0 && !showAddBlocking && (
-              <p className="text-xs text-gray-300 dark:text-gray-600 italic">Ne bloque aucune tâche</p>
+              <p className="text-xs text-gray-300 dark:text-gray-600 italic">{tr(locale, "Ne bloque aucune tâche", "Does not block any task")}</p>
             )}
             {blocking.map((dep) => (
               <div key={dep.id} className="flex items-center gap-1.5 py-0.5 group">
@@ -511,6 +521,7 @@ function DepSearchBox({
   onSelect: (id: string) => void;
   onCancel: () => void;
 }) {
+  const locale = localeFromPathname(usePathname());
   return (
     <div className="mt-1.5 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden shadow-sm">
       <input
@@ -519,12 +530,12 @@ function DepSearchBox({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}
-        placeholder="Chercher une tâche…"
+        placeholder={tr(locale, "Chercher une tâche…", "Search a task...")}
         className="w-full px-3 py-1.5 text-xs text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 outline-none placeholder-gray-400 dark:placeholder-gray-500"
       />
       <div className="max-h-32 overflow-y-auto bg-white dark:bg-gray-800">
         {tasks.length === 0 ? (
-          <p className="text-xs text-gray-400 dark:text-gray-500 italic px-3 py-2">Aucune tâche correspondante</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 italic px-3 py-2">{tr(locale, "Aucune tâche correspondante", "No matching task")}</p>
         ) : (
           tasks.slice(0, 8).map((t) => (
             <button
@@ -542,15 +553,15 @@ function DepSearchBox({
 }
 
 // --- Activity log section ---
-const ACTION_LABELS: Record<string, string> = {
-  CREATED: "a créé la tâche",
-  TITLE_UPDATED: "a modifié le titre",
-  FIELD_UPDATED: "a mis à jour un champ",
-  ARCHIVED: "a archivé la tâche",
-  COMMENT_ADDED: "a ajouté un commentaire",
-};
-
 function ActivitySection({ taskId }: { taskId: string }) {
+  const locale = localeFromPathname(usePathname());
+  const ACTION_LABELS: Record<string, string> = {
+    CREATED: tr(locale, "a créé la tâche", "created the task"),
+    TITLE_UPDATED: tr(locale, "a modifié le titre", "updated the title"),
+    FIELD_UPDATED: tr(locale, "a mis à jour un champ", "updated a field"),
+    ARCHIVED: tr(locale, "a archivé la tâche", "archived the task"),
+    COMMENT_ADDED: tr(locale, "a ajouté un commentaire", "added a comment"),
+  };
   type LogEntry = { id: string; action: string; actor: string; details: string | null; createdAt: Date };
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -566,7 +577,7 @@ function ActivitySection({ taskId }: { taskId: string }) {
     });
   }, [taskId, expanded]);
 
-  const fmt = (d: Date | string) => new Date(d).toLocaleDateString("fr-FR", {
+  const fmt = (d: Date | string) => new Date(d).toLocaleDateString(getUiLocale(), {
     day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
   });
 
@@ -575,7 +586,7 @@ function ActivitySection({ taskId }: { taskId: string }) {
     if (log.action === "FIELD_UPDATED" && log.details) {
       try {
         const d = JSON.parse(log.details);
-        return `a mis à jour "${d.field}"${d.value ? ` → ${d.value}` : " (effacé)"}`;
+        return `${tr(locale, "a mis à jour", "updated")} "${d.field}"${d.value ? ` → ${d.value}` : tr(locale, " (effacé)", " (cleared)")}`;
       } catch { /* ignore */ }
     }
     return base;
@@ -590,15 +601,15 @@ function ActivitySection({ taskId }: { taskId: string }) {
         <svg className={`w-3 h-3 transition-transform ${expanded ? "rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="M9 18l6-6-6-6" strokeWidth="2" strokeLinecap="round" />
         </svg>
-        Activité
+        {tr(locale, "Activité", "Activity")}
       </button>
 
       {expanded && (
         <div className="space-y-2">
           {!loaded ? (
-            <p className="text-xs text-gray-300 dark:text-gray-600 italic">Chargement…</p>
+            <p className="text-xs text-gray-300 dark:text-gray-600 italic">{tr(locale, "Chargement…", "Loading...")}</p>
           ) : logs.length === 0 ? (
-            <p className="text-xs text-gray-400 dark:text-gray-500 italic">Aucune activité enregistrée.</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 italic">{tr(locale, "Aucune activité enregistrée.", "No activity recorded.")}</p>
           ) : (
             logs.map((log) => (
               <div key={log.id} className="flex items-start gap-2 text-xs text-gray-500 dark:text-gray-400">
@@ -621,6 +632,7 @@ function ActivitySection({ taskId }: { taskId: string }) {
 
 // --- Comments section ---
 function CommentsSection({ taskId }: { taskId: string }) {
+  const locale = localeFromPathname(usePathname());
   const { data: session } = useSession();
   const { memberNames, memberAvatars } = useProjectContext();
   const [comments, setComments] = useState<Comment[]>([]);
@@ -643,7 +655,7 @@ function CommentsSection({ taskId }: { taskId: string }) {
   const submit = () => {
     const text = draft.trim();
     if (!text) return;
-    const author = session?.user?.name ?? "Moi";
+    const author = session?.user?.name ?? tr(locale, "Moi", "Me");
     setDraft("");
     setMentionQuery(null);
     const temp: Comment = {
@@ -701,7 +713,7 @@ function CommentsSection({ taskId }: { taskId: string }) {
 
   const formatTime = (d: Date | string) => {
     const date = new Date(d);
-    return date.toLocaleDateString("fr-FR", {
+    return date.toLocaleDateString(getUiLocale(), {
       day: "numeric",
       month: "short",
       hour: "2-digit",
@@ -715,12 +727,12 @@ function CommentsSection({ taskId }: { taskId: string }) {
   return (
     <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
       <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
-        Commentaires
+        {tr(locale, "Commentaires", "Comments")}
       </p>
 
       {/* Comment list */}
       {loaded && comments.length === 0 && (
-        <p className="text-xs text-gray-400 dark:text-gray-500 italic mb-3">Aucun commentaire pour l'instant.</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 italic mb-3">{tr(locale, "Aucun commentaire pour l'instant.", "No comments yet.")}</p>
       )}
       <div className="space-y-3 mb-3">
         {comments.map((c) => (
@@ -775,7 +787,7 @@ function CommentsSection({ taskId }: { taskId: string }) {
                 submit();
               }
             }}
-            placeholder={memberNames.length > 0 ? "Écrire un commentaire… (@nom pour mentionner)" : "Écrire un commentaire… (Entrée pour envoyer)"}
+            placeholder={memberNames.length > 0 ? tr(locale, "Écrire un commentaire… (@nom pour mentionner)", "Write a comment... (@name to mention)") : tr(locale, "Écrire un commentaire… (Entrée pour envoyer)", "Write a comment... (Enter to send)")}
             rows={2}
             className="w-full text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 outline-none focus:border-indigo-400 focus:bg-white dark:focus:bg-gray-600 transition-colors resize-none placeholder-gray-300 dark:placeholder-gray-500"
           />
@@ -817,6 +829,7 @@ function NotesField({
   value: string | null;
   onSave: (v: string | null) => void;
 }) {
+  const locale = localeFromPathname(usePathname());
   const [draft, setDraft] = useState(value ?? "");
 
   useEffect(() => {
@@ -833,7 +846,7 @@ function NotesField({
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={save}
-      placeholder="Ajouter des notes…"
+      placeholder={tr(locale, "Ajouter des notes…", "Add notes...")}
       rows={4}
       className="w-full text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 outline-none focus:border-indigo-400 focus:bg-white dark:focus:bg-gray-600 transition-colors resize-none placeholder-gray-300 dark:placeholder-gray-500"
     />
@@ -852,6 +865,7 @@ function SubtasksSection({
   initialSubtasks: SubtaskWithFields[];
   statusColId: string | null;
 }) {
+  const locale = localeFromPathname(usePathname());
   const [subtasks, setSubtasks] = useState<SubtaskWithFields[]>(initialSubtasks);
   const [draft, setDraft] = useState("");
   const [addingNew, setAddingNew] = useState(false);
@@ -916,7 +930,7 @@ function SubtasksSection({
     const tempId = `temp-sub-${Date.now()}`;
     const temp: SubtaskWithFields = {
       id: tempId, groupId, parentId, title,
-      position: subtasks.length, archivedAt: null, completedAt: null, recurrence: null, createdAt: new Date(), updatedAt: new Date(),
+      position: subtasks.length, archivedAt: null, completedAt: null, reminderOffsetMinutes: null, reminderSentFor: null, recurrence: null, createdAt: new Date(), updatedAt: new Date(),
       fieldValues: [],
     };
     setSubtasks((prev) => [...prev, temp]);
@@ -933,7 +947,7 @@ function SubtasksSection({
     <div className="mt-5 mb-2">
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-          Sous-tâches {subtasks.length > 0 && <span className="font-normal normal-case text-gray-400 dark:text-gray-500">({doneCount}/{subtasks.length})</span>}
+          {tr(locale, "Sous-tâches", "Subtasks")} {subtasks.length > 0 && <span className="font-normal normal-case text-gray-400 dark:text-gray-500">({doneCount}/{subtasks.length})</span>}
         </p>
         <button
           onClick={() => setAddingNew(true)}
@@ -942,7 +956,7 @@ function SubtasksSection({
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path d="M12 4v16m8-8H4" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
-          Ajouter
+          {tr(locale, "Ajouter", "Add")}
         </button>
       </div>
 
@@ -1008,7 +1022,7 @@ function SubtasksSection({
               if (e.key === "Escape") { setDraft(""); setAddingNew(false); }
             }}
             onBlur={handleAdd}
-            placeholder="Titre de la sous-tâche…"
+            placeholder={tr(locale, "Titre de la sous-tâche…", "Subtask title...")}
             className="flex-1 text-sm text-gray-700 dark:text-gray-300 outline-none border-b border-indigo-300 pb-0.5 bg-transparent placeholder-gray-300 dark:placeholder-gray-600 focus:placeholder-gray-200"
           />
         </div>
@@ -1019,7 +1033,7 @@ function SubtasksSection({
           onClick={() => setAddingNew(true)}
           className="w-full border border-dashed border-gray-200 dark:border-gray-700 rounded-lg py-2 text-xs text-gray-400 dark:text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors cursor-pointer"
         >
-          + Ajouter une sous-tâche
+          + {tr(locale, "Ajouter une sous-tâche", "Add a subtask")}
         </button>
       )}
     </div>
@@ -1030,15 +1044,19 @@ function SubtasksSection({
 function FieldRow({
   label,
   column,
+  task,
   fieldValues,
   onSave,
   memberNames = [],
+  readOnlyOwner = false,
 }: {
   label: string;
   column: ProjectColumn;
+  task: { id: string; reminderOffsetMinutes?: number | null };
   fieldValues: TaskWithFields["fieldValues"];
   onSave: (v: string | null) => void;
   memberNames?: string[];
+  readOnlyOwner?: boolean;
 }) {
   const value = getFieldValue(fieldValues, column.id);
 
@@ -1049,7 +1067,7 @@ function FieldRow({
       case "PRIORITY":
         return <SelectCell value={value} options={PRIORITY_OPTIONS} onSave={onSave} />;
       case "DUE_DATE":
-        return <DateCell value={value} onSave={onSave} />;
+        return <DateCell value={value} onSave={onSave} taskId={task.id} reminderOffsetMinutes={task.reminderOffsetMinutes ?? null} />;
       case "TIMELINE":
         return <TimelineCell value={value} onSave={onSave} />;
       case "BUDGET":
@@ -1057,6 +1075,17 @@ function FieldRow({
       case "NOTES":
         return <NotesField value={value} onSave={onSave} />;
       case "OWNER":
+        if (readOnlyOwner) {
+          return (
+            <div className="w-full px-1 py-1 min-h-[24px] flex items-center">
+              {value ? (
+                <span className="text-xs text-gray-700 dark:text-gray-300 truncate">{value}</span>
+              ) : (
+                <span className="text-gray-300 text-xs select-none">—</span>
+              )}
+            </div>
+          );
+        }
         return memberNames.length > 0
           ? <OwnerCell value={value} onSave={onSave} memberNames={memberNames} />
           : <TextCell value={value} onSave={onSave} />;
@@ -1077,7 +1106,7 @@ function FieldRow({
 
 // --- Date formatter ---
 function fmtDate(d: Date | string) {
-  return new Date(d).toLocaleDateString("fr-FR", {
+  return new Date(d).toLocaleDateString(getUiLocale(), {
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -1096,6 +1125,7 @@ interface Props {
   onFieldUpdate: (columnId: string, value: string | null) => void;
   onArchive?: () => void;
   onDuplicate?: () => void;
+  readOnlyOwner?: boolean;
 }
 
 // Avoid unused import warning
@@ -1112,7 +1142,9 @@ export function TaskDetailPanel({
   onFieldUpdate,
   onArchive,
   onDuplicate,
+  readOnlyOwner = false,
 }: Props) {
+  const locale = localeFromPathname(usePathname());
   const { memberNames } = useProjectContext();
   const [titleDraft, setTitleDraft] = useState(task.title);
   const [visible, setVisible] = useState(false);
@@ -1182,7 +1214,7 @@ export function TaskDetailPanel({
                   }
                 }}
                 className="w-full text-[17px] font-semibold text-gray-900 dark:text-gray-50 outline-none bg-transparent leading-snug border-b border-transparent hover:border-gray-200 dark:hover:border-gray-600 focus:border-indigo-400 transition-colors pb-0.5 placeholder-gray-300 dark:placeholder-gray-600"
-                placeholder="Titre de la tâche"
+                placeholder={tr(locale, "Titre de la tâche", "Task title")}
               />
               <div className="flex items-center gap-1.5 mt-2">
                 <div
@@ -1195,7 +1227,7 @@ export function TaskDetailPanel({
             <button
               onClick={onClose}
               className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors cursor-pointer flex-shrink-0 mt-0.5"
-              title="Fermer (Échap)"
+              title={tr(locale, "Fermer (Échap)", "Close (Esc)")}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M6 18L18 6M6 6l12 12" strokeWidth="1.5" strokeLinecap="round" />
@@ -1208,18 +1240,20 @@ export function TaskDetailPanel({
         <div className="flex-1 overflow-y-auto px-6 py-2">
           {columns.length === 0 ? (
             <p className="text-sm text-gray-400 dark:text-gray-500 py-6 text-center">
-              Aucun champ actif dans ce projet.
+              {tr(locale, "Aucun champ actif dans ce projet.", "No active field in this project.")}
             </p>
           ) : (
             <div>
               {columns.map((col) => (
                 <FieldRow
                   key={col.id}
-                  label={col.label}
+                  label={getDisplayColumnLabel(col, locale)}
                   column={col}
+                  task={{ id: task.id, reminderOffsetMinutes: task.reminderOffsetMinutes ?? null }}
                   fieldValues={task.fieldValues}
                   onSave={(value) => onFieldUpdate(col.id, value)}
                   memberNames={memberNames}
+                  readOnlyOwner={readOnlyOwner}
                 />
               ))}
             </div>
@@ -1245,31 +1279,31 @@ export function TaskDetailPanel({
               <button
                 onClick={() => { onDuplicate(); onClose(); }}
                 className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 px-2.5 py-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer border border-transparent hover:border-indigo-200 dark:hover:border-indigo-700"
-                title="Dupliquer la tâche"
+                title={tr(locale, "Dupliquer la tâche", "Duplicate task")}
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <rect x="9" y="9" width="13" height="13" rx="2" strokeWidth="1.5" />
                   <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
-                Dupliquer
+                {tr(locale, "Dupliquer", "Duplicate")}
               </button>
             )}
             {onArchive && (
               <button
                 onClick={() => { onArchive(); onClose(); }}
                 className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-amber-600 px-2.5 py-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors cursor-pointer border border-transparent hover:border-amber-200 dark:hover:border-amber-700"
-                title="Archiver la tâche"
+                title={tr(locale, "Archiver la tâche", "Archive task")}
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                Archiver
+                {tr(locale, "Archiver", "Archive")}
               </button>
             )}
           </div>
           <div className="flex flex-col items-end gap-0.5">
-            <span className="text-[11px] text-gray-400 dark:text-gray-500">Créé le {fmtDate(task.createdAt)}</span>
-            <span className="text-[11px] text-gray-400 dark:text-gray-500">Modifié le {fmtDate(task.updatedAt)}</span>
+            <span className="text-[11px] text-gray-400 dark:text-gray-500">{tr(locale, "Créé le", "Created on")} {fmtDate(task.createdAt)}</span>
+            <span className="text-[11px] text-gray-400 dark:text-gray-500">{tr(locale, "Modifié le", "Updated on")} {fmtDate(task.updatedAt)}</span>
           </div>
         </div>
       </div>

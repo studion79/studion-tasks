@@ -2,7 +2,7 @@
 
 import { writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
-import { prisma, requireMember, projectIdFromTask } from "./_helpers";
+import { prisma, requireMember, projectIdFromTask, emitTaskChanged } from "./_helpers";
 
 export async function getTaskAttachments(taskId: string) {
   return prisma.taskAttachment.findMany({
@@ -12,7 +12,8 @@ export async function getTaskAttachments(taskId: string) {
 }
 
 export async function uploadTaskAttachment(taskId: string, formData: FormData) {
-  await requireMember(await projectIdFromTask(taskId));
+  const projectId = await projectIdFromTask(taskId);
+  await requireMember(projectId);
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) throw new Error("Fichier manquant");
 
@@ -36,14 +37,17 @@ export async function uploadTaskAttachment(taskId: string, formData: FormData) {
       path: `/uploads/${taskId}/${safeName}`,
     },
   });
+  emitTaskChanged(projectId, taskId);
   return attachment;
 }
 
 export async function deleteTaskAttachment(id: string) {
   const attachment = await prisma.taskAttachment.findUnique({ where: { id } });
   if (!attachment) return;
-  await requireMember(await projectIdFromTask(attachment.taskId));
+  const projectId = await projectIdFromTask(attachment.taskId);
+  await requireMember(projectId);
   const filePath = path.join(process.cwd(), "public", attachment.path);
   await unlink(filePath).catch(() => {});
   await prisma.taskAttachment.delete({ where: { id } });
+  emitTaskChanged(projectId, attachment.taskId);
 }

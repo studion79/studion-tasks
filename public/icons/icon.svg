@@ -1,18 +1,53 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#6366f1"/>
-  <!-- Checklist icon -->
-  <!-- Line 1 - checked -->
-  <rect x="160" y="148" width="192" height="20" rx="10" fill="white" opacity="0.3"/>
-  <circle cx="136" cy="158" r="16" fill="white" opacity="0.9"/>
-  <polyline points="127,158 133,164 145,152" stroke="#6366f1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <!-- Line 2 - checked -->
-  <rect x="160" y="208" width="160" height="20" rx="10" fill="white" opacity="0.3"/>
-  <circle cx="136" cy="218" r="16" fill="white" opacity="0.9"/>
-  <polyline points="127,218 133,224 145,212" stroke="#6366f1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  <!-- Line 3 - unchecked -->
-  <rect x="160" y="268" width="180" height="20" rx="10" fill="white" opacity="0.5"/>
-  <circle cx="136" cy="278" r="16" fill="white" opacity="0.2" stroke="white" stroke-width="2"/>
-  <!-- Line 4 - unchecked -->
-  <rect x="160" y="328" width="130" height="20" rx="10" fill="white" opacity="0.5"/>
-  <circle cx="136" cy="338" r="16" fill="white" opacity="0.2" stroke="white" stroke-width="2"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Calque_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 512 512">
+  <!-- Generator: Adobe Illustrator 29.8.1, SVG Export Plug-In . SVG Version: 2.1.1 Build 2)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #1e1e4c;
+      }
+
+      .st1 {
+        opacity: .2;
+        stroke: #fff;
+        stroke-width: 2px;
+      }
+
+      .st1, .st2, .st3, .st4 {
+        fill: #fff;
+        isolation: isolate;
+      }
+
+      .st5 {
+        fill: none;
+        stroke: #6366f1;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 4px;
+      }
+
+      .st2 {
+        opacity: .9;
+      }
+
+      .st3 {
+        opacity: .3;
+      }
+
+      .st4 {
+        opacity: .5;
+      }
+    </style>
+  </defs>
+  <rect class="st0" width="512" height="512" rx="96" ry="96"/>
+  <path class="st3" d="M170,148h172c5.5,0,10,4.5,10,10h0c0,5.5-4.5,10-10,10h-172c-5.5,0-10-4.5-10-10h0c0-5.5,4.5-10,10-10Z"/>
+  <circle class="st2" cx="136" cy="158" r="16"/>
+  <polyline class="st5" points="127 158 133 164 145 152"/>
+  <path class="st3" d="M170,208h140c5.5,0,10,4.5,10,10h0c0,5.5-4.5,10-10,10h-140c-5.5,0-10-4.5-10-10h0c0-5.5,4.5-10,10-10Z"/>
+  <circle class="st2" cx="136" cy="218" r="16"/>
+  <polyline class="st5" points="127 218 133 224 145 212"/>
+  <path class="st4" d="M170,268h160c5.5,0,10,4.5,10,10h0c0,5.5-4.5,10-10,10h-160c-5.5,0-10-4.5-10-10h0c0-5.5,4.5-10,10-10Z"/>
+  <circle class="st1" cx="136" cy="278" r="16"/>
+  <path class="st4" d="M170,328h110c5.5,0,10,4.5,10,10h0c0,5.5-4.5,10-10,10h-110c-5.5,0-10-4.5-10-10h0c0-5.5,4.5-10,10-10Z"/>
+  <circle class="st1" cx="136" cy="338" r="16"/>
 </svg>

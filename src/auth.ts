@@ -64,8 +64,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Credentials({
       credentials: {
-        email: { label: "Identifiant", type: "text" },
-        password: { label: "Mot de passe", type: "password" },
+        email: { label: "Identifier", type: "text" },
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
         const identifier = String(credentials?.email ?? "").trim();
