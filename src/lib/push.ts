@@ -120,14 +120,29 @@ export async function removePushSubscription(endpoint: string): Promise<void> {
   }
 }
 
+export type WebPushSendResult = {
+  total: number;
+  sent: number;
+  failed: number;
+  removed: number;
+  errors: string[];
+};
+
 export async function sendWebPushToUser(params: {
   userId: string;
   title: string;
   body: string;
   url?: string;
   tag?: string;
-}): Promise<void> {
-  if (!isWebPushEnabled()) return;
+}): Promise<WebPushSendResult> {
+  const result: WebPushSendResult = {
+    total: 0,
+    sent: 0,
+    failed: 0,
+    removed: 0,
+    errors: [],
+  };
+  if (!isWebPushEnabled()) return result;
   ensureVapidConfigured();
 
   let rows: StoredSubscription[] = [];
@@ -138,10 +153,11 @@ export async function sendWebPushToUser(params: {
       params.userId
     );
   } catch (error) {
-    if (isMissingTable(error)) return;
+    if (isMissingTable(error)) return result;
     throw error;
   }
-  if (rows.length === 0) return;
+  if (rows.length === 0) return result;
+  result.total = rows.length;
 
   const payload = JSON.stringify({
     title: params.title,
@@ -158,12 +174,18 @@ export async function sendWebPushToUser(params: {
     rows.map(async (row) => {
       try {
         await webpush.sendNotification(toWebPushSubscription(row), payload);
+        result.sent += 1;
       } catch (error) {
+        result.failed += 1;
         const statusCode = (error as { statusCode?: number })?.statusCode;
         if (statusCode === 404 || statusCode === 410) {
           await removePushSubscription(row.endpoint).catch(() => {});
+          result.removed += 1;
         }
+        const message = error instanceof Error ? error.message : String(error);
+        if (message) result.errors.push(message);
       }
     })
   );
+  return result;
 }

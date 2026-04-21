@@ -8,6 +8,7 @@ import { sendMail } from "@/lib/mailer";
 import { getUserLocale } from "@/lib/i18n/server";
 import type { AppLocale } from "@/i18n/config";
 import { publishRealtimeEvent } from "@/lib/realtime";
+import { pickByIsEn } from "@/lib/i18n/pick";
 export { revalidatePath } from "next/cache";
 export { prisma };
 
@@ -110,54 +111,54 @@ function buildPushCopy(type: string, message: string, locale: AppLocale): { titl
   const taskName = extractQuotedTaskName(message);
   const lower = message.toLowerCase();
   const isEn = locale === "en";
-  let title = isEn ? "Team update" : "Mise à jour d'équipe";
+  let title = pickByIsEn(isEn, "Mise à jour d'équipe", "Team update");
   let body = normalizeBody(message);
   let tag = `notif-${type.toLowerCase()}`;
 
   if (type === "TASK_ASSIGNED") {
-    title = isEn ? "New task assigned" : "Nouvelle tâche assignée";
+    title = pickByIsEn(isEn, "Nouvelle tâche assignée", "New task assigned");
     body = taskName
-      ? (isEn ? `“${taskName}” has been assigned to you.` : `“${taskName}” vous est attribuée.`)
-      : (isEn ? "A task has been assigned to you." : "Une tâche vous a été attribuée.");
+      ? (pickByIsEn(isEn, `“${taskName}” vous est attribuée.`, `“${taskName}” has been assigned to you.`))
+      : (pickByIsEn(isEn, "Une tâche vous a été attribuée.", "A task has been assigned to you."));
     tag = taskName ? `task-assigned-${toTagPart(taskName)}` : "task-assigned";
   } else if (type === "COMMENT_ADDED") {
-    title = isEn ? "New comment" : "Nouveau commentaire";
+    title = pickByIsEn(isEn, "Nouveau commentaire", "New comment");
     body = taskName
-      ? (isEn ? `A comment was added on “${taskName}”.` : `Un commentaire a été ajouté sur “${taskName}”.`)
-      : (isEn ? "A comment was added." : "Un commentaire a été ajouté.");
+      ? (pickByIsEn(isEn, `Un commentaire a été ajouté sur “${taskName}”.`, `A comment was added on “${taskName}”.`))
+      : (pickByIsEn(isEn, "Un commentaire a été ajouté.", "A comment was added."));
     tag = taskName ? `comment-${toTagPart(taskName)}` : "comment";
   } else if (type === "MENTIONED") {
-    title = isEn ? "New comment" : "Nouveau commentaire";
+    title = pickByIsEn(isEn, "Nouveau commentaire", "New comment");
     body = taskName
-      ? (isEn ? `You were mentioned on “${taskName}”.` : `Vous avez été mentionné sur “${taskName}”.`)
-      : (isEn ? "You were mentioned in a comment." : "Vous avez été mentionné dans un commentaire.");
+      ? (pickByIsEn(isEn, `Vous avez été mentionné sur “${taskName}”.`, `You were mentioned on “${taskName}”.`))
+      : (pickByIsEn(isEn, "Vous avez été mentionné dans un commentaire.", "You were mentioned in a comment."));
     tag = taskName ? `mention-${toTagPart(taskName)}` : "mention";
   } else if (type === "DUE_DATE_SOON") {
-    if (lower.includes("aujourd") || lower.includes("today")) title = isEn ? "Due today" : "Échéance aujourd'hui";
-    else if (lower.includes("dans 1 jour") || lower.includes("demain") || lower.includes("in 1 day") || lower.includes("tomorrow")) title = isEn ? "Due tomorrow" : "À rendre demain";
-    else title = isEn ? "Due soon" : "Échéance proche";
+    if (lower.includes("aujourd") || lower.includes("today")) title = pickByIsEn(isEn, "Échéance aujourd'hui", "Due today");
+    else if (lower.includes("dans 1 jour") || lower.includes("demain") || lower.includes("in 1 day") || lower.includes("tomorrow")) title = pickByIsEn(isEn, "À rendre demain", "Due tomorrow");
+    else title = pickByIsEn(isEn, "Échéance proche", "Due soon");
     body = taskName
-      ? (isEn ? `“${taskName}” is due soon.` : `“${taskName}” arrive bientôt à échéance.`)
+      ? (pickByIsEn(isEn, `“${taskName}” arrive bientôt à échéance.`, `“${taskName}” is due soon.`))
       : normalizeBody(message);
     tag = taskName ? `due-${toTagPart(taskName)}` : "due-soon";
   } else if (type === "OVERDUE") {
-    title = isEn ? "Past due" : "Échéance dépassée";
+    title = pickByIsEn(isEn, "Échéance dépassée", "Past due");
     body = taskName
-      ? (isEn ? `“${taskName}” was not completed on time.` : `“${taskName}” n'a pas été finalisée à temps.`)
-      : (isEn ? "A task is past due." : "Une tâche dépasse sa date d'échéance.");
+      ? (pickByIsEn(isEn, `“${taskName}” n'a pas été finalisée à temps.`, `“${taskName}” was not completed on time.`))
+      : (pickByIsEn(isEn, "Une tâche dépasse sa date d'échéance.", "A task is past due."));
     tag = taskName ? `overdue-${toTagPart(taskName)}` : "overdue";
   } else if (type === "DAILY_SUMMARY") {
-    title = isEn ? "Morning brief" : "Point du matin";
+    title = pickByIsEn(isEn, "Point du matin", "Morning brief");
     body = message.trim();
     tag = "daily-summary";
   } else if (type === "AUTOMATION") {
-    title = isEn ? "Team update" : "Mise à jour d'équipe";
+    title = pickByIsEn(isEn, "Mise à jour d'équipe", "Team update");
     body = taskName
-      ? (isEn ? `“${taskName}” was updated automatically.` : `“${taskName}” a été mise à jour automatiquement.`)
-      : (isEn ? "An automation updated a task." : "Une automatisation a modifié une tâche.");
+      ? (pickByIsEn(isEn, `“${taskName}” a été mise à jour automatiquement.`, `“${taskName}” was updated automatically.`))
+      : (pickByIsEn(isEn, "Une automatisation a modifié une tâche.", "An automation updated a task."));
     tag = taskName ? `automation-${toTagPart(taskName)}` : "automation";
   } else if (type === "INVITATION") {
-    title = isEn ? "New activity" : "Nouvelle activité";
+    title = pickByIsEn(isEn, "Nouvelle activité", "New activity");
     body = normalizeBody(message);
     tag = "invitation";
   }
@@ -192,7 +193,7 @@ function notificationEmailHtml(params: {
     </div>
     <div style="padding:22px;">
       <p style="margin:0 0 18px;color:#374151;font-size:15px;line-height:1.6;">${bodyHtml}</p>
-      <a href="${params.actionUrl}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 16px;border-radius:10px;font-size:14px;font-weight:600;">${isEn ? "Open Task App" : "Ouvrir Task App"}</a>
+      <a href="${params.actionUrl}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 16px;border-radius:10px;font-size:14px;font-weight:600;">${pickByIsEn(isEn, "Ouvrir Task App", "Open Task App")}</a>
     </div>
   </div>
 </body>
@@ -230,6 +231,104 @@ function resolveAppUrl(): string {
   }
 
   return "http://localhost:3000";
+}
+
+function getNotificationUrl(params: {
+  type: string;
+  taskId?: string;
+  projectId?: string;
+}): string {
+  const { type, taskId, projectId } = params;
+  if (projectId && taskId) {
+    const base = `/projects/${projectId}?taskId=${encodeURIComponent(taskId)}`;
+    if (type === "COMMENT_ADDED" || type === "MENTIONED") {
+      return `${base}&focus=comments`;
+    }
+    return base;
+  }
+  if (projectId) return `/projects/${projectId}`;
+  if (type === "INVITATION") return "/";
+  if (type === "DAILY_SUMMARY") return "/";
+  return "/";
+}
+
+function isDailySummaryText(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("tâches à suivre") || normalized.includes("tasks to follow");
+}
+
+async function retry<T>(fn: () => Promise<T>, attempts = 2): Promise<T> {
+  let lastError: unknown = null;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (i < attempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 200 * (i + 1)));
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
+let deliveryLogTableEnsured = false;
+async function ensureNotificationDeliveryLogTable(): Promise<void> {
+  if (deliveryLogTableEnsured) return;
+  await prisma.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "NotificationDeliveryLog" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "notificationId" TEXT,
+      "userId" TEXT NOT NULL,
+      "type" TEXT NOT NULL,
+      "channel" TEXT NOT NULL,
+      "status" TEXT NOT NULL,
+      "reason" TEXT,
+      "taskId" TEXT,
+      "projectId" TEXT,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "NotificationDeliveryLog_userId_createdAt_idx"
+     ON "NotificationDeliveryLog"("userId","createdAt")`
+  );
+  await prisma.$executeRawUnsafe(
+    `CREATE INDEX IF NOT EXISTS "NotificationDeliveryLog_notificationId_idx"
+     ON "NotificationDeliveryLog"("notificationId")`
+  );
+  deliveryLogTableEnsured = true;
+}
+
+async function logDelivery(params: {
+  notificationId?: string | null;
+  userId: string;
+  type: string;
+  channel: "PUSH" | "EMAIL";
+  status: "SENT" | "FAILED" | "SKIPPED";
+  reason?: string | null;
+  taskId?: string | null;
+  projectId?: string | null;
+}): Promise<void> {
+  try {
+    await ensureNotificationDeliveryLogTable();
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "NotificationDeliveryLog"
+       ("id","notificationId","userId","type","channel","status","reason","taskId","projectId","createdAt")
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      crypto.randomUUID(),
+      params.notificationId ?? null,
+      params.userId,
+      params.type,
+      params.channel,
+      params.status,
+      params.reason ?? null,
+      params.taskId ?? null,
+      params.projectId ?? null
+    );
+  } catch {
+    // non-blocking
+  }
 }
 
 /** Throws 401 if no session; returns the current user id */
@@ -366,23 +465,46 @@ export async function notifyUser(
   projectId?: string
 ) {
   try {
+    if (message.trim().length === 0) return;
+    let effectiveProjectId = projectId;
+    if (!effectiveProjectId && taskId) {
+      const taskRow = await prisma.task.findUnique({
+        where: { id: taskId },
+        select: { group: { select: { projectId: true } } },
+      });
+      effectiveProjectId = taskRow?.group.projectId ?? undefined;
+    }
     const locale = await getUserLocale(userId);
     const pref = await prisma.userNotificationPreference.findUnique({
       where: { userId_type: { userId, type } },
     });
     if (pref && !pref.enabled) return;
 
+    const recentDuplicate = await prisma.notification.findFirst({
+      where: {
+        userId,
+        type,
+        taskId: taskId ?? null,
+        projectId: effectiveProjectId ?? null,
+        message,
+        createdAt: { gte: new Date(Date.now() - 30_000) },
+      },
+      select: { id: true },
+      orderBy: { createdAt: "desc" },
+    });
+    if (recentDuplicate) return;
+
     const copy = buildPushCopy(type, message, locale);
     const notificationMessage = type === "DAILY_SUMMARY"
       ? message
       : copy.body;
 
-    await prisma.notification.create({
-      data: { userId, type, message: notificationMessage, taskId: taskId ?? null, projectId: projectId ?? null },
+    const notification = await prisma.notification.create({
+      data: { userId, type, message: notificationMessage, taskId: taskId ?? null, projectId: effectiveProjectId ?? null },
     });
-    emitNotificationChanged(userId, projectId);
-    if (projectId) {
-      emitProjectChanged(projectId, taskId);
+    emitNotificationChanged(userId, effectiveProjectId);
+    if (effectiveProjectId) {
+      emitProjectChanged(effectiveProjectId, taskId);
     }
 
     let settings: {
@@ -421,43 +543,206 @@ export async function notifyUser(
         })
       : false;
 
-    const url =
-      projectId && taskId
-        ? `/projects/${projectId}?taskId=${encodeURIComponent(taskId)}`
-        : projectId
-          ? `/projects/${projectId}`
-          : "/";
-    if (!dndActive && (settings?.pushEnabled ?? true)) {
-      await sendWebPushToUser({
+    const url = getNotificationUrl({ type, projectId: effectiveProjectId, taskId });
+    const pushEnabled = settings?.pushEnabled ?? true;
+    const emailEnabled = settings?.emailEnabled ?? false;
+
+    if (dndActive) {
+      await logDelivery({
+        notificationId: notification.id,
         userId,
-        title: copy.title,
-        body: copy.body,
-        url,
-        tag: taskId ? `${copy.tag}-${taskId}` : copy.tag,
+        type,
+        channel: "PUSH",
+        status: "SKIPPED",
+        reason: "DND_ACTIVE",
+        taskId,
+        projectId: effectiveProjectId,
       });
+    } else if (!pushEnabled) {
+      await logDelivery({
+        notificationId: notification.id,
+        userId,
+        type,
+        channel: "PUSH",
+        status: "SKIPPED",
+        reason: "PUSH_DISABLED",
+        taskId,
+        projectId: effectiveProjectId,
+      });
+    } else {
+      try {
+        const pushResult = await retry(
+          () =>
+            sendWebPushToUser({
+              userId,
+              title: copy.title,
+              body: copy.body,
+              url,
+              tag: taskId ? `${copy.tag}-${taskId}` : copy.tag,
+            }),
+          2
+        );
+        if (pushResult.total === 0) {
+          await logDelivery({
+            notificationId: notification.id,
+            userId,
+            type,
+            channel: "PUSH",
+            status: "SKIPPED",
+            reason: "NO_SUBSCRIPTION",
+            taskId,
+            projectId: effectiveProjectId,
+          });
+        } else if (pushResult.sent > 0) {
+          await logDelivery({
+            notificationId: notification.id,
+            userId,
+            type,
+            channel: "PUSH",
+            status: "SENT",
+            reason: `sent=${pushResult.sent},failed=${pushResult.failed}`,
+            taskId,
+            projectId: effectiveProjectId,
+          });
+        } else {
+          await logDelivery({
+            notificationId: notification.id,
+            userId,
+            type,
+            channel: "PUSH",
+            status: "FAILED",
+            reason: pushResult.errors[0] ?? "PUSH_SEND_FAILED",
+            taskId,
+            projectId: effectiveProjectId,
+          });
+        }
+      } catch (error) {
+        await logDelivery({
+          notificationId: notification.id,
+          userId,
+          type,
+          channel: "PUSH",
+          status: "FAILED",
+          reason: error instanceof Error ? error.message : String(error),
+          taskId,
+          projectId: effectiveProjectId,
+        });
+      }
     }
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true, name: true },
+      select: { email: true },
     });
-    if (user?.email && settings?.emailEnabled && !dndActive) {
+    if (!user?.email) {
+      await logDelivery({
+        notificationId: notification.id,
+        userId,
+        type,
+        channel: "EMAIL",
+        status: "SKIPPED",
+        reason: "NO_EMAIL",
+        taskId,
+        projectId: effectiveProjectId,
+      });
+      return;
+    }
+
+    if (dndActive) {
+      await logDelivery({
+        notificationId: notification.id,
+        userId,
+        type,
+        channel: "EMAIL",
+        status: "SKIPPED",
+        reason: "DND_ACTIVE",
+        taskId,
+        projectId: effectiveProjectId,
+      });
+      return;
+    }
+
+    if (!emailEnabled) {
+      await logDelivery({
+        notificationId: notification.id,
+        userId,
+        type,
+        channel: "EMAIL",
+        status: "SKIPPED",
+        reason: "EMAIL_DISABLED",
+        taskId,
+        projectId: effectiveProjectId,
+      });
+      return;
+    }
+
+    try {
       const actionUrl = new URL(url, resolveAppUrl()).toString();
-      await sendMail({
-        to: user.email,
-        subject: `[Task App] ${copy.title}`,
-        html: notificationEmailHtml({
-          locale,
-          title: copy.title,
-          body: copy.body,
-          actionUrl,
-        }),
-        text: `${copy.title}\n\n${copy.body}\n\n${actionUrl}`,
+      const emailBody = type === "DAILY_SUMMARY" || isDailySummaryText(message)
+        ? message
+        : copy.body;
+      await retry(
+        () =>
+          sendMail({
+            to: user.email,
+            subject: `[Task App] ${copy.title}`,
+            html: notificationEmailHtml({
+              locale,
+              title: copy.title,
+              body: emailBody,
+              actionUrl,
+            }),
+            text: `${copy.title}\n\n${emailBody}\n\n${actionUrl}`,
+          }),
+        2
+      );
+      await logDelivery({
+        notificationId: notification.id,
+        userId,
+        type,
+        channel: "EMAIL",
+        status: "SENT",
+        taskId,
+        projectId: effectiveProjectId,
+      });
+    } catch (error) {
+      await logDelivery({
+        notificationId: notification.id,
+        userId,
+        type,
+        channel: "EMAIL",
+        status: "FAILED",
+        reason: error instanceof Error ? error.message : String(error),
+        taskId,
+        projectId: effectiveProjectId,
       });
     }
   } catch {
     // notifications are non-critical
   }
+}
+
+export async function getNotificationDeliveryLog(limit = 200) {
+  await ensureNotificationDeliveryLogTable();
+  const rows = await prisma.$queryRawUnsafe<Array<{
+    id: string;
+    notificationId: string | null;
+    userId: string;
+    type: string;
+    channel: string;
+    status: string;
+    reason: string | null;
+    taskId: string | null;
+    projectId: string | null;
+    createdAt: string;
+  }>>(
+    `SELECT "id","notificationId","userId","type","channel","status","reason","taskId","projectId","createdAt"
+     FROM "NotificationDeliveryLog"
+     ORDER BY "createdAt" DESC
+     LIMIT ?`,
+    Math.max(1, Math.min(1000, Math.floor(limit)))
+  );
+  return rows;
 }
 
 /** Find a project member by display name */
@@ -467,4 +752,18 @@ export async function findUserByNameInProject(projectId: string, name: string) {
     include: { user: true },
   });
   return member?.user ?? null;
+}
+
+/** Resolve an OWNER field value to a member user (supports userId and legacy display-name values). */
+export async function findUserByOwnerValueInProject(projectId: string, ownerValue: string) {
+  const normalized = ownerValue.trim();
+  if (!normalized) return null;
+
+  const byId = await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId: normalized } },
+    include: { user: true },
+  });
+  if (byId?.user) return byId.user;
+
+  return findUserByNameInProject(projectId, normalized);
 }

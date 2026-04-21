@@ -8,7 +8,7 @@ import {
   projectIdFromGroup,
   logActivity,
   notifyUser,
-  findUserByNameInProject,
+  findUserByOwnerValueInProject,
   emitTaskChanged,
   emitProjectChanged,
   emitArchiveChanged,
@@ -18,9 +18,9 @@ import { composeDateTimeValue, hasExplicitTime } from "@/lib/task-schedule";
 
 const INBOX_GROUP_NAME = "À trier";
 
-async function getPersonalOwnerForProject(projectId: string): Promise<string | null> {
-  const rows = await prisma.$queryRawUnsafe<Array<{ isPersonal: number; ownerName: string | null }>>(
-    `SELECT p."isPersonal" as isPersonal, u."name" as ownerName
+async function getPersonalOwnerForProject(projectId: string): Promise<{ ownerId: string; ownerName: string } | null> {
+  const rows = await prisma.$queryRawUnsafe<Array<{ isPersonal: number; ownerId: string | null; ownerName: string | null }>>(
+    `SELECT p."isPersonal" as isPersonal, u."id" as ownerId, u."name" as ownerName
      FROM "Project" p
      LEFT JOIN "User" u ON u."id" = p."personalOwnerId"
      WHERE p."id" = ?
@@ -28,13 +28,13 @@ async function getPersonalOwnerForProject(projectId: string): Promise<string | n
     projectId
   );
   const row = rows[0];
-  if (!row || !Boolean(row.isPersonal) || !row.ownerName) return null;
-  return row.ownerName;
+  if (!row || !Boolean(row.isPersonal) || !row.ownerName || !row.ownerId) return null;
+  return { ownerId: row.ownerId, ownerName: row.ownerName };
 }
 
 async function forceOwnerForTaskIfPersonal(taskId: string, projectId: string): Promise<void> {
-  const ownerName = await getPersonalOwnerForProject(projectId);
-  if (!ownerName) return;
+  const owner = await getPersonalOwnerForProject(projectId);
+  if (!owner) return;
   const ownerColumn = await prisma.projectColumn.findFirst({
     where: { projectId, type: "OWNER" },
     orderBy: { position: "asc" },
@@ -43,8 +43,8 @@ async function forceOwnerForTaskIfPersonal(taskId: string, projectId: string): P
   if (!ownerColumn) return;
   await prisma.taskFieldValue.upsert({
     where: { taskId_columnId: { taskId, columnId: ownerColumn.id } },
-    create: { taskId, columnId: ownerColumn.id, value: ownerName },
-    update: { value: ownerName },
+    create: { taskId, columnId: ownerColumn.id, value: owner.ownerId },
+    update: { value: owner.ownerId },
   });
 }
 
@@ -99,7 +99,7 @@ async function runAutomations(taskId: string, changedFieldType: string, newValue
     } else if (action.type === "NOTIFY_OWNER") {
       const ownerFv = task.fieldValues.find((fv) => fv.column.type === "OWNER");
       if (ownerFv?.value) {
-        const ownerUser = await findUserByNameInProject(task.group.projectId, ownerFv.value);
+        const ownerUser = await findUserByOwnerValueInProject(task.group.projectId, ownerFv.value);
         if (ownerUser) {
           await notifyUser(
             ownerUser.id,
@@ -239,9 +239,12 @@ export async function upsertTaskField(
       : value;
 
   if (col?.type === "OWNER") {
-    const personalOwnerName = await getPersonalOwnerForProject(projectId);
-    if (personalOwnerName) {
-      normalizedValue = personalOwnerName;
+    const personalOwner = await getPersonalOwnerForProject(projectId);
+    if (personalOwner) {
+      normalizedValue = personalOwner.ownerId;
+    } else if (normalizedValue) {
+      const ownerUser = await findUserByOwnerValueInProject(projectId, normalizedValue);
+      if (ownerUser) normalizedValue = ownerUser.id;
     }
   }
 
@@ -297,7 +300,7 @@ export async function upsertTaskField(
       include: { group: { include: { project: true } } },
     });
     if (task) {
-      const assignee = await findUserByNameInProject(task.group.projectId, normalizedValue);
+      const assignee = await findUserByOwnerValueInProject(task.group.projectId, normalizedValue);
       if (assignee) {
         await notifyUser(
           assignee.id,
@@ -464,10 +467,17 @@ export async function duplicateTask(taskId: string) {
   });
   if (!task) throw new Error("Task not found");
   await requireMember(task.group.projectId);
-  const count = await prisma.task.count({ where: { groupId: task.groupId, archivedAt: null } });
+  const count = await prisma.task.count({
+    where: {
+      groupId: task.groupId,
+      archivedAt: null,
+      parentId: task.parentId,
+    },
+  });
   const duplicated = await prisma.task.create({
     data: {
       groupId: task.groupId,
+      parentId: task.parentId,
       title: `${task.title} (copy)`,
       position: count,
       fieldValues: {
@@ -494,9 +504,12 @@ export async function bulkUpdateTaskField(taskIds: string[], columnId: string, v
 
   let effectiveValue = value;
   if (column?.type === "OWNER") {
-    const personalOwnerName = await getPersonalOwnerForProject(projectId);
-    if (personalOwnerName) {
-      effectiveValue = personalOwnerName;
+    const personalOwner = await getPersonalOwnerForProject(projectId);
+    if (personalOwner) {
+      effectiveValue = personalOwner.ownerId;
+    } else if (effectiveValue) {
+      const ownerUser = await findUserByOwnerValueInProject(projectId, effectiveValue);
+      if (ownerUser) effectiveValue = ownerUser.id;
     }
   }
 

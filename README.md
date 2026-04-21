@@ -1,5 +1,16 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Quality and operations
+
+```bash
+npm run audit:i18n
+npm run release:check
+npm run lint:quality
+npm run e2e
+```
+
+See `OPERATIONS.md` for release, backups, restore checks, and monitoring.
+
 ## Getting Started
 
 First, run the development server:

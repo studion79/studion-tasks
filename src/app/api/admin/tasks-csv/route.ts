@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { isSuperAdminUserId } from "@/lib/super-admin";
 import { getRequestLocale } from "@/lib/i18n/server";
+import { pickByIsEn, pickByLocale } from "@/lib/i18n/pick";
 
 type SessionUser = {
   id?: string;
@@ -25,19 +26,22 @@ function recurrenceLabel(recurrence: string | null, isEn: boolean): { rule: stri
     };
     const interval = Math.max(1, Number(parsed.interval ?? 1));
     const frequency = parsed.frequency ?? "weekly";
-    const unitMap: Record<string, string> = isEn ? {
+    const unitMapEn: Record<string, string> = {
       daily: "day(s)",
       weekly: "week(s)",
       monthly: "month(s)",
-    } : {
+    };
+    const unitMapFr: Record<string, string> = {
       daily: "jour(s)",
       weekly: "semaine(s)",
       monthly: "mois",
     };
+    const unitMap = { ...unitMapFr };
+    if (isEn) {
+      Object.assign(unitMap, unitMapEn);
+    }
     return {
-      rule: isEn
-        ? `every ${interval} ${unitMap[frequency] ?? frequency}`
-        : `tous les ${interval} ${unitMap[frequency] ?? frequency}`,
+      rule: pickByIsEn(isEn, `tous les ${interval} ${unitMap[frequency] ?? frequency}`, `every ${interval} ${unitMap[frequency] ?? frequency}`),
       endDate: parsed.endDate ?? "",
     };
   } catch {
@@ -52,7 +56,7 @@ export async function GET(request: Request) {
   const user = session?.user as SessionUser | undefined;
   const isSuperAdmin = Boolean(user?.isSuperAdmin) || isSuperAdminUserId(user?.id);
   if (!isSuperAdmin) {
-    return new Response(isEn ? "Access denied" : "Accès refusé", { status: 403 });
+    return new Response(pickByIsEn(isEn, "Accès refusé", "Access denied"), { status: 403 });
   }
 
   const tasks = await prisma.task.findMany({

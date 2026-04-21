@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { getRequestLocale } from "@/lib/i18n/server";
 import { publishRealtimeEvent } from "@/lib/realtime";
+import { pickByIsEn, pickByLocale } from "@/lib/i18n/pick";
 
 let settingsTableEnsured = false;
 async function ensureNotificationSettingsTable(): Promise<void> {
@@ -52,7 +53,7 @@ export async function GET(req: Request) {
   const isEn = locale === "en";
   const session = await auth();
   const userId = session?.user?.id;
-  if (!userId) return Response.json({ ok: false, error: isEn ? "Not authenticated." : "Non authentifié" }, { status: 401 });
+  if (!userId) return Response.json({ ok: false, error: pickByIsEn(isEn, "Non authentifié", "Not authenticated.") }, { status: 401 });
 
   await ensureNotificationSettingsTable();
   const rows = await prisma.$queryRawUnsafe<Array<{ pushEnabled: boolean }>>(
@@ -74,7 +75,7 @@ export async function POST(req: Request) {
   const isEn = locale === "en";
   const session = await auth();
   const userId = session?.user?.id;
-  if (!userId) return Response.json({ ok: false, error: isEn ? "Not authenticated." : "Non authentifié" }, { status: 401 });
+  if (!userId) return Response.json({ ok: false, error: pickByIsEn(isEn, "Non authentifié", "Not authenticated.") }, { status: 401 });
 
   const body = (await req.json().catch(() => ({}))) as { pushEnabled?: boolean };
   const pushEnabled = Boolean(body.pushEnabled);

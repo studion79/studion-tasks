@@ -21,7 +21,22 @@ export type RealtimeEvent = {
 
 type RealtimeSubscriber = (event: RealtimeEvent) => void;
 
-const subscribers = new Map<string, RealtimeSubscriber>();
+type RealtimeBusState = {
+  subscribers: Map<string, RealtimeSubscriber>;
+};
+
+declare global {
+  var __taskAppRealtimeBus: RealtimeBusState | undefined;
+}
+
+function getRealtimeBus(): RealtimeBusState {
+  if (!globalThis.__taskAppRealtimeBus) {
+    globalThis.__taskAppRealtimeBus = {
+      subscribers: new Map<string, RealtimeSubscriber>(),
+    };
+  }
+  return globalThis.__taskAppRealtimeBus;
+}
 
 function toIsoNow() {
   return new Date().toISOString();
@@ -35,16 +50,18 @@ function newEventId() {
 }
 
 function subscribeRealtime(listener: RealtimeSubscriber): () => void {
+  const bus = getRealtimeBus();
   const id = newEventId();
-  subscribers.set(id, listener);
+  bus.subscribers.set(id, listener);
   return () => {
-    subscribers.delete(id);
+    bus.subscribers.delete(id);
   };
 }
 
 export function publishRealtimeEvent(
   event: Omit<RealtimeEvent, "id" | "timestamp"> & Partial<Pick<RealtimeEvent, "id" | "timestamp">>
 ) {
+  const bus = getRealtimeBus();
   const normalized: RealtimeEvent = {
     id: event.id ?? newEventId(),
     timestamp: event.timestamp ?? toIsoNow(),
@@ -55,7 +72,7 @@ export function publishRealtimeEvent(
     userId: event.userId,
   };
 
-  for (const listener of subscribers.values()) {
+  for (const listener of bus.subscribers.values()) {
     try {
       listener(normalized);
     } catch {
@@ -91,4 +108,3 @@ export function parseRequestedScopes(raw: string | null | undefined): RealtimeSc
   }
   return Array.from(unique);
 }
-

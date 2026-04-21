@@ -13,6 +13,7 @@ model User {
   name      String
   password  String
   avatar    String?
+  emailVerifiedAt DateTime?
   createdAt DateTime @default(now())
 
   projectMembers        ProjectMember[]
@@ -22,12 +23,29 @@ model User {
   notificationSettings  UserNotificationSettings?
   projectGroups         UserProjectGroup[]
   personalProjectsOwned Project[]                   @relation("PersonalProjectOwner")
+  emailVerificationTokens EmailVerificationToken[]
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  inviteToken String?
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model UserProjectGroup {
   id        String          @id @default(cuid())
   userId    String
   name      String
+  description String?
   position  Int             @default(0)
   createdAt DateTime        @default(now())
 
@@ -67,6 +85,7 @@ model ProjectMember {
   userId       String
   role         MemberRole        @default(MEMBER)
   isPinned     Boolean           @default(false)
+  projectOrder Int               @default(0)
   userGroupId  String?
   createdAt    DateTime          @default(now())
 
@@ -167,13 +186,18 @@ model ProjectDashboardWidget {
 model Group {
   id        String   @id @default(cuid())
   projectId String
+  parentId  String?
   name      String
   color     String   @default("#6366f1")
   position  Int      @default(0)
   createdAt DateTime @default(now())
 
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent    Group?   @relation("GroupTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Group[]  @relation("GroupTree")
   tasks     Task[]
+
+  @@index([projectId, parentId, position])
 }
 
 model Task {

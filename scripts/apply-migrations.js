@@ -3,6 +3,7 @@ const { PrismaLibSql } = require("@prisma/adapter-libsql");
 const { PrismaClient } = require("../src/generated/prisma");
 const path = require("path");
 const fs = require("fs");
+const MIGRATION_TABLE = "__app_migrations";
 
 const AVAILABLE_COLUMNS = [
   { type: "OWNER", label: "Owner", defaultActive: true },
@@ -71,6 +72,55 @@ function personalProjectData(name) {
   };
 }
 
+async function ensureMigrationTable(prisma) {
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "${MIGRATION_TABLE}" (
+      "name" TEXT NOT NULL PRIMARY KEY,
+      "appliedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+}
+
+async function tableExists(prisma, tableName) {
+  const rows = await prisma.$queryRawUnsafe(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;",
+    tableName
+  );
+  return Array.isArray(rows) && rows.length > 0;
+}
+
+async function columnExists(prisma, tableName, columnName) {
+  const rows = await prisma.$queryRawUnsafe(`PRAGMA table_info("${tableName}");`);
+  return Array.isArray(rows) && rows.some((row) => String(row.name) === columnName);
+}
+
+async function getAppliedMigrations(prisma) {
+  const rows = await prisma.$queryRawUnsafe(`SELECT name FROM "${MIGRATION_TABLE}";`);
+  return new Set((rows ?? []).map((row) => String(row.name)));
+}
+
+async function markApplied(prisma, migrationName) {
+  await prisma.$executeRawUnsafe(
+    `INSERT OR IGNORE INTO "${MIGRATION_TABLE}" ("name") VALUES (?);`,
+    migrationName
+  );
+}
+
+async function alreadyAppliedBySchema(prisma, migrationName) {
+  // Legacy guard: these old "RedefineTables" migrations are destructive if replayed.
+  // We detect whether their target schema is already present and skip replay safely.
+  if (migrationName === "20260324221416_add_users_and_members") {
+    const userTable = await tableExists(prisma, "User");
+    const memberTable = await tableExists(prisma, "ProjectMember");
+    const commentUserId = await columnExists(prisma, "Comment", "userId");
+    return userTable && memberTable && commentUserId;
+  }
+  if (migrationName === "20260324222540_add_subtasks") {
+    return columnExists(prisma, "Task", "parentId");
+  }
+  return false;
+}
+
 async function run() {
   const dbUrl =
     process.env.LIBSQL_DATABASE_URL ??
@@ -79,12 +129,30 @@ async function run() {
   const adapter = new PrismaLibSql({ url: dbUrl });
   const prisma = new PrismaClient({ adapter });
 
+  await ensureMigrationTable(prisma);
+
   const migrations = fs.readdirSync(migrationsDir).sort();
+  let applied = await getAppliedMigrations(prisma);
+
   for (const migration of migrations) {
     const sqlPath = path.join(migrationsDir, migration, "migration.sql");
     if (!fs.existsSync(sqlPath)) continue;
+
+    if (applied.has(migration)) {
+      console.log("Skipped:", migration);
+      continue;
+    }
+
+    if (await alreadyAppliedBySchema(prisma, migration)) {
+      await markApplied(prisma, migration);
+      applied.add(migration);
+      console.log("Recorded (already applied):", migration);
+      continue;
+    }
+
     const sql = fs.readFileSync(sqlPath, "utf8");
     const statements = sql.split(";").map((s) => s.trim()).filter(Boolean);
+
     for (const stmt of statements) {
       try {
         await prisma.$executeRawUnsafe(stmt + ";");
@@ -93,6 +161,8 @@ async function run() {
         if (!harmless.some((msg) => e.message.includes(msg))) throw e;
       }
     }
+    await markApplied(prisma, migration);
+    applied.add(migration);
     console.log("Applied:", migration);
   }
 

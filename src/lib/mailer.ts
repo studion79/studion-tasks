@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
 import nodemailer from "nodemailer";
 import type { AppLocale } from "@/i18n/config";
+import { pickByIsEn, pickByLocale } from "@/lib/i18n/pick";
 
 const FROM = (process.env.EMAIL_FROM ?? "Task App <contact@studio-n.fr>").trim();
 const SENDMAIL_PATH = (process.env.SENDMAIL_PATH ?? "/usr/sbin/sendmail").trim();
@@ -125,8 +126,8 @@ export function invitationEmailHtml({
 }): string {
   const isEn = locale === "en";
   const action = hasAccount
-    ? (isEn ? "Accept invitation" : "Accepter l'invitation")
-    : (isEn ? "Create account and join" : "Créer mon compte et rejoindre");
+    ? (pickByIsEn(isEn, "Accepter l'invitation", "Accept invitation"))
+    : (pickByIsEn(isEn, "Créer mon compte et rejoindre", "Create account and join"));
 
   return `
 <!DOCTYPE html>
@@ -135,25 +136,21 @@ export function invitationEmailHtml({
 <body style="margin:0;padding:0;background:#f8fafc;font-family:system-ui,-apple-system,sans-serif;">
   <div style="max-width:520px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
     <div style="background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);padding:32px 40px;">
-      <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">${isEn ? "Project invitation" : "Invitation à rejoindre un projet"}</h1>
+      <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">${pickByIsEn(isEn, "Invitation à rejoindre un projet", "Project invitation")}</h1>
     </div>
     <div style="padding:32px 40px;">
       <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.6;">
         ${
-          isEn
-            ? `<strong>${inviterName}</strong> invited you to join project <strong>${projectName}</strong>.`
-            : `<strong>${inviterName}</strong> vous invite à rejoindre le projet <strong>${projectName}</strong>.`
+          pickByIsEn(isEn, `<strong>${inviterName}</strong> vous invite à rejoindre le projet <strong>${projectName}</strong>.`, `<strong>${inviterName}</strong> invited you to join project <strong>${projectName}</strong>.`)
         }
       </p>
       ${
         !hasAccount
           ? `<p style="margin:0 0 24px;color:#6b7280;font-size:14px;line-height:1.6;">${
-              isEn
-                ? "You don't have an account yet. Click below to create one and join this project automatically."
-                : "Vous n'avez pas encore de compte. Cliquez sur le bouton ci-dessous pour en créer un et rejoindre le projet automatiquement."
+              pickByIsEn(isEn, "Vous n'avez pas encore de compte. Cliquez sur le bouton ci-dessous pour en créer un et rejoindre le projet automatiquement.", "You don't have an account yet. Click below to create one and join this project automatically.")
             }</p>`
           : `<p style="margin:0 0 24px;color:#6b7280;font-size:14px;line-height:1.6;">${
-              isEn ? "Sign in to accept this invitation." : "Connectez-vous pour accepter l'invitation."
+              pickByIsEn(isEn, "Connectez-vous pour accepter l'invitation.", "Sign in to accept this invitation.")
             }</p>`
       }
       <a href="${inviteUrl}"
@@ -162,10 +159,47 @@ export function invitationEmailHtml({
       </a>
       <p style="margin:24px 0 0;color:#9ca3af;font-size:12px;">
         ${
-          isEn
-            ? "This link is valid for 7 days. If you don't want to join this project, you can ignore this email."
-            : "Ce lien est valable 7 jours. Si vous ne souhaitez pas rejoindre ce projet, ignorez cet email."
+          pickByIsEn(isEn, "Ce lien est valable 7 jours. Si vous ne souhaitez pas rejoindre ce projet, ignorez cet email.", "This link is valid for 7 days. If you don't want to join this project, you can ignore this email.")
         }
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+export function emailVerificationHtml({
+  locale,
+  name,
+  verifyUrl,
+}: {
+  locale: AppLocale;
+  name: string;
+  verifyUrl: string;
+}): string {
+  const isEn = locale === "en";
+  return `
+<!DOCTYPE html>
+<html lang="${locale}">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:system-ui,-apple-system,sans-serif;">
+  <div style="max-width:520px;margin:40px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+    <div style="background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);padding:32px 40px;">
+      <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;">${pickByIsEn(isEn, "Confirmez votre email", "Confirm your email")}</h1>
+    </div>
+    <div style="padding:32px 40px;">
+      <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.6;">
+        ${pickByIsEn(isEn, `Bonjour <strong>${name}</strong>,`, `Hi <strong>${name}</strong>,`)}
+      </p>
+      <p style="margin:0 0 24px;color:#6b7280;font-size:14px;line-height:1.6;">
+        ${pickByIsEn(isEn, "Cliquez sur le bouton ci-dessous pour confirmer votre adresse email et finaliser la création de votre compte Task App.", "Click the button below to confirm your email address and finish creating your Task App account.")}
+      </p>
+      <a href="${verifyUrl}"
+         style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-size:14px;font-weight:600;">
+        ${pickByIsEn(isEn, "Confirmer mon email", "Confirm my email")}
+      </a>
+      <p style="margin:24px 0 0;color:#9ca3af;font-size:12px;line-height:1.5;">
+        ${pickByIsEn(isEn, "Ce lien est valable 24 heures. Si vous n'avez pas demandé la création de ce compte, vous pouvez ignorer cet email.", "This link is valid for 24 hours. If you did not request this account, you can ignore this email.")}
       </p>
     </div>
   </div>

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { isSuperAdminUserId } from "@/lib/super-admin";
 import { getRequestLocale } from "@/lib/i18n/server";
 import { publishRealtimeEvent } from "@/lib/realtime";
+import { pickByIsEn, pickByLocale } from "@/lib/i18n/pick";
 
 const ALLOWED_IMAGE_TYPES = new Set([
   "image/jpeg",
@@ -84,14 +85,14 @@ export async function GET(
     const user = session?.user as { id?: string; isSuperAdmin?: boolean } | undefined;
     const userId = user?.id;
     if (!userId) {
-      return NextResponse.json({ ok: false, error: isEn ? "Not authenticated." : "Non authentifié" }, { status: 401 });
+      return NextResponse.json({ ok: false, error: pickByIsEn(isEn, "Non authentifié", "Not authenticated.") }, { status: 401 });
     }
 
     const { id: projectId } = await context.params;
     const isGlobalAdmin = Boolean(user?.isSuperAdmin) || isSuperAdminUserId(userId);
     const canRead = await ensureCanReadProject(userId, projectId, isGlobalAdmin);
     if (!canRead) {
-      return NextResponse.json({ ok: false, error: isEn ? "Access denied." : "Accès refusé" }, { status: 403 });
+      return NextResponse.json({ ok: false, error: pickByIsEn(isEn, "Accès refusé", "Access denied.") }, { status: 403 });
     }
 
     const project = await prisma.project.findUnique({
@@ -100,12 +101,12 @@ export async function GET(
     });
 
     if (!project) {
-      return NextResponse.json({ ok: false, error: isEn ? "Project not found." : "Projet introuvable" }, { status: 404 });
+      return NextResponse.json({ ok: false, error: pickByIsEn(isEn, "Projet introuvable", "Project not found.") }, { status: 404 });
     }
 
     const resolvedPath = await resolveReadableAvatarPath(projectId, project.avatar);
     if (!resolvedPath) {
-      return NextResponse.json({ ok: false, error: isEn ? "Project avatar not found. Please upload it again." : "Avatar projet introuvable, veuillez le recharger." }, { status: 404 });
+      return NextResponse.json({ ok: false, error: pickByIsEn(isEn, "Avatar projet introuvable, veuillez le recharger.", "Project avatar not found. Please upload it again.") }, { status: 404 });
     }
 
     const buffer = await readFile(resolvedPath);
@@ -118,7 +119,7 @@ export async function GET(
     });
   } catch (error) {
     console.error("Project avatar fetch failed:", error);
-    return NextResponse.json({ ok: false, error: isEn ? "Error while reading project avatar." : "Erreur de lecture avatar" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: pickByIsEn(isEn, "Erreur de lecture avatar", "Error while reading project avatar.") }, { status: 500 });
   }
 }
 
@@ -133,30 +134,30 @@ export async function POST(
     const user = session?.user as { id?: string; isSuperAdmin?: boolean } | undefined;
     const userId = user?.id;
     if (!userId) {
-      return NextResponse.json({ ok: false, error: isEn ? "Not authenticated." : "Non authentifié" }, { status: 401 });
+      return NextResponse.json({ ok: false, error: pickByIsEn(isEn, "Non authentifié", "Not authenticated.") }, { status: 401 });
     }
 
     const { id: projectId } = await context.params;
     const isGlobalAdmin = Boolean(user?.isSuperAdmin) || isSuperAdminUserId(userId);
     const canManage = await ensureCanManageProject(userId, projectId, isGlobalAdmin);
     if (!canManage) {
-      return NextResponse.json({ ok: false, error: isEn ? "Administrator rights required." : "Droits administrateur requis" }, { status: 403 });
+      return NextResponse.json({ ok: false, error: pickByIsEn(isEn, "Droits administrateur requis", "Administrator rights required.") }, { status: 403 });
     }
 
     const formData = await request.formData();
     const file = formData.get("avatar");
     if (!(file instanceof File) || file.size === 0) {
-      return NextResponse.json({ ok: false, error: isEn ? "No file provided." : "Aucun fichier fourni" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: pickByIsEn(isEn, "Aucun fichier fourni", "No file provided.") }, { status: 400 });
     }
     if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
       return NextResponse.json(
-        { ok: false, error: isEn ? "Unsupported format. Use JPG, PNG, WebP, GIF or AVIF." : "Format non supporté. Utilisez JPG, PNG, WebP, GIF ou AVIF." },
+        { ok: false, error: pickByIsEn(isEn, "Format non supporté. Utilisez JPG, PNG, WebP, GIF ou AVIF.", "Unsupported format. Use JPG, PNG, WebP, GIF or AVIF.") },
         { status: 400 }
       );
     }
     if (file.size > MAX_UPLOAD_BYTES) {
       return NextResponse.json(
-        { ok: false, error: isEn ? "Image too large (maximum 20MB)." : "Image trop volumineuse (maximum 20MB)." },
+        { ok: false, error: pickByIsEn(isEn, "Image trop volumineuse (maximum 20MB).", "Image too large (maximum 20MB).") },
         { status: 413 }
       );
     }
@@ -190,7 +191,7 @@ export async function POST(
   } catch (error) {
     console.error("Project avatar upload failed:", error);
     return NextResponse.json(
-      { ok: false, error: isEn ? "Unable to process this image. Try JPG, PNG or WebP." : "Impossible de traiter cette image. Essayez une image JPG, PNG ou WebP." },
+      { ok: false, error: pickByIsEn(isEn, "Impossible de traiter cette image. Essayez une image JPG, PNG ou WebP.", "Unable to process this image. Try JPG, PNG or WebP.") },
       { status: 500 }
     );
   }

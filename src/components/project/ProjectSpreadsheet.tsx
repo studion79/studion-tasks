@@ -7,7 +7,9 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  type SetStateAction,
 } from "react";
+import { createPortal } from "react-dom";
 import { getUiLocale } from "@/lib/ui-locale";
 import { usePathname, useRouter } from "next/navigation";
 import type {
@@ -18,12 +20,13 @@ import type {
   SpreadsheetFilters,
   SpreadsheetSort,
 } from "@/lib/types";
-import { COLUMN_WIDTHS } from "@/lib/constants";
+import { COLUMN_WIDTHS, getPriorityOptions, getStatusOptions } from "@/lib/constants";
 import { CellRenderer, RecurrenceIcon } from "./cells";
 import { TaskDetailPanel } from "./TaskDetailPanel";
 import { useProjectContext } from "./ProjectContext";
 import {
   createGroup as createGroupAction,
+  createGroupWithParent as createGroupWithParentAction,
   updateGroupName as updateGroupNameAction,
   updateGroupColor as updateGroupColorAction,
   createTask as createTaskAction,
@@ -33,6 +36,7 @@ import {
   archiveTask as archiveTaskAction,
   duplicateTask as duplicateTaskAction,
   reorderGroup as reorderGroupAction,
+  deleteGroup as deleteGroupAction,
   getArchivedTasks,
   restoreTask as restoreTaskAction,
   moveTask as moveTaskAction,
@@ -45,15 +49,22 @@ import {
   importGroupTemplate as importGroupTemplateAction,
   unarchiveTask,
 } from "@/lib/actions";
-import { STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/lib/constants";
 import { toCanonicalStatus } from "@/lib/status";
-import { localeFromPathname, tr } from "@/lib/i18n/client";
+import { trKey } from "@/lib/i18n/client";
+import { useClientLocale } from "@/lib/i18n/useClientLocale";
 import { getDisplayColumnLabel } from "@/lib/i18n/columns";
 import { composeDateTimeValue } from "@/lib/task-schedule";
+import { buildGroupHierarchyMeta, sortGroupsByHierarchy } from "@/lib/group-tree";
+import { normalizeTimeInput } from "@/lib/time-input";
 
-const TASK_COL = 280;
+const TASK_COL = 360;
 const ACTIONS_COL = 48;
 const CHECK_COL = 36;
+const MIN_NAME_COL = 260;
+const MIN_FIELD_COL = 120;
+const MAX_COL = 820;
+const TASK_INDENT_STEP = 18;
+const DRAG_HANDLE_GAP = 12;
 
 function colW(type: string): number {
   return (COLUMN_WIDTHS as Record<string, number>)[type] ?? 130;
@@ -81,7 +92,7 @@ function TitleCell({
   onComplete?: () => void;
   completing?: boolean;
 }) {
-  const locale = localeFromPathname(usePathname());
+  const locale = useClientLocale(usePathname());
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.title);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -111,7 +122,7 @@ function TitleCell({
       <div
         className={`w-3.5 h-3.5 rounded-sm border flex-shrink-0 cursor-pointer transition-all flex items-center justify-center ${completing ? "border-emerald-500 bg-emerald-500" : "border-gray-300 dark:border-gray-600 group-hover/title:border-indigo-400"}`}
         onClick={completing ? undefined : (onComplete ?? onDelete)}
-        title={completing ? tr(locale, "Terminée", "Completed") : onComplete ? tr(locale, "Terminer la tâche", "Complete task") : tr(locale, "Supprimer la tâche", "Delete task")}
+        title={completing ? trKey(locale, "spreadsheet.auto.001") : onComplete ? trKey(locale, "spreadsheet.auto.002") : trKey(locale, "spreadsheet.auto.003")}
       >
         {completing && (
           <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -150,7 +161,7 @@ function TitleCell({
         <button
           onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
           className="p-0.5 rounded text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all cursor-pointer"
-          title={tr(locale, "Dupliquer la tâche", "Duplicate task")}
+          title={trKey(locale, "spreadsheet.auto.004")}
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <rect x="9" y="9" width="13" height="13" rx="2" strokeWidth="1.5" />
@@ -160,7 +171,7 @@ function TitleCell({
         <button
           onClick={(e) => { e.stopPropagation(); onArchive(); }}
           className="p-0.5 rounded text-gray-400 hover:text-amber-500 hover:bg-amber-50 transition-all cursor-pointer"
-          title={tr(locale, "Archiver la tâche", "Archive task")}
+          title={trKey(locale, "spreadsheet.auto.005")}
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -169,7 +180,7 @@ function TitleCell({
         <button
           onClick={(e) => { e.stopPropagation(); onOpen(); }}
           className="p-0.5 rounded text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all cursor-pointer"
-          title={tr(locale, "Ouvrir la fiche", "Open card")}
+          title={trKey(locale, "spreadsheet.auto.006")}
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -184,7 +195,7 @@ function TitleCell({
 function BulkActionBar({
   selectedCount,
   columns,
-  memberNames,
+  ownerOptions,
   onClear,
   onStatusChange,
   onPriorityChange,
@@ -194,7 +205,7 @@ function BulkActionBar({
 }: {
   selectedCount: number;
   columns: ProjectColumn[];
-  memberNames?: string[];
+  ownerOptions?: Array<{ id: string; name: string }>;
   onClear: () => void;
   onStatusChange: (value: string) => void;
   onPriorityChange: (value: string) => void;
@@ -202,7 +213,9 @@ function BulkActionBar({
   onArchive: () => void;
   onDelete: () => void;
 }) {
-  const locale = localeFromPathname(usePathname());
+  const locale = useClientLocale(usePathname());
+  const statusOptions = useMemo(() => getStatusOptions(locale), [locale]);
+  const priorityOptions = useMemo(() => getPriorityOptions(locale), [locale]);
   const [openMenu, setOpenMenu] = useState<"status" | "priority" | "owner" | null>(null);
   const statusCol = columns.find((c) => c.type === "STATUS");
   const priorityCol = columns.find((c) => c.type === "PRIORITY");
@@ -211,7 +224,7 @@ function BulkActionBar({
   return (
     <div className="fixed bottom-3 sm:bottom-6 left-2 right-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-50 flex items-center gap-1.5 sm:gap-2 bg-gray-900 text-white rounded-xl shadow-2xl px-3 sm:px-4 py-2.5 text-sm border border-gray-700 overflow-x-auto">
       <span className="text-gray-300 text-xs font-medium mr-1 whitespace-nowrap">
-        {selectedCount} {tr(locale, "sélectionné", "selected")}{selectedCount > 1 ? "s" : ""}
+        {selectedCount} {trKey(locale, "spreadsheet.auto.007")}{selectedCount > 1 ? "s" : ""}
       </span>
 
       {statusCol && (
@@ -220,14 +233,14 @@ function BulkActionBar({
             onClick={() => setOpenMenu(openMenu === "status" ? null : "status")}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors text-xs cursor-pointer"
           >
-            {tr(locale, "Statut", "Status")}
+            {trKey(locale, "spreadsheet.auto.008")}
             <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
           {openMenu === "status" && (
             <div className="absolute bottom-full mb-1.5 left-0 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[140px] z-50">
-              {STATUS_OPTIONS.map((opt) => (
+              {statusOptions.map((opt) => (
                 <button
                   key={opt.value}
                   onClick={() => { onStatusChange(opt.value); setOpenMenu(null); }}
@@ -247,14 +260,14 @@ function BulkActionBar({
             onClick={() => setOpenMenu(openMenu === "priority" ? null : "priority")}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors text-xs cursor-pointer"
           >
-            {tr(locale, "Priorité", "Priority")}
+            {trKey(locale, "spreadsheet.auto.009")}
             <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
           {openMenu === "priority" && (
             <div className="absolute bottom-full mb-1.5 left-0 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[120px] z-50">
-              {PRIORITY_OPTIONS.map((opt) => (
+              {priorityOptions.map((opt) => (
                 <button
                   key={opt.value}
                   onClick={() => { onPriorityChange(opt.value); setOpenMenu(null); }}
@@ -268,26 +281,26 @@ function BulkActionBar({
         </div>
       )}
 
-      {ownerCol && memberNames && memberNames.length > 0 && (
+      {ownerCol && ownerOptions && ownerOptions.length > 0 && (
         <div className="relative">
           <button
             onClick={() => setOpenMenu(openMenu === "owner" ? null : "owner")}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors text-xs cursor-pointer"
           >
-            {tr(locale, "Assigné à", "Assigned to")}
+            {trKey(locale, "spreadsheet.auto.010")}
             <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
           {openMenu === "owner" && (
             <div className="absolute bottom-full mb-1.5 left-0 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 min-w-[140px] z-50">
-              {memberNames.map((name) => (
+              {ownerOptions.map((owner) => (
                 <button
-                  key={name}
-                  onClick={() => { onOwnerChange(name); setOpenMenu(null); }}
+                  key={owner.id}
+                  onClick={() => { onOwnerChange(owner.id); setOpenMenu(null); }}
                   className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
                 >
-                  {name}
+                  {owner.name}
                 </button>
               ))}
             </div>
@@ -300,23 +313,23 @@ function BulkActionBar({
       <button
         onClick={onArchive}
         className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-amber-700 transition-colors text-xs cursor-pointer"
-        title={tr(locale, "Archiver la sélection", "Archive selection")}
+        title={trKey(locale, "spreadsheet.auto.011")}
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
-        {tr(locale, "Archiver", "Archive")}
+        {trKey(locale, "spreadsheet.auto.012")}
       </button>
 
       <button
         onClick={onDelete}
         className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-red-700 transition-colors text-xs cursor-pointer"
-        title={tr(locale, "Supprimer la sélection", "Delete selection")}
+        title={trKey(locale, "spreadsheet.auto.013")}
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
-        {tr(locale, "Supprimer", "Delete")}
+        {trKey(locale, "spreadsheet.auto.014")}
       </button>
 
       <div className="w-px h-4 bg-gray-700 mx-1" />
@@ -324,7 +337,7 @@ function BulkActionBar({
       <button
         onClick={onClear}
         className="p-1 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors cursor-pointer"
-        title={tr(locale, "Désélectionner tout", "Deselect all")}
+        title={trKey(locale, "spreadsheet.auto.015")}
       >
         <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="M6 18L18 6M6 6l12 12" strokeWidth="2" strokeLinecap="round" />
@@ -345,12 +358,15 @@ const GROUP_COLOR_PALETTE = [
 // --- Group header ---
 function GroupHeader({
   group,
+  depth,
   taskCount,
   collapsed,
   onToggle,
   onRename,
   onColorChange,
   onAddTask,
+  onAddSubgroup,
+  onDeleteGroup,
   onMoveUp,
   onMoveDown,
   canMoveUp,
@@ -360,12 +376,15 @@ function GroupHeader({
   onSaveAsTemplate,
 }: {
   group: GroupWithTasks;
+  depth: number;
   taskCount: number;
   collapsed: boolean;
   onToggle: () => void;
   onRename: (name: string) => void;
   onColorChange: (color: string) => void;
   onAddTask: () => void;
+  onAddSubgroup: () => void;
+  onDeleteGroup: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   canMoveUp: boolean;
@@ -410,6 +429,7 @@ function GroupHeader({
   return (
     <div className="flex items-center justify-between py-2 px-4 group/gh">
       <div className="flex items-center gap-2">
+        {depth > 0 && <div className="w-px self-stretch bg-gray-200 dark:bg-gray-700 mr-1" />}
         {/* Collapse toggle */}
         <button
           onClick={onToggle}
@@ -484,6 +504,24 @@ function GroupHeader({
         {/* Reorder arrows */}
         <div className="opacity-0 group-hover/gh:opacity-100 flex items-center gap-0.5 transition-opacity ml-1">
           <button
+            onClick={onAddSubgroup}
+            className="p-0.5 rounded text-gray-400 hover:text-indigo-500 cursor-pointer transition-colors"
+            title="Add sub-category"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path d="M4 7h8M8 7v8a2 2 0 002 2h10M16 13v6m-3-3h6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button
+            onClick={onDeleteGroup}
+            className="p-0.5 rounded text-gray-400 hover:text-red-500 cursor-pointer transition-colors"
+            title="Delete category"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path d="M19 7l-.9 12.1A2 2 0 0116.1 21H7.9a2 2 0 01-2-1.9L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3M4 7h16" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button
             onClick={onMoveUp}
             disabled={!canMoveUp}
             className="p-0.5 rounded text-gray-400 hover:text-gray-600 disabled:opacity-25 disabled:cursor-default cursor-pointer transition-colors"
@@ -537,7 +575,8 @@ const STATUS_RANK: Record<string, number> = { NOT_STARTED: 0, WORKING: 1, STUCK:
 function filterTasks(
   tasks: TaskWithFields[],
   filters: SpreadsheetFilters,
-  columns: ProjectColumn[]
+  columns: ProjectColumn[],
+  normalizeOwnerValue?: (value: string | null | undefined) => string | null
 ): TaskWithFields[] {
   const statusCol = columns.find((c) => c.type === "STATUS");
   const priorityCol = columns.find((c) => c.type === "PRIORITY");
@@ -558,7 +597,12 @@ function filterTasks(
     }
     if (filters.owner.length > 0 && ownerCol) {
       const v = task.fieldValues.find((f) => f.columnId === ownerCol.id)?.value ?? "";
-      if (!filters.owner.includes(v)) return false;
+      const normalized = normalizeOwnerValue ? normalizeOwnerValue(v) ?? "" : v;
+      const matches = filters.owner.some((filterValue) => {
+        const normalizedFilter = normalizeOwnerValue ? normalizeOwnerValue(filterValue) ?? filterValue : filterValue;
+        return normalizedFilter === normalized || filterValue === v;
+      });
+      if (!matches) return false;
     }
     return true;
   });
@@ -595,6 +639,98 @@ function sortTasks(
   return sorted;
 }
 
+function sortByPosition(tasks: TaskWithFields[]): TaskWithFields[] {
+  return [...tasks].sort((a, b) => {
+    if (a.position !== b.position) return a.position - b.position;
+    return String(a.createdAt).localeCompare(String(b.createdAt));
+  });
+}
+
+function normalizeGroupTaskTree(group: GroupWithTasks): GroupWithTasks {
+  const sourceById = new Map<string, TaskWithFields>();
+  const normalizedById = new Map<string, TaskWithFields>();
+
+  const registerTask = (task: TaskWithFields) => {
+    sourceById.set(task.id, task);
+    if (!normalizedById.has(task.id)) {
+      normalizedById.set(task.id, { ...task, subtasks: [] });
+    }
+    for (const subtask of (task.subtasks ?? []) as TaskWithFields[]) {
+      registerTask(subtask);
+    }
+  };
+
+  for (const task of group.tasks) {
+    registerTask(task);
+  }
+
+  for (const sourceTask of sourceById.values()) {
+    if (!sourceTask.parentId) continue;
+    const parent = normalizedById.get(sourceTask.parentId);
+    const child = normalizedById.get(sourceTask.id);
+    if (!parent || !child || parent.id === child.id) continue;
+    parent.subtasks = [...(parent.subtasks ?? []), child];
+  }
+
+  const roots: TaskWithFields[] = [];
+  const rootSeen = new Set<string>();
+  const sortTreeRecursive = (task: TaskWithFields): TaskWithFields => {
+    const uniqueChildren = Array.from(
+      new Map(((task.subtasks ?? []) as TaskWithFields[]).map((subtask) => [subtask.id, subtask])).values()
+    );
+    const sortedChildren = sortByPosition(uniqueChildren).map(sortTreeRecursive);
+    return { ...task, subtasks: sortedChildren };
+  };
+  for (const sourceTask of sourceById.values()) {
+    if (sourceTask.parentId && normalizedById.has(sourceTask.parentId)) continue;
+    const normalized = normalizedById.get(sourceTask.id);
+    if (!normalized || rootSeen.has(normalized.id)) continue;
+    rootSeen.add(normalized.id);
+    roots.push(sortTreeRecursive(normalized));
+  }
+
+  return {
+    ...group,
+    tasks: sortByPosition(roots),
+  };
+}
+
+function normalizeGroupsTaskTree(groups: GroupWithTasks[]): GroupWithTasks[] {
+  return groups.map((group) => normalizeGroupTaskTree(group));
+}
+
+function mapTaskTree(
+  tasks: TaskWithFields[],
+  updater: (task: TaskWithFields) => TaskWithFields
+): TaskWithFields[] {
+  return tasks.map((task) => {
+    const nextSelf = updater(task);
+    const currentSubtasks = nextSelf.subtasks ?? [];
+    const nextSubtasks = mapTaskTree(currentSubtasks as TaskWithFields[], updater);
+    if (nextSubtasks === currentSubtasks) return nextSelf;
+    return { ...nextSelf, subtasks: nextSubtasks };
+  });
+}
+
+function removeTaskFromTree(tasks: TaskWithFields[], taskId: string): TaskWithFields[] {
+  const filtered = tasks
+    .filter((task) => task.id !== taskId)
+    .map((task) => ({
+      ...task,
+      subtasks: removeTaskFromTree((task.subtasks ?? []) as TaskWithFields[], taskId),
+    }));
+  return filtered;
+}
+
+function findTaskInGroupTasks(tasks: TaskWithFields[], taskId: string): TaskWithFields | null {
+  for (const task of tasks) {
+    if (task.id === taskId) return task;
+    const foundInSubtask = findTaskInGroupTasks((task.subtasks ?? []) as TaskWithFields[], taskId);
+    if (foundInSubtask) return foundInSubtask;
+  }
+  return null;
+}
+
 // --- Main ---
 export function ProjectSpreadsheet({
   project,
@@ -614,14 +750,31 @@ export function ProjectSpreadsheet({
   type ArchivedTaskEntry = Awaited<ReturnType<typeof getArchivedTasks>>[number];
   const readOnlyOwner = Boolean((project as ProjectWithRelations & { isPersonal?: boolean }).isPersonal);
 
-  const { allColumns } = useProjectContext();
+  const { allColumns, memberOptions, normalizeOwnerValue, resolveOwnerName } = useProjectContext();
   const columns = visibleColumns ?? project.columns;
   const statusColId = allColumns.find((c) => c.type === "STATUS")?.id ?? null;
   const projectStatusCol = project.columns.find((c) => c.type === "STATUS") ?? null;
   const projectPriorityCol = project.columns.find((c) => c.type === "PRIORITY") ?? null;
   const projectOwnerCol = project.columns.find((c) => c.type === "OWNER") ?? null;
   const projectDueDateCol = project.columns.find((c) => c.type === "DUE_DATE") ?? null;
-  const [groups, setGroups] = useState<GroupWithTasks[]>(project.groups);
+  const [groups, setGroupsState] = useState<GroupWithTasks[]>(() =>
+    normalizeGroupsTaskTree(project.groups)
+  );
+  const setGroups = useCallback((updater: SetStateAction<GroupWithTasks[]>) => {
+    setGroupsState((prev) => {
+      const next =
+        typeof updater === "function"
+          ? (updater as (previousState: GroupWithTasks[]) => GroupWithTasks[])(prev)
+          : updater;
+      return normalizeGroupsTaskTree(next);
+    });
+  }, []);
+  const orderedGroups = useMemo(() => sortGroupsByHierarchy(groups), [groups]);
+  const hierarchyMeta = useMemo(() => buildGroupHierarchyMeta(orderedGroups), [orderedGroups]);
+  const groupsById = useMemo(
+    () => new Map(orderedGroups.map((group) => [group.id, group])),
+    [orderedGroups]
+  );
 
   // Full sync from server after every refresh — keeps temp (in-flight) tasks intact
   useEffect(() => {
@@ -642,11 +795,49 @@ export function ProjectSpreadsheet({
   const dragTask = useRef<{ taskId: string; fromGroupId: string } | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null); // "groupId:insertIndex"
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const visibleOrderedGroups = useMemo(() => {
+    const isHiddenByAncestor = (group: GroupWithTasks) => {
+      let parentId = group.parentId;
+      const seen = new Set<string>();
+      while (parentId) {
+        if (seen.has(parentId)) break;
+        seen.add(parentId);
+        if (collapsedGroups.has(parentId)) return true;
+        parentId = groupsById.get(parentId)?.parentId ?? null;
+      }
+      return false;
+    };
+    return orderedGroups.filter((group) => !isHiddenByAncestor(group));
+  }, [collapsedGroups, groupsById, orderedGroups]);
+  const mobileGroupParentPathById = useMemo(() => {
+    const byId = new Map(orderedGroups.map((group) => [group.id, group]));
+    const out = new Map<string, string>();
+    for (const group of orderedGroups) {
+      const chain: string[] = [];
+      let cursor = group.parentId ? byId.get(group.parentId) ?? null : null;
+      const seen = new Set<string>();
+      while (cursor && !seen.has(cursor.id)) {
+        seen.add(cursor.id);
+        chain.push(cursor.name);
+        cursor = cursor.parentId ? byId.get(cursor.parentId) ?? null : null;
+      }
+      out.set(group.id, chain.reverse().join(" / "));
+    }
+    return out;
+  }, [orderedGroups]);
   const [addingTaskIn, setAddingTaskIn] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskFieldDrafts, setNewTaskFieldDrafts] = useState<Record<string, string>>({});
   const [addingGroup, setAddingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
+  const [mobileRenamingGroupId, setMobileRenamingGroupId] = useState<string | null>(null);
+  const [mobileGroupNameDraft, setMobileGroupNameDraft] = useState("");
+  const [mobileMoveTask, setMobileMoveTask] = useState<{ id: string; title: string; fromGroupId: string } | null>(null);
+  const [mobileGroupMenuId, setMobileGroupMenuId] = useState<string | null>(null);
+  const [mobileGroupMenuPos, setMobileGroupMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [mobileExpandedRootGroups, setMobileExpandedRootGroups] = useState<Set<string>>(new Set());
+  const [mobileExpandedSubgroups, setMobileExpandedSubgroups] = useState<Set<string>>(new Set());
+  const [mobileExpandedTaskSubtasks, setMobileExpandedTaskSubtasks] = useState<Set<string>>(new Set());
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   // Group template state
   const [saveTemplateGroupId, setSaveTemplateGroupId] = useState<string | null>(null);
@@ -658,9 +849,25 @@ export function ProjectSpreadsheet({
   const GROUP_PAGE_SIZE = 50;
   const [, startTransition] = useTransition();
   const router = useRouter();
-  const locale = localeFromPathname(usePathname());
+  const locale = useClientLocale(usePathname());
+  const statusOptions = useMemo(() => getStatusOptions(locale), [locale]);
+  const priorityOptions = useMemo(() => getPriorityOptions(locale), [locale]);
   const taskInputRef = useRef<HTMLInputElement>(null);
   const groupInputRef = useRef<HTMLInputElement>(null);
+  const mobileGroupMenuPanelRef = useRef<HTMLDivElement | null>(null);
+  const mobileGroupMenuTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const subgroupFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [newSubgroupId, setNewSubgroupId] = useState<string | null>(null);
+  const [newSubgroupHint, setNewSubgroupHint] = useState<string | null>(null);
+  const [nameColWidth, setNameColWidth] = useState(TASK_COL);
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const spreadsheetWidthsKey = useMemo(() => `spreadsheet-widths:${project.id}`, [project.id]);
+  const resizeRef = useRef<{
+    kind: "name" | "column";
+    columnId?: string;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
 
   const timelineStartKey = useCallback((columnId: string) => `${columnId}__start`, []);
   const timelineStartTimeKey = useCallback((columnId: string) => `${columnId}__start_time`, []);
@@ -675,6 +882,190 @@ export function ProjectSpreadsheet({
     setNewTaskFieldDrafts({});
     setAddingTaskIn(null);
   }, []);
+  const clearSubgroupFeedbackTimeout = useCallback(() => {
+    if (subgroupFeedbackTimeoutRef.current) {
+      clearTimeout(subgroupFeedbackTimeoutRef.current);
+      subgroupFeedbackTimeoutRef.current = null;
+    }
+  }, []);
+  const findVisibleGroupNode = useCallback((groupId: string): HTMLElement | null => {
+    const nodes = Array.from(document.querySelectorAll(`[data-group-row-id="${groupId}"]`));
+    for (const node of nodes) {
+      if (!(node instanceof HTMLElement)) continue;
+      if (node.offsetParent === null) continue;
+      return node;
+    }
+    return null;
+  }, []);
+  const isNodeOutsideViewport = useCallback((node: HTMLElement) => {
+    const rect = node.getBoundingClientRect();
+    return rect.bottom < 0 || rect.top > window.innerHeight;
+  }, []);
+  const showSubgroupFeedback = useCallback(
+    (groupId: string) => {
+      setNewSubgroupId(groupId);
+      setNewSubgroupHint(groupId);
+      clearSubgroupFeedbackTimeout();
+      subgroupFeedbackTimeoutRef.current = setTimeout(() => {
+        setNewSubgroupId((current) => (current === groupId ? null : current));
+        setNewSubgroupHint((current) => (current === groupId ? null : current));
+      }, 4500);
+    },
+    [clearSubgroupFeedbackTimeout]
+  );
+  const scrollToGroupRow = useCallback((groupId: string) => {
+    const node = findVisibleGroupNode(groupId);
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    node.classList.add("ring-2", "ring-emerald-300");
+    window.setTimeout(() => {
+      node.classList.remove("ring-2", "ring-emerald-300");
+    }, 1300);
+  }, [findVisibleGroupNode]);
+
+  const updateMobileGroupMenuPosition = useCallback((groupId: string) => {
+    const trigger = mobileGroupMenuTriggerRefs.current[groupId];
+    if (!trigger) {
+      setMobileGroupMenuId(null);
+      setMobileGroupMenuPos(null);
+      return;
+    }
+    const rect = trigger.getBoundingClientRect();
+    const margin = 8;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const width = Math.min(190, viewportWidth - margin * 2);
+    const left = Math.min(Math.max(rect.right - width, margin), viewportWidth - width - margin);
+    const menuHeight = 210;
+    const top = Math.min(rect.bottom + 6, viewportHeight - menuHeight - margin);
+    setMobileGroupMenuPos({ top: Math.max(margin, top), left, width });
+  }, []);
+
+  useEffect(() => {
+    if (!mobileGroupMenuId) return;
+    updateMobileGroupMenuPosition(mobileGroupMenuId);
+
+    const onOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node;
+      const trigger = mobileGroupMenuTriggerRefs.current[mobileGroupMenuId];
+      if (trigger?.contains(target)) return;
+      if (mobileGroupMenuPanelRef.current?.contains(target)) return;
+      setMobileGroupMenuId(null);
+      setMobileGroupMenuPos(null);
+    };
+
+    const onReposition = () => updateMobileGroupMenuPosition(mobileGroupMenuId);
+    document.addEventListener("mousedown", onOutside);
+    document.addEventListener("touchstart", onOutside, { passive: true });
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+    return () => {
+      document.removeEventListener("mousedown", onOutside);
+      document.removeEventListener("touchstart", onOutside);
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [mobileGroupMenuId, updateMobileGroupMenuPosition]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(spreadsheetWidthsKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { nameColWidth?: number; columnWidths?: Record<string, number> };
+      if (typeof parsed.nameColWidth === "number" && Number.isFinite(parsed.nameColWidth)) {
+        setNameColWidth(Math.max(MIN_NAME_COL, Math.min(MAX_COL, parsed.nameColWidth)));
+      }
+      if (parsed.columnWidths && typeof parsed.columnWidths === "object") {
+        const next: Record<string, number> = {};
+        Object.entries(parsed.columnWidths).forEach(([key, value]) => {
+          if (typeof value === "number" && Number.isFinite(value)) {
+            next[key] = Math.max(MIN_FIELD_COL, Math.min(MAX_COL, value));
+          }
+        });
+        setColumnWidths(next);
+      }
+    } catch {
+      // ignore invalid local storage payload
+    }
+  }, [spreadsheetWidthsKey]);
+
+  useEffect(() => {
+    return () => clearSubgroupFeedbackTimeout();
+  }, [clearSubgroupFeedbackTimeout]);
+
+  useEffect(() => {
+    if (!newSubgroupHint) return;
+    const raf = window.requestAnimationFrame(() => {
+      const node = findVisibleGroupNode(newSubgroupHint);
+      if (!node) return;
+      if (!isNodeOutsideViewport(node)) {
+        setNewSubgroupHint(null);
+      }
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [findVisibleGroupNode, isNodeOutsideViewport, newSubgroupHint, groups]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(spreadsheetWidthsKey, JSON.stringify({ nameColWidth, columnWidths }));
+    } catch {
+      // ignore local storage write errors
+    }
+  }, [columnWidths, nameColWidth, spreadsheetWidthsKey]);
+
+  const getColumnWidth = useCallback(
+    (column: ProjectColumn) => columnWidths[column.id] ?? colW(column.type),
+    [columnWidths]
+  );
+
+  const startResize = useCallback(
+    (kind: "name" | "column", event: React.MouseEvent, columnId?: string) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (kind === "column" && !columnId) return;
+      const currentWidth = kind === "name"
+        ? nameColWidth
+        : getColumnWidth(columns.find((c) => c.id === columnId)!);
+      resizeRef.current = {
+        kind,
+        columnId,
+        startX: event.clientX,
+        startWidth: currentWidth,
+      };
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    },
+    [columns, getColumnWidth, nameColWidth]
+  );
+
+  useEffect(() => {
+    const handleMove = (event: MouseEvent) => {
+      const active = resizeRef.current;
+      if (!active) return;
+      const nextWidth = Math.max(
+        active.kind === "name" ? MIN_NAME_COL : MIN_FIELD_COL,
+        Math.min(MAX_COL, active.startWidth + (event.clientX - active.startX))
+      );
+      if (active.kind === "name") {
+        setNameColWidth(nextWidth);
+      } else if (active.columnId) {
+        const columnId = active.columnId;
+        setColumnWidths((prev) => ({ ...prev, [columnId]: nextWidth }));
+      }
+    };
+    const handleUp = () => {
+      if (!resizeRef.current) return;
+      resizeRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+    };
+  }, []);
 
   useEffect(() => {
     if (addingTaskIn) taskInputRef.current?.focus();
@@ -683,6 +1074,13 @@ export function ProjectSpreadsheet({
   useEffect(() => {
     if (addingGroup) groupInputRef.current?.focus();
   }, [addingGroup]);
+
+  useEffect(() => {
+    if (mobileExpandedRootGroups.size > 0) return;
+    const firstRoot = visibleOrderedGroups.find((group) => (hierarchyMeta.depthById.get(group.id) ?? 0) === 0);
+    if (!firstRoot) return;
+    setMobileExpandedRootGroups(new Set([firstRoot.id]));
+  }, [hierarchyMeta.depthById, mobileExpandedRootGroups.size, visibleOrderedGroups]);
 
   const toggleCollapse = useCallback((groupId: string) => {
     setCollapsedGroups((prev) => {
@@ -700,7 +1098,7 @@ export function ProjectSpreadsheet({
         setCompletingTasks((prev) => new Set(prev).add(taskId));
         setTimeout(() => {
           setGroups((prev) =>
-            prev.map((g) => ({ ...g, tasks: g.tasks.filter((t) => t.id !== taskId) }))
+            prev.map((g) => ({ ...g, tasks: removeTaskFromTree(g.tasks, taskId) }))
           );
           setCompletingTasks((prev) => {
             const s = new Set(prev);
@@ -723,7 +1121,7 @@ export function ProjectSpreadsheet({
       setGroups((prev) =>
         prev.map((g) => ({
           ...g,
-          tasks: g.tasks.map((t) => {
+          tasks: mapTaskTree(g.tasks, (t) => {
             if (t.id !== taskId) return t;
             const rest = t.fieldValues.filter((fv) => fv.columnId !== columnId);
             return {
@@ -758,7 +1156,7 @@ export function ProjectSpreadsheet({
     setGroups((prev) =>
       prev.map((g) => ({
         ...g,
-        tasks: g.tasks.map((t) => (t.id === taskId ? { ...t, title } : t)),
+        tasks: mapTaskTree(g.tasks, (t) => (t.id === taskId ? { ...t, title } : t)),
       }))
     );
     startTransition(async () => {
@@ -788,10 +1186,21 @@ export function ProjectSpreadsheet({
 
   const handleReorderGroup = useCallback((groupId: string, direction: "up" | "down") => {
     setGroups((prev) => {
+      const ordered = sortGroupsByHierarchy(prev);
+      const meta = buildGroupHierarchyMeta(ordered);
+      const siblingIndex = meta.siblingIndexById.get(groupId);
+      const siblingCount = meta.siblingCountById.get(groupId);
+      if (typeof siblingIndex !== "number" || typeof siblingCount !== "number") return prev;
+      const swapSiblingIdx = direction === "up" ? siblingIndex - 1 : siblingIndex + 1;
+      if (swapSiblingIdx < 0 || swapSiblingIdx >= siblingCount) return prev;
+
+      const parentId = prev.find((g) => g.id === groupId)?.parentId ?? null;
+      const siblings = meta.siblingsByParent.get(parentId) ?? [];
+      const swapId = siblings[swapSiblingIdx];
+      if (!swapId) return prev;
       const idx = prev.findIndex((g) => g.id === groupId);
-      if (idx === -1) return prev;
-      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-      if (swapIdx < 0 || swapIdx >= prev.length) return prev;
+      const swapIdx = prev.findIndex((g) => g.id === swapId);
+      if (idx === -1 || swapIdx === -1) return prev;
       const next = [...prev];
       [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
       return next;
@@ -801,10 +1210,45 @@ export function ProjectSpreadsheet({
     });
   }, []);
 
+  const handleDeleteGroup = useCallback((groupId: string) => {
+    const ok = window.confirm(
+      locale === "fr"
+        ? "Supprimer cette catégorie et ses sous-catégories ?"
+        : "Delete this category and its sub-categories?"
+    );
+    if (!ok) return;
+    setGroups((prev) => {
+      const byId = new Map(prev.map((group) => [group.id, group]));
+      const toDelete = new Set<string>([groupId]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const group of prev) {
+          if (group.parentId && toDelete.has(group.parentId) && !toDelete.has(group.id)) {
+            toDelete.add(group.id);
+            changed = true;
+          }
+        }
+      }
+      const kept = prev.filter((group) => !toDelete.has(group.id));
+      // cleanup potential dangling parent refs
+      return kept.map((group) => ({
+        ...group,
+        parentId: group.parentId && byId.has(group.parentId) && !toDelete.has(group.parentId)
+          ? group.parentId
+          : null,
+      }));
+    });
+    startTransition(async () => {
+      await deleteGroupAction(groupId);
+      router.refresh();
+    });
+  }, [locale, router]);
+
   const handleDeleteTask = useCallback((taskId: string) => {
     if (openTaskId === taskId) setOpenTaskId(null);
     setGroups((prev) =>
-      prev.map((g) => ({ ...g, tasks: g.tasks.filter((t) => t.id !== taskId) }))
+      prev.map((g) => ({ ...g, tasks: removeTaskFromTree(g.tasks, taskId) }))
     );
     startTransition(async () => {
       await deleteTaskAction(taskId);
@@ -815,7 +1259,7 @@ export function ProjectSpreadsheet({
   const handleArchiveTask = useCallback((taskId: string) => {
     if (openTaskId === taskId) setOpenTaskId(null);
     setGroups((prev) =>
-      prev.map((g) => ({ ...g, tasks: g.tasks.filter((t) => t.id !== taskId) }))
+      prev.map((g) => ({ ...g, tasks: removeTaskFromTree(g.tasks, taskId) }))
     );
     startTransition(async () => {
       await archiveTaskAction(taskId);
@@ -824,8 +1268,8 @@ export function ProjectSpreadsheet({
   }, [openTaskId]);
 
   const handleDuplicateTask = useCallback((taskId: string) => {
-    const sourceGroup = groups.find((g) => g.tasks.some((t) => t.id === taskId));
-    const sourceTask = sourceGroup?.tasks.find((t) => t.id === taskId);
+    const sourceGroup = groups.find((g) => Boolean(findTaskInGroupTasks(g.tasks, taskId)));
+    const sourceTask = sourceGroup ? findTaskInGroupTasks(sourceGroup.tasks, taskId) : null;
     if (!sourceTask || !sourceGroup) return;
     const tempId = `temp-dup-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const tempTask: TaskWithFields = {
@@ -839,9 +1283,18 @@ export function ProjectSpreadsheet({
     };
     setGroups((prev) =>
       prev.map((g) =>
-        g.id === sourceGroup.id
-          ? { ...g, tasks: [...g.tasks, tempTask] }
-          : g
+        g.id !== sourceGroup.id
+          ? g
+          : sourceTask.parentId
+            ? {
+                ...g,
+                tasks: mapTaskTree(g.tasks, (t) =>
+                  t.id === sourceTask.parentId
+                    ? { ...t, subtasks: [...((t.subtasks ?? []) as TaskWithFields[]), tempTask] }
+                    : t
+                ),
+              }
+            : { ...g, tasks: [...g.tasks, tempTask] }
       )
     );
     startTransition(async () => {
@@ -849,7 +1302,12 @@ export function ProjectSpreadsheet({
       setGroups((prev) =>
         prev.map((g) =>
           g.id === sourceGroup.id
-            ? { ...g, tasks: g.tasks.map((t) => (t.id === tempId ? (created as TaskWithFields) : t)) }
+            ? {
+                ...g,
+                tasks: mapTaskTree(g.tasks, (t) =>
+                  t.id === tempId ? (created as TaskWithFields) : t
+                ),
+              }
             : g
         )
       );
@@ -864,7 +1322,7 @@ export function ProjectSpreadsheet({
     setGroups((prev) =>
       prev.map((g) => ({
         ...g,
-        tasks: g.tasks.map((t) => {
+        tasks: mapTaskTree(g.tasks, (t) => {
           if (!ids.includes(t.id)) return t;
           const rest = t.fieldValues.filter((fv) => fv.columnId !== statusCol.id);
           return { ...t, fieldValues: [...rest, { id: `opt-${statusCol.id}`, taskId: t.id, columnId: statusCol.id, value, updatedAt: new Date() }] };
@@ -881,7 +1339,7 @@ export function ProjectSpreadsheet({
     setGroups((prev) =>
       prev.map((g) => ({
         ...g,
-        tasks: g.tasks.map((t) => {
+        tasks: mapTaskTree(g.tasks, (t) => {
           if (!ids.includes(t.id)) return t;
           const rest = t.fieldValues.filter((fv) => fv.columnId !== priorityCol.id);
           return { ...t, fieldValues: [...rest, { id: `opt-${priorityCol.id}`, taskId: t.id, columnId: priorityCol.id, value, updatedAt: new Date() }] };
@@ -898,7 +1356,7 @@ export function ProjectSpreadsheet({
     setGroups((prev) =>
       prev.map((g) => ({
         ...g,
-        tasks: g.tasks.map((t) => {
+        tasks: mapTaskTree(g.tasks, (t) => {
           if (!ids.includes(t.id)) return t;
           const rest = t.fieldValues.filter((fv) => fv.columnId !== ownerCol.id);
           return { ...t, fieldValues: [...rest, { id: `opt-${ownerCol.id}`, taskId: t.id, columnId: ownerCol.id, value, updatedAt: new Date() }] };
@@ -911,11 +1369,11 @@ export function ProjectSpreadsheet({
   const handleBulkArchive = useCallback(() => {
     const ids = Array.from(selectedTaskIds);
     if (ids.length === 0) return;
-    if (!confirm(`${tr(locale, "Archiver", "Archive")} ${ids.length} ${tr(locale, "tâche", "task")}${ids.length > 1 ? "s" : ""} ?`)) return;
+    if (!confirm(`${trKey(locale, "spreadsheet.auto.012")} ${ids.length} ${trKey(locale, "spreadsheet.auto.016")}${ids.length > 1 ? "s" : ""} ?`)) return;
     if (ids.includes(openTaskId ?? "")) setOpenTaskId(null);
     setSelectedTaskIds(new Set());
     setGroups((prev) =>
-      prev.map((g) => ({ ...g, tasks: g.tasks.filter((t) => !ids.includes(t.id)) }))
+      prev.map((g) => ({ ...g, tasks: ids.reduce((tasks, id) => removeTaskFromTree(tasks, id), g.tasks) }))
     );
     startTransition(async () => { await bulkArchiveTasks(ids); router.refresh(); });
   }, [selectedTaskIds, openTaskId, router]);
@@ -923,11 +1381,11 @@ export function ProjectSpreadsheet({
   const handleBulkDelete = useCallback(() => {
     const ids = Array.from(selectedTaskIds);
     if (ids.length === 0) return;
-    if (!confirm(`${tr(locale, "Supprimer définitivement", "Delete permanently")} ${ids.length} ${tr(locale, "tâche", "task")}${ids.length > 1 ? "s" : ""} ?`)) return;
+    if (!confirm(`${trKey(locale, "spreadsheet.auto.017")} ${ids.length} ${trKey(locale, "spreadsheet.auto.016")}${ids.length > 1 ? "s" : ""} ?`)) return;
     if (ids.includes(openTaskId ?? "")) setOpenTaskId(null);
     setSelectedTaskIds(new Set());
     setGroups((prev) =>
-      prev.map((g) => ({ ...g, tasks: g.tasks.filter((t) => !ids.includes(t.id)) }))
+      prev.map((g) => ({ ...g, tasks: ids.reduce((tasks, id) => removeTaskFromTree(tasks, id), g.tasks) }))
     );
     startTransition(async () => { await bulkDeleteTasks(ids); router.refresh(); });
   }, [selectedTaskIds, openTaskId, router]);
@@ -998,14 +1456,40 @@ export function ProjectSpreadsheet({
     });
   };
 
-  const submitAddTask = (groupId: string) => {
+  const handleMoveTaskToGroup = useCallback((taskId: string, fromGroupId: string, toGroupId: string) => {
+    if (fromGroupId === toGroupId) return;
+    setGroups((prev) => {
+      const sourceGroup = prev.find((g) => g.id === fromGroupId);
+      const task = sourceGroup?.tasks.find((t) => t.id === taskId);
+      if (!task) return prev;
+      const removed = prev.map((g) => ({
+        ...g,
+        tasks: g.tasks.filter((t) => t.id !== taskId),
+      }));
+      return removed.map((g) =>
+        g.id === toGroupId
+          ? { ...g, tasks: [...g.tasks, { ...task, groupId: toGroupId }] }
+          : g
+      );
+    });
+    setMobileMoveTask(null);
+    startTransition(async () => {
+      const targetGroup = groups.find((g) => g.id === toGroupId);
+      const targetIndex = targetGroup?.tasks.filter((t) => !t.archivedAt).length ?? 0;
+      await moveTaskAction(taskId, toGroupId, targetIndex);
+      router.refresh();
+    });
+  }, [groups, router]);
+
+  const submitAddTask = (groupId: string, draftOverrides?: Record<string, string>) => {
+    const effectiveDrafts = draftOverrides ? { ...newTaskFieldDrafts, ...draftOverrides } : newTaskFieldDrafts;
     const title = newTaskTitle.trim();
     const draftEntries = columns.flatMap((col) => {
       if (col.type === "TIMELINE") {
-        const start = (newTaskFieldDrafts[timelineStartKey(col.id)] ?? "").trim();
-        const startTime = (newTaskFieldDrafts[timelineStartTimeKey(col.id)] ?? "").trim();
-        const end = (newTaskFieldDrafts[timelineEndKey(col.id)] ?? "").trim();
-        const endTime = (newTaskFieldDrafts[timelineEndTimeKey(col.id)] ?? "").trim();
+        const start = (effectiveDrafts[timelineStartKey(col.id)] ?? "").trim();
+        const startTime = normalizeTimeInput((effectiveDrafts[timelineStartTimeKey(col.id)] ?? "").trim());
+        const end = (effectiveDrafts[timelineEndKey(col.id)] ?? "").trim();
+        const endTime = normalizeTimeInput((effectiveDrafts[timelineEndTimeKey(col.id)] ?? "").trim());
         if (!start && !end) return [];
         return [[
           col.id,
@@ -1016,12 +1500,12 @@ export function ProjectSpreadsheet({
         ] as const];
       }
       if (col.type === "DUE_DATE") {
-        const date = (newTaskFieldDrafts[col.id] ?? "").trim();
-        const time = (newTaskFieldDrafts[dueTimeKey(col.id)] ?? "").trim();
+        const date = (effectiveDrafts[col.id] ?? "").trim();
+        const time = normalizeTimeInput((effectiveDrafts[dueTimeKey(col.id)] ?? "").trim());
         const composed = date ? composeDateTimeValue(date, time || null) : "";
         return composed ? [[col.id, composed] as const] : [];
       }
-      const value = (newTaskFieldDrafts[col.id] ?? "").trim();
+      const value = (effectiveDrafts[col.id] ?? "").trim();
       return value ? [[col.id, value] as const] : [];
     });
     const fieldDraftByColumnId = Object.fromEntries(draftEntries);
@@ -1084,6 +1568,7 @@ export function ProjectSpreadsheet({
     const tempGroup: GroupWithTasks = {
       id: tempId,
       projectId: project.id,
+      parentId: null,
       name,
       color: "#6366f1",
       position: groups.length,
@@ -1100,6 +1585,45 @@ export function ProjectSpreadsheet({
       );
     });
   };
+
+  const submitAddSubgroup = useCallback(
+    (parentGroupId: string) => {
+      const baseName = locale === "fr" ? "Sous-catégorie" : "Sub-category";
+      const parentGroup = groups.find((g) => g.id === parentGroupId);
+      if (!parentGroup) return;
+      const siblingCount = groups.filter((g) => (g.parentId ?? null) === parentGroupId).length;
+      const tempId = `temp-subgroup-${Date.now()}`;
+      const tempGroup: GroupWithTasks = {
+        id: tempId,
+        projectId: project.id,
+        parentId: parentGroupId,
+        name: `${baseName} ${siblingCount + 1}`,
+        color: parentGroup.color,
+        position: siblingCount,
+        createdAt: new Date(),
+        tasks: [],
+      };
+      setGroups((prev) => [...prev, tempGroup]);
+      setCollapsedGroups((prev) => {
+        if (!prev.has(parentGroupId)) return prev;
+        const next = new Set(prev);
+        next.delete(parentGroupId);
+        return next;
+      });
+      showSubgroupFeedback(tempId);
+      startTransition(async () => {
+        const created = await createGroupWithParentAction(project.id, tempGroup.name, parentGroupId);
+        setGroups((prev) =>
+          prev.map((g) =>
+            g.id === tempId ? ({ ...created, tasks: created.tasks ?? [] } as GroupWithTasks) : g
+          )
+        );
+        setNewSubgroupId((current) => (current === tempId ? created.id : current));
+        setNewSubgroupHint((current) => (current === tempId ? created.id : current));
+      });
+    },
+    [groups, locale, project.id, showSubgroupFeedback]
+  );
 
   const handleSaveGroupAsTemplate = async () => {
     const name = saveTemplateName.trim();
@@ -1137,7 +1661,7 @@ export function ProjectSpreadsheet({
   };
 
   const totalMinWidth =
-    CHECK_COL + TASK_COL + columns.reduce((sum, c) => sum + colW(c.type), 0) + ACTIONS_COL + 48;
+    CHECK_COL + nameColWidth + columns.reduce((sum, c) => sum + getColumnWidth(c), 0) + ACTIONS_COL + 48;
 
   const searchLower = search?.trim().toLowerCase() ?? "";
   const isDoneTask = useCallback(
@@ -1157,7 +1681,8 @@ export function ProjectSpreadsheet({
         filters.owner.length === 0);
     let baseTasks = emptyFilters
       ? group.tasks
-      : filterTasks(group.tasks, filters!, project.columns);
+      : filterTasks(group.tasks, filters!, project.columns, normalizeOwnerValue);
+    baseTasks = baseTasks.filter((t) => !t.parentId);
     baseTasks = baseTasks.filter((t) => !t.archivedAt);
     baseTasks = baseTasks.filter((t) => !isDoneTask(t));
     if (searchLower) {
@@ -1168,6 +1693,32 @@ export function ProjectSpreadsheet({
     return sortTasks(baseTasks, sort ?? null, project.columns);
   }, [filters, isDoneTask, project.columns, searchLower, sort]);
 
+  const getVisibleSubtasks = useCallback((task: TaskWithFields, depth = 1): Array<{ task: TaskWithFields; depth: number }> => {
+    const source = (task.subtasks ?? []) as TaskWithFields[];
+    const emptyFilters =
+      !filters ||
+      (filters.status.length === 0 &&
+        filters.priority.length === 0 &&
+        filters.owner.length === 0);
+    let baseTasks = emptyFilters
+      ? source
+      : filterTasks(source, filters!, project.columns, normalizeOwnerValue);
+    baseTasks = baseTasks.filter((t) => !t.archivedAt);
+    baseTasks = baseTasks.filter((t) => !isDoneTask(t));
+    if (searchLower) {
+      baseTasks = baseTasks.filter((t) =>
+        t.title.toLowerCase().includes(searchLower)
+      );
+    }
+    const sorted = sortTasks(baseTasks, sort ?? null, project.columns);
+    const out: Array<{ task: TaskWithFields; depth: number }> = [];
+    for (const subtask of sorted) {
+      out.push({ task: subtask, depth });
+      out.push(...getVisibleSubtasks(subtask, depth + 1));
+    }
+    return out;
+  }, [filters, isDoneTask, normalizeOwnerValue, project.columns, searchLower, sort]);
+
   const formatDueDate = useCallback((value: string | null | undefined) => {
     if (!value) return null;
     const normalized = value.slice(0, 10);
@@ -1175,59 +1726,213 @@ export function ProjectSpreadsheet({
     if (Number.isNaN(d.getTime())) return null;
     return d.toLocaleDateString(getUiLocale(), { day: "numeric", month: "short" });
   }, []);
+  const isDescendantOfGroup = useCallback(
+    (groupId: string, ancestorId: string) => {
+      let cursor = groupsById.get(groupId)?.parentId ?? null;
+      const seen = new Set<string>();
+      while (cursor) {
+        if (seen.has(cursor)) break;
+        seen.add(cursor);
+        if (cursor === ancestorId) return true;
+        cursor = groupsById.get(cursor)?.parentId ?? null;
+      }
+      return false;
+    },
+    [groupsById]
+  );
 
   // Collect all displayed task IDs across groups for "select all"
   const allDisplayedTaskIds = useMemo(
-    () => groups.flatMap((group) => getGroupVisibleTasks(group).map((t) => t.id)),
-    [groups, getGroupVisibleTasks]
+    () =>
+      visibleOrderedGroups.flatMap((group) =>
+        getGroupVisibleTasks(group).flatMap((task) => [
+          task.id,
+          ...getVisibleSubtasks(task).map(({ task: subtask }) => subtask.id),
+        ])
+      ),
+    [visibleOrderedGroups, getGroupVisibleTasks, getVisibleSubtasks]
   );
   const allSelected = allDisplayedTaskIds.length > 0 && allDisplayedTaskIds.every((id) => selectedTaskIds.has(id));
   const someSelected = !allSelected && allDisplayedTaskIds.some((id) => selectedTaskIds.has(id));
 
+  const renderMobileGroupMenu = (group: GroupWithTasks) => (
+    mobileGroupMenuId === group.id && mobileGroupMenuPos && createPortal(
+      <div
+        ref={mobileGroupMenuPanelRef}
+        className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-2xl ring-1 ring-black/5 dark:ring-white/10 overflow-hidden"
+        style={{
+          position: "fixed",
+          top: `${mobileGroupMenuPos.top}px`,
+          left: `${mobileGroupMenuPos.left}px`,
+          width: `${mobileGroupMenuPos.width}px`,
+          zIndex: 2147483646,
+        }}
+      >
+        <button
+          onClick={() => {
+            setMobileGroupMenuId(null);
+            setMobileGroupMenuPos(null);
+            setNewTaskTitle("");
+            setNewTaskFieldDrafts({});
+            setAddingTaskIn(group.id);
+          }}
+          className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/70 cursor-pointer"
+        >
+          + {trKey(locale, "spreadsheet.auto.018")}
+        </button>
+        <button
+          onClick={() => {
+            setMobileGroupMenuId(null);
+            setMobileGroupMenuPos(null);
+            const typed = window.prompt(
+              locale === "fr" ? "Nouveau nom de catégorie" : "New category name",
+              group.name
+            );
+            const next = typed?.trim();
+            if (!next || next === group.name) return;
+            handleGroupRename(group.id, next);
+          }}
+          className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/70 cursor-pointer"
+        >
+          {locale === "fr" ? "Renommer" : "Rename"}
+        </button>
+        <button
+          onClick={() => {
+            setMobileGroupMenuId(null);
+            setMobileGroupMenuPos(null);
+            submitAddSubgroup(group.id);
+          }}
+          className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/70 cursor-pointer"
+        >
+          + {locale === "fr" ? "Sous-catégorie" : "Sub-category"}
+        </button>
+        <button
+          onClick={() => {
+            setMobileGroupMenuId(null);
+            setMobileGroupMenuPos(null);
+            handleDeleteGroup(group.id);
+          }}
+          className="w-full text-left px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer"
+        >
+          {locale === "fr" ? "Supprimer" : "Delete"}
+        </button>
+      </div>,
+      document.body
+    )
+  );
+
   return (
     <>
-    <div className="sm:hidden space-y-3">
-      {groups.map((group) => {
+    <div className="sm:hidden space-y-2.5 overflow-x-hidden overscroll-y-contain px-0.5 pb-1">
+      {visibleOrderedGroups.map((group) => {
+        const depth = hierarchyMeta.depthById.get(group.id) ?? 0;
+        if (depth > 0) return null;
         const displayTasks = getGroupVisibleTasks(group);
         const pageSize = groupPageSizes[group.id] ?? GROUP_PAGE_SIZE;
         const pagedTasks = displayTasks.slice(0, pageSize);
         const hiddenCount = displayTasks.length - pagedTasks.length;
         const isCollapsed = collapsedGroups.has(group.id);
+        const isRootExpanded = mobileExpandedRootGroups.has(group.id);
+        const nestedGroups = visibleOrderedGroups.filter(
+          (candidate) => candidate.id !== group.id && isDescendantOfGroup(candidate.id, group.id)
+        );
+        const collapsedPreviewTasks = displayTasks.slice(0, 2);
         return (
-          <section key={group.id} className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
-            <div className="px-3 py-2.5 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2">
-              <button
-                onClick={() => toggleCollapse(group.id)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
-              >
-                <svg
-                  className={`w-3.5 h-3.5 transition-transform duration-150 ${isCollapsed ? "-rotate-90" : ""}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+          <section
+            key={group.id}
+            data-group-row-id={group.id}
+            className={`mobile-surface-soft transition-all relative overflow-visible rounded-[20px] ${
+              newSubgroupId === group.id
+                ? "border-emerald-300 dark:border-emerald-700 ring-2 ring-emerald-200/70 dark:ring-emerald-900/40"
+                : ""
+            }`}
+          >
+            <div className="px-3 py-2.5 border-b border-gray-100/90 dark:border-gray-700/90">
+              <div className="flex items-start gap-2">
+                <button
+                  onClick={() =>
+                    setMobileExpandedRootGroups((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(group.id)) next.delete(group.id);
+                      else next.add(group.id);
+                      return next;
+                    })
+                  }
+                  className="mt-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer"
                 >
-                  <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: group.color }} />
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-300 truncate">
-                {group.name}
-              </p>
-              <span className="text-[11px] text-gray-400 dark:text-gray-500 ml-auto">{displayTasks.length}</span>
-              <button
-                onClick={() => {
-                  setNewTaskTitle("");
-                  setNewTaskFieldDrafts({});
-                  setAddingTaskIn(group.id);
-                }}
-                className="text-[11px] text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium cursor-pointer"
-              >
-                + {tr(locale, "Tâche", "Task")}
-              </button>
+                  <svg
+                    className={`w-3.5 h-3.5 transition-transform duration-150 ${isRootExpanded ? "" : "-rotate-90"}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{ backgroundColor: group.color }} />
+                <div className="min-w-0 flex-1">
+                  {mobileRenamingGroupId === group.id ? (
+                    <input
+                      autoFocus
+                      value={mobileGroupNameDraft}
+                      onChange={(e) => setMobileGroupNameDraft(e.target.value)}
+                      onBlur={() => {
+                        const next = mobileGroupNameDraft.trim();
+                        setMobileRenamingGroupId(null);
+                        if (next && next !== group.name) handleGroupRename(group.id, next);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const next = mobileGroupNameDraft.trim();
+                          setMobileRenamingGroupId(null);
+                          if (next && next !== group.name) handleGroupRename(group.id, next);
+                        }
+                        if (e.key === "Escape") {
+                          setMobileRenamingGroupId(null);
+                          setMobileGroupNameDraft("");
+                        }
+                      }}
+                      className="text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-indigo-300 dark:border-indigo-700 rounded px-1.5 py-0.5 min-w-0 w-full"
+                    />
+                  ) : (
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-300 truncate">
+                      {group.name}
+                    </p>
+                  )}
+                </div>
+                <span className="text-[11px] text-gray-400 dark:text-gray-500 tabular-nums mt-0.5">{displayTasks.length}</span>
+                <div className="relative">
+                  <button
+                    ref={(node) => {
+                      mobileGroupMenuTriggerRefs.current[group.id] = node;
+                    }}
+                    onClick={() =>
+                      setMobileGroupMenuId((prev) => {
+                        if (prev === group.id) {
+                          setMobileGroupMenuPos(null);
+                          return null;
+                        }
+                        updateMobileGroupMenuPosition(group.id);
+                        return group.id;
+                      })
+                    }
+                    className="w-7 h-7 rounded-lg border border-gray-200/90 dark:border-gray-600/90 text-gray-500 dark:text-gray-300 hover:border-indigo-300 hover:text-indigo-600 dark:hover:border-indigo-600 dark:hover:text-indigo-300 transition-colors cursor-pointer flex items-center justify-center"
+                    title={locale === "fr" ? "Actions catégorie" : "Category actions"}
+                    data-mobile-group-menu-trigger={group.id}
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                      <circle cx="5" cy="12" r="2" />
+                      <circle cx="12" cy="12" r="2" />
+                      <circle cx="19" cy="12" r="2" />
+                    </svg>
+                  </button>
+                  {renderMobileGroupMenu(group)}
+                </div>
+              </div>
             </div>
 
-            {!isCollapsed && (
-              <div className="p-2 space-y-2">
+            {isRootExpanded && !isCollapsed && (
+              <div className="p-2.5 space-y-2">
                 {addingTaskIn === group.id && (
                   <div className="rounded-xl border border-indigo-200 dark:border-indigo-700 bg-indigo-50/50 dark:bg-indigo-900/20 p-2 flex items-center gap-2">
                     <input
@@ -1238,22 +1943,22 @@ export function ProjectSpreadsheet({
                         if (e.key === "Enter") submitAddTask(group.id);
                         if (e.key === "Escape") resetTaskDraft();
                       }}
-                      placeholder={tr(locale, "Nom de la tâche…", "Task name...")}
+                      placeholder={trKey(locale, "spreadsheet.auto.019")}
                       className="flex-1 text-sm text-gray-800 dark:text-gray-100 border border-indigo-300 dark:border-indigo-700 rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-indigo-200 dark:bg-gray-800/80"
                     />
                     <button
-                      onMouseDown={(e) => { e.preventDefault(); submitAddTask(group.id); }}
+                      onClick={() => submitAddTask(group.id)}
                       className="w-8 h-8 rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 transition-colors cursor-pointer flex items-center justify-center"
-                      title={tr(locale, "Valider", "Confirm")}
+                      title={trKey(locale, "spreadsheet.auto.020")}
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path d="M5 13l4 4L19 7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </button>
                     <button
-                      onMouseDown={(e) => { e.preventDefault(); resetTaskDraft(); }}
+                      onClick={() => resetTaskDraft()}
                       className="w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer flex items-center justify-center"
-                      title={tr(locale, "Annuler", "Cancel")}
+                      title={trKey(locale, "spreadsheet.auto.021")}
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path d="M6 18L18 6M6 6l12 12" strokeWidth="2" strokeLinecap="round" />
@@ -1264,7 +1969,7 @@ export function ProjectSpreadsheet({
 
                 {pagedTasks.length === 0 ? (
                   <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4">
-                    {tr(locale, "Aucune tâche", "No task")}
+                    {trKey(locale, "spreadsheet.auto.022")}
                   </p>
                 ) : (
                   pagedTasks.map((task) => {
@@ -1277,19 +1982,24 @@ export function ProjectSpreadsheet({
                     const ownerValue = projectOwnerCol
                       ? task.fieldValues.find((f) => f.columnId === projectOwnerCol.id)?.value ?? ""
                       : "";
+                    const ownerLabel = resolveOwnerName(ownerValue) ?? ownerValue;
                     const dueValue = projectDueDateCol
                       ? task.fieldValues.find((f) => f.columnId === projectDueDateCol.id)?.value ?? ""
                       : "";
                     const dueLabel = formatDueDate(dueValue);
-                    const statusMeta = STATUS_OPTIONS.find((opt) => opt.value === statusValue);
-                    const priorityMeta = PRIORITY_OPTIONS.find((opt) => opt.value === priorityValue);
+                    const statusMeta = statusOptions.find((opt) => opt.value === statusValue);
+                    const priorityMeta = priorityOptions.find((opt) => opt.value === priorityValue);
                     const selected = selectedTaskIds.has(task.id);
                     const completing = completingTasks.has(task.id);
+                    const visibleSubtasks = getVisibleSubtasks(task);
+                    const showAllSubtasks = mobileExpandedTaskSubtasks.has(task.id);
+                    const displayedSubtasks = showAllSubtasks ? visibleSubtasks : visibleSubtasks.slice(0, 3);
                     return (
                       <article
                         key={task.id}
                         onClick={() => setOpenTaskId(task.id)}
-                        className={`rounded-xl border p-3 transition-colors cursor-pointer ${selected ? "border-indigo-300 dark:border-indigo-700 bg-indigo-50/40 dark:bg-indigo-900/20" : "border-gray-200 dark:border-gray-700 hover:border-indigo-200 dark:hover:border-indigo-700 bg-white dark:bg-gray-800"}`}
+                        className={`rounded-xl border p-3 transition-colors cursor-pointer ${selected ? "border-indigo-300 dark:border-indigo-700 bg-indigo-50/40 dark:bg-indigo-900/20" : "border-gray-200/90 dark:border-gray-700 hover:border-indigo-200 dark:hover:border-indigo-700 bg-white/90 dark:bg-gray-800/95"}`}
+                        style={{ marginLeft: `${Math.min(depth, 6) * Math.max(8, TASK_INDENT_STEP - 6)}px` }}
                       >
                         <div className="flex items-start gap-2">
                           <input
@@ -1324,9 +2034,9 @@ export function ProjectSpreadsheet({
                                   {priorityMeta.label}
                                 </span>
                               )}
-                              {ownerValue && (
+                              {ownerLabel && (
                                 <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 max-w-[140px] truncate">
-                                  {ownerValue}
+                                  {ownerLabel}
                                 </span>
                               )}
                               {dueLabel && (
@@ -1342,7 +2052,7 @@ export function ProjectSpreadsheet({
                                 e.stopPropagation();
                                 if (!completing) handleFieldUpdate(task.id, statusColId, "DONE");
                               }}
-                              title={tr(locale, "Terminer la tâche", "Complete task")}
+                              title={trKey(locale, "spreadsheet.auto.002")}
                               className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${completing ? "border-emerald-500 bg-emerald-500 text-white" : "border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:border-emerald-500 hover:text-emerald-500"}`}
                             >
                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1350,7 +2060,96 @@ export function ProjectSpreadsheet({
                               </svg>
                             </button>
                           )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMobileMoveTask({ id: task.id, title: task.title, fromGroupId: group.id });
+                            }}
+                            className="w-7 h-7 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-300 hover:border-indigo-400 hover:text-indigo-500 transition-colors cursor-pointer flex items-center justify-center"
+                            title={locale === "fr" ? "Déplacer vers…" : "Move to…"}
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path d="M12 5v14m0 0l-4-4m4 4l4-4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </button>
                         </div>
+                        {displayedSubtasks.length > 0 && (
+                          <div className="mt-2.5 border-t border-gray-100 dark:border-gray-700 pt-2 space-y-1.5">
+                            {displayedSubtasks.map(({ task: subtask, depth: subDepth }) => {
+                              const subtaskCompleting = completingTasks.has(subtask.id);
+                              return (
+                                <div
+                                  key={subtask.id}
+                                  className={`flex items-center gap-1.5 transition-all ${subtaskCompleting ? "opacity-50" : ""}`}
+                                  style={{ marginLeft: `${Math.min(subDepth, 4) * 12}px` }}
+                                >
+                                  {statusColId && (
+                                    <button
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        if (!subtaskCompleting) {
+                                          handleFieldUpdate(subtask.id, statusColId, "DONE");
+                                        }
+                                      }}
+                                      className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${
+                                        subtaskCompleting
+                                          ? "border-emerald-500 bg-emerald-500 text-white"
+                                          : "border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:border-emerald-500 hover:text-emerald-500"
+                                      }`}
+                                      title={trKey(locale, "spreadsheet.auto.002")}
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path d="M5 13l4 4L19 7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setOpenTaskId(subtask.id);
+                                    }}
+                                    className={`min-w-0 flex-1 text-left text-[11px] cursor-pointer truncate transition-all ${
+                                      subtaskCompleting
+                                        ? "line-through text-emerald-600 dark:text-emerald-400"
+                                        : "text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-300"
+                                    }`}
+                                  >
+                                    {subtaskCompleting ? (
+                                      <svg className="inline w-3 h-3 mr-1 mb-0.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path d="M5 13l4 4L19 7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                      </svg>
+                                    ) : null}
+                                    ↳ {subtask.title}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                            {visibleSubtasks.length > 3 && (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setMobileExpandedTaskSubtasks((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(task.id)) next.delete(task.id);
+                                    else next.add(task.id);
+                                    return next;
+                                  });
+                                }}
+                                className="text-[11px] text-indigo-500 dark:text-indigo-300 hover:text-indigo-600 dark:hover:text-indigo-200 cursor-pointer ml-6"
+                              >
+                                {showAllSubtasks
+                                  ? locale === "fr"
+                                    ? "Masquer les sous-tâches"
+                                    : "Hide subtasks"
+                                  : locale === "fr"
+                                    ? `+${visibleSubtasks.length - 3} sous-tâches`
+                                    : `+${visibleSubtasks.length - 3} subtasks`}
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </article>
                     );
                   })
@@ -1361,8 +2160,158 @@ export function ProjectSpreadsheet({
                     onClick={() => setGroupPageSizes((prev) => ({ ...prev, [group.id]: pageSize + GROUP_PAGE_SIZE }))}
                     className="w-full text-center py-2 text-xs text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300 cursor-pointer"
                   >
-                    {tr(locale, "Voir", "Show")} {hiddenCount} {tr(locale, "tâche", "task")}{hiddenCount > 1 ? "s" : ""} {tr(locale, "de plus…", "more...")}
+                    {trKey(locale, "spreadsheet.auto.023")} {hiddenCount} {trKey(locale, "spreadsheet.auto.016")}{hiddenCount > 1 ? "s" : ""} {trKey(locale, "spreadsheet.auto.024")}
                   </button>
+                )}
+                {nestedGroups.length > 0 && (
+                  <div className="space-y-2 pt-1">
+                    {nestedGroups.map((subgroup) => {
+                      const subDepth = hierarchyMeta.depthById.get(subgroup.id) ?? 1;
+                      const subDisplayTasks = getGroupVisibleTasks(subgroup);
+                      const subPath = mobileGroupParentPathById.get(subgroup.id) ?? "";
+                      const subKey = subgroup.id;
+                      const subgroupExpanded = mobileExpandedSubgroups.has(subKey);
+                      return (
+                        <div
+                          key={subgroup.id}
+                          className="rounded-xl border border-gray-200/80 dark:border-gray-700/80 bg-gray-50/80 dark:bg-gray-900/35 overflow-hidden"
+                          style={{
+                            marginLeft: `${Math.min(Math.max(subDepth - 1, 0), 4) * 10}px`,
+                            borderLeftWidth: "2px",
+                            borderLeftColor: subgroup.color,
+                          }}
+                        >
+                          <div className="px-2.5 py-2 border-b border-gray-200/80 dark:border-gray-700/80 bg-white/40 dark:bg-gray-800/25">
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setMobileExpandedSubgroups((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(subKey)) next.delete(subKey);
+                                    else next.add(subKey);
+                                    return next;
+                                  })
+                                }
+                                className="min-w-0 flex-1 flex items-center gap-2 text-left cursor-pointer"
+                              >
+                                <svg
+                                  className={`w-3 h-3 text-gray-400 transition-transform ${subgroupExpanded ? "" : "-rotate-90"}`}
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: subgroup.color }} />
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-300 truncate min-w-0">
+                                  {subgroup.name}
+                                </p>
+                                <span className="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums ml-auto">{subDisplayTasks.length}</span>
+                              </button>
+                              <div className="relative">
+                                <button
+                                  ref={(node) => {
+                                    mobileGroupMenuTriggerRefs.current[subgroup.id] = node;
+                                  }}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setMobileGroupMenuId((prev) => {
+                                      if (prev === subgroup.id) {
+                                        setMobileGroupMenuPos(null);
+                                        return null;
+                                      }
+                                      updateMobileGroupMenuPosition(subgroup.id);
+                                      return subgroup.id;
+                                    });
+                                  }}
+                                  className="w-7 h-7 rounded-lg border border-gray-200/90 dark:border-gray-600/90 text-gray-500 dark:text-gray-300 hover:border-indigo-300 hover:text-indigo-600 dark:hover:border-indigo-600 dark:hover:text-indigo-300 transition-colors cursor-pointer flex items-center justify-center"
+                                  title={locale === "fr" ? "Actions catégorie" : "Category actions"}
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                                    <circle cx="5" cy="12" r="2" />
+                                    <circle cx="12" cy="12" r="2" />
+                                    <circle cx="19" cy="12" r="2" />
+                                  </svg>
+                                </button>
+                                {renderMobileGroupMenu(subgroup)}
+                              </div>
+                            </div>
+                            {subPath && (
+                              <p className="mt-1 text-[10px] text-gray-400 dark:text-gray-500 truncate">
+                                {locale === "fr" ? "Sous-catégorie de" : "Sub-category of"} {subPath}
+                              </p>
+                            )}
+                          </div>
+                          {subgroupExpanded ? (
+                            <div className="p-2 space-y-1.5">
+                              {subDisplayTasks.slice(0, 4).map((task) => {
+                                const subtaskPreview = getVisibleSubtasks(task).slice(0, 2);
+                                return (
+                                  <button
+                                    key={task.id}
+                                    onClick={() => setOpenTaskId(task.id)}
+                                    className="w-full text-left rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2.5 py-2 text-xs text-gray-700 dark:text-gray-200 hover:border-indigo-200 dark:hover:border-indigo-700 transition-colors cursor-pointer"
+                                  >
+                                    <span className="truncate block">{task.title}</span>
+                                    {subtaskPreview.length > 0 && (
+                                      <span className="mt-1 block text-[10px] text-gray-500 dark:text-gray-400 truncate">
+                                        {subtaskPreview.map(({ task: nested }) => nested.title).join(" • ")}
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                              {subDisplayTasks.length > 4 && (
+                                <p className="px-1 text-[10px] text-gray-400 dark:text-gray-500">
+                                  +{subDisplayTasks.length - 4} {locale === "fr" ? "autres tâches" : "more tasks"}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="p-2">
+                              {subDisplayTasks.length === 0 ? (
+                                <p className="text-[10px] text-gray-400 dark:text-gray-500">
+                                  {locale === "fr" ? "Aucune tâche visible" : "No visible tasks"}
+                                </p>
+                              ) : (
+                                <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
+                                  {subDisplayTasks.slice(0, 2).map((task) => task.title).join(" • ")}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+            {!isRootExpanded && !isCollapsed && (
+              <div className="px-3 pb-3">
+                {collapsedPreviewTasks.length === 0 ? (
+                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                    {locale === "fr" ? "Aucune tâche visible" : "No visible tasks"}
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    {collapsedPreviewTasks.map((task) => (
+                      <p key={task.id} className="truncate text-xs text-gray-500 dark:text-gray-400">
+                        • {task.title}
+                      </p>
+                    ))}
+                    {displayTasks.length > collapsedPreviewTasks.length && (
+                      <p className="text-[11px] text-indigo-500 dark:text-indigo-300">
+                        +{displayTasks.length - collapsedPreviewTasks.length} {locale === "fr" ? "autres tâches" : "more tasks"}
+                      </p>
+                    )}
+                    {nestedGroups.length > 0 && (
+                      <p className="text-[11px] text-gray-400 dark:text-gray-500">
+                        {nestedGroups.length} {locale === "fr" ? "sous-catégorie(s)" : "sub-category(ies)"}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -1370,7 +2319,7 @@ export function ProjectSpreadsheet({
         );
       })}
 
-      <section className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+      <section className="mobile-surface-soft rounded-[20px] overflow-hidden">
         <button
           onClick={handleToggleArchives}
           className="flex items-center gap-2 px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer w-full text-left"
@@ -1378,7 +2327,7 @@ export function ProjectSpreadsheet({
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
-          {showArchives ? tr(locale, "Masquer les archives", "Hide archives") : tr(locale, "Voir les archives", "Show archives")}
+          {showArchives ? trKey(locale, "spreadsheet.auto.025") : trKey(locale, "spreadsheet.auto.026")}
           <svg className={`w-3 h-3 ml-auto transition-transform ${showArchives ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path d="M6 9l6 6 6-6" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
@@ -1386,9 +2335,9 @@ export function ProjectSpreadsheet({
         {showArchives && (
           <div className="px-3 pb-3">
             {!archivesLoaded ? (
-              <p className="text-xs text-gray-400 dark:text-gray-500 italic py-2">{tr(locale, "Chargement…", "Loading...")}</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 italic py-2">{trKey(locale, "spreadsheet.auto.027")}</p>
             ) : archivedTasks.length === 0 ? (
-              <p className="text-xs text-gray-400 dark:text-gray-500 italic py-2">{tr(locale, "Aucune tâche archivée.", "No archived task.")}</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 italic py-2">{trKey(locale, "spreadsheet.auto.028")}</p>
             ) : (
               <div className="space-y-1">
                 {archivedTasks.map((task) => (
@@ -1398,7 +2347,7 @@ export function ProjectSpreadsheet({
                     <button
                       onClick={() => handleRestoreTask(task.id)}
                       className="p-1 rounded text-gray-400 hover:text-emerald-500 transition-colors cursor-pointer"
-                      title={tr(locale, "Restaurer la tâche", "Restore task")}
+                      title={trKey(locale, "spreadsheet.auto.029")}
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -1412,7 +2361,7 @@ export function ProjectSpreadsheet({
         )}
       </section>
 
-      <section className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-3">
+      <section className="mobile-surface-soft rounded-[20px] border-dashed p-3">
         {addingGroup ? (
           <div className="flex items-center gap-2">
             <input
@@ -1424,7 +2373,7 @@ export function ProjectSpreadsheet({
                 if (e.key === "Escape") setAddingGroup(false);
               }}
               onBlur={submitAddGroup}
-              placeholder={tr(locale, "Nom du groupe…", "Group name...")}
+              placeholder={trKey(locale, "spreadsheet.auto.030")}
               className="flex-1 text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 outline-none bg-white dark:bg-gray-800 dark:text-gray-100"
             />
           </div>
@@ -1436,11 +2385,47 @@ export function ProjectSpreadsheet({
             }}
             className="w-full text-left text-sm text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors cursor-pointer"
           >
-            + {tr(locale, "Ajouter un groupe", "Add group")}
+            + {trKey(locale, "spreadsheet.auto.031")}
           </button>
         )}
       </section>
     </div>
+
+    {mobileMoveTask && (
+      <div className="sm:hidden fixed inset-0 z-[95]">
+        <div className="absolute inset-0 bg-black/30" onClick={() => setMobileMoveTask(null)} />
+        <div className="absolute left-0 right-0 bottom-0 rounded-t-2xl bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 max-h-[72vh] overflow-y-auto">
+          <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+            {locale === "fr" ? "Déplacer la tâche" : "Move task"}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{mobileMoveTask.title}</p>
+          <div className="mt-3 space-y-1.5">
+            {orderedGroups
+              .filter((candidate) => candidate.id !== mobileMoveTask.fromGroupId)
+              .map((candidate) => {
+                const candidateDepth = hierarchyMeta.depthById.get(candidate.id) ?? 0;
+                return (
+                  <button
+                    key={candidate.id}
+                    onClick={() => handleMoveTaskToGroup(mobileMoveTask.id, mobileMoveTask.fromGroupId, candidate.id)}
+                    className="w-full text-left flex items-center gap-2 rounded-lg px-2.5 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer"
+                    style={{ paddingLeft: `${10 + Math.min(candidateDepth, 6) * 12}px` }}
+                  >
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: candidate.color }} />
+                    <span className="text-sm text-gray-700 dark:text-gray-200 truncate">{candidate.name}</span>
+                  </button>
+                );
+              })}
+          </div>
+          <button
+            onClick={() => setMobileMoveTask(null)}
+            className="mt-4 w-full rounded-lg border border-gray-200 dark:border-gray-600 px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+          >
+            {trKey(locale, "common.cancel")}
+          </button>
+        </div>
+      </div>
+    )}
 
     <div className="hidden sm:block overflow-x-auto">
       <div style={{ minWidth: totalMinWidth }}>
@@ -1474,25 +2459,38 @@ export function ProjectSpreadsheet({
             />
           </div>
           <div
-            style={{ width: TASK_COL, minWidth: TASK_COL }}
-            className="px-4 py-2.5 text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider"
+            style={{ width: nameColWidth, minWidth: nameColWidth }}
+            className="relative group/resize px-4 py-2.5 text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider"
           >
-            {tr(locale, "Tâche", "Task")}
+            {trKey(locale, "spreadsheet.auto.018")}
+            <div
+              onMouseDown={(e) => startResize("name", e)}
+              className="absolute right-0 top-0 h-full w-2 cursor-col-resize opacity-0 group-hover/resize:opacity-100 hover:opacity-100"
+            >
+              <div className="mx-auto h-full w-px bg-indigo-200 dark:bg-indigo-700" />
+            </div>
           </div>
           {columns.map((col) => (
             <div
               key={col.id}
-              style={{ width: colW(col.type), minWidth: colW(col.type) }}
-              className="px-3 py-2.5 text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider"
+              style={{ width: getColumnWidth(col), minWidth: getColumnWidth(col) }}
+              className="relative group/resize px-3 py-2.5 text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider"
             >
               {getDisplayColumnLabel(col, locale)}
+              <div
+                onMouseDown={(e) => startResize("column", e, col.id)}
+                className="absolute right-0 top-0 h-full w-2 cursor-col-resize opacity-0 group-hover/resize:opacity-100 hover:opacity-100"
+              >
+                <div className="mx-auto h-full w-px bg-indigo-200 dark:bg-indigo-700" />
+              </div>
             </div>
           ))}
           <div style={{ width: ACTIONS_COL }} />
         </div>
 
         {/* ── Groups ── */}
-        {groups.map((group, groupIdx) => {
+        {visibleOrderedGroups.map((group) => {
+          const depth = hierarchyMeta.depthById.get(group.id) ?? 0;
           const displayTasks = getGroupVisibleTasks(group);
           const pageSize = groupPageSizes[group.id] ?? GROUP_PAGE_SIZE;
           const pagedTasks = displayTasks.slice(0, pageSize);
@@ -1519,9 +2517,19 @@ export function ProjectSpreadsheet({
             : null;
 
           return (
-            <div key={group.id} className="border-b border-gray-100 dark:border-gray-700">
+            <div
+              key={group.id}
+              data-group-row-id={group.id}
+              className={`border-b transition-all ${
+                newSubgroupId === group.id
+                  ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-900/10"
+                  : "border-gray-100 dark:border-gray-700"
+              }`}
+            >
+              <div style={{ paddingLeft: `${Math.min(depth, 6) * 14}px` }}>
               <GroupHeader
                 group={group}
+                depth={depth}
                 taskCount={displayTasks.length}
                 collapsed={isCollapsed}
                 onToggle={() => toggleCollapse(group.id)}
@@ -1532,10 +2540,15 @@ export function ProjectSpreadsheet({
                   setNewTaskFieldDrafts({});
                   setAddingTaskIn(group.id);
                 }}
+                onAddSubgroup={() => submitAddSubgroup(group.id)}
+                onDeleteGroup={() => handleDeleteGroup(group.id)}
                 onMoveUp={() => handleReorderGroup(group.id, "up")}
                 onMoveDown={() => handleReorderGroup(group.id, "down")}
-                canMoveUp={groupIdx > 0}
-                canMoveDown={groupIdx < groups.length - 1}
+                canMoveUp={(hierarchyMeta.siblingIndexById.get(group.id) ?? 0) > 0}
+                canMoveDown={
+                  (hierarchyMeta.siblingIndexById.get(group.id) ?? 0) <
+                  (hierarchyMeta.siblingCountById.get(group.id) ?? 1) - 1
+                }
                 donePct={donePct}
                 totalBudget={totalBudget}
                 onSaveAsTemplate={() => {
@@ -1544,17 +2557,19 @@ export function ProjectSpreadsheet({
                   setSaveTemplateGroupId(group.id);
                 }}
               />
+              </div>
 
               {!isCollapsed && (
                 <>
                   {pagedTasks.map((task, taskIdx) => {
+                    const visibleSubtasks = getVisibleSubtasks(task);
                     const dropKey = `${group.id}:${taskIdx}`;
                     const isDropTarget = dragOverKey === dropKey;
                     return (
                     <div key={task.id}>
                       {/* Drop zone above this task */}
                       <div
-                        className={`h-0.5 transition-all ${isDropTarget ? "h-1.5 bg-indigo-400 mx-4 rounded-full" : ""}`}
+                        className={`h-2 transition-all ${isDropTarget ? "h-3 bg-indigo-400/90 mx-3 rounded-full" : "bg-transparent"}`}
                         onDragOver={(e) => { e.preventDefault(); setDragOverKey(dropKey); }}
                         onDragLeave={() => setDragOverKey(null)}
                         onDrop={() => handleDropAt(group.id, taskIdx)}
@@ -1567,7 +2582,11 @@ export function ProjectSpreadsheet({
                     >
                       {/* Checkbox */}
                       <div
-                        style={{ width: CHECK_COL, minWidth: CHECK_COL }}
+                        style={{
+                          width: CHECK_COL,
+                          minWidth: CHECK_COL,
+                          paddingLeft: `${Math.min(depth, 6) * TASK_INDENT_STEP}px`,
+                        }}
                         className="flex items-center justify-center flex-shrink-0"
                       >
                         <input
@@ -1594,8 +2613,12 @@ export function ProjectSpreadsheet({
                         </svg>
                       </div>
                       <div
-                        style={{ width: TASK_COL, minWidth: TASK_COL }}
-                        className="px-2 py-2.5"
+                        style={{
+                          width: nameColWidth,
+                          minWidth: nameColWidth,
+                          paddingLeft: `${8 + Math.min(depth, 6) * TASK_INDENT_STEP}px`,
+                        }}
+                        className="py-2.5 pr-2"
                       >
                         <TitleCell
                           task={task}
@@ -1612,7 +2635,7 @@ export function ProjectSpreadsheet({
                       {columns.map((col) => (
                         <div
                           key={col.id}
-                          style={{ width: colW(col.type), minWidth: colW(col.type) }}
+                          style={{ width: getColumnWidth(col), minWidth: getColumnWidth(col) }}
                           className="px-2 py-1.5"
                         >
                           <CellRenderer
@@ -1629,6 +2652,85 @@ export function ProjectSpreadsheet({
                       ))}
                       <div style={{ width: ACTIONS_COL }} />
                     </div>
+                    {visibleSubtasks.map(({ task: subtask, depth: subtaskDepth }) => (
+                      <div
+                        key={subtask.id}
+                        className={`flex items-center border-t border-gray-100/80 dark:border-gray-700/40 bg-gray-50/35 dark:bg-gray-800/20 hover:bg-gray-50/70 dark:hover:bg-gray-700/35 transition-all group/row ${selectedTaskIds.has(subtask.id) ? "bg-indigo-50/40 dark:bg-indigo-900/20" : ""} ${completingTasks.has(subtask.id) ? "opacity-50 bg-emerald-50/60 dark:bg-emerald-900/10" : ""}`}
+                      >
+                        <div
+                          style={{
+                            width: CHECK_COL,
+                            minWidth: CHECK_COL,
+                            paddingLeft: `${Math.min(depth, 6) * TASK_INDENT_STEP + 18 + subtaskDepth * TASK_INDENT_STEP}px`,
+                          }}
+                          className="flex items-center justify-center flex-shrink-0"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedTaskIds.has(subtask.id)}
+                            onChange={() => {
+                              setSelectedTaskIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(subtask.id)) next.delete(subtask.id);
+                                else next.add(subtask.id);
+                                return next;
+                              });
+                            }}
+                            className={`w-3.5 h-3.5 rounded border-gray-300 text-indigo-500 cursor-pointer accent-indigo-500 transition-opacity ${selectedTaskIds.has(subtask.id) ? "opacity-100" : "opacity-0 group-hover/row:opacity-100"}`}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                        <div className="pl-0 pr-0 flex-shrink-0 opacity-0">
+                          <svg className="w-3 h-3 text-gray-300 dark:text-gray-600" fill="currentColor" viewBox="0 0 24 24">
+                            <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
+                            <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+                            <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+                          </svg>
+                        </div>
+                        <div
+                          style={{
+                            width: nameColWidth,
+                            minWidth: nameColWidth,
+                            paddingLeft: `${8 + Math.min(depth, 6) * TASK_INDENT_STEP + 18 + subtaskDepth * TASK_INDENT_STEP}px`,
+                          }}
+                          className="py-2.5 pr-2"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-[10px] text-gray-400 dark:text-gray-500">↳</span>
+                            <TitleCell
+                              task={subtask}
+                              groupColor={group.color}
+                              onSave={(title) => handleTitleUpdate(subtask.id, title)}
+                              onDelete={() => handleDeleteTask(subtask.id)}
+                              onOpen={() => setOpenTaskId(subtask.id)}
+                              onArchive={() => handleArchiveTask(subtask.id)}
+                              onDuplicate={() => handleDuplicateTask(subtask.id)}
+                              onComplete={statusColId ? () => handleFieldUpdate(subtask.id, statusColId, "DONE") : undefined}
+                              completing={completingTasks.has(subtask.id)}
+                            />
+                          </div>
+                        </div>
+                        {columns.map((col) => (
+                          <div
+                            key={col.id}
+                            style={{ width: getColumnWidth(col), minWidth: getColumnWidth(col) }}
+                            className="px-2 py-1.5"
+                          >
+                            <CellRenderer
+                              column={col}
+                              task={{ id: subtask.id, reminderOffsetMinutes: subtask.reminderOffsetMinutes ?? null }}
+                              fieldValues={subtask.fieldValues}
+                              onSave={(columnId, value) =>
+                                handleFieldUpdate(subtask.id, columnId, value)
+                              }
+                              memberNames={memberNames}
+                              readOnlyOwner={readOnlyOwner}
+                            />
+                          </div>
+                        ))}
+                        <div style={{ width: ACTIONS_COL }} />
+                      </div>
+                    ))}
                     </div>
                     );
                   })}
@@ -1638,7 +2740,7 @@ export function ProjectSpreadsheet({
                     const endKey = `${group.id}:${pagedTasks.length}`;
                     return (
                       <div
-                        className={`h-0.5 transition-all ${dragOverKey === endKey ? "h-1.5 bg-indigo-400 mx-4 rounded-full" : ""}`}
+                        className={`h-2 transition-all ${dragOverKey === endKey ? "h-3 bg-indigo-400/90 mx-3 rounded-full" : "bg-transparent"}`}
                         onDragOver={(e) => { e.preventDefault(); setDragOverKey(endKey); }}
                         onDragLeave={() => setDragOverKey(null)}
                         onDrop={() => handleDropAt(group.id, pagedTasks.length)}
@@ -1652,15 +2754,28 @@ export function ProjectSpreadsheet({
                       onClick={() => setGroupPageSizes((prev) => ({ ...prev, [group.id]: pageSize + GROUP_PAGE_SIZE }))}
                       className="w-full text-left px-4 py-2 text-xs text-gray-400 dark:text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer border-t border-gray-100 dark:border-gray-700"
                     >
-                      {tr(locale, "Voir", "Show")} {hiddenCount} {tr(locale, "tâche", "task")}{hiddenCount > 1 ? "s" : ""} {tr(locale, "de plus…", "more...")}
+                      {trKey(locale, "spreadsheet.auto.023")} {hiddenCount} {trKey(locale, "spreadsheet.auto.016")}{hiddenCount > 1 ? "s" : ""} {trKey(locale, "spreadsheet.auto.024")}
                     </button>
                   )}
 
                   {/* Add task row */}
                   {addingTaskIn === group.id ? (
                     <div className="flex items-center border-t border-gray-100 dark:border-gray-700 bg-indigo-50/20 dark:bg-indigo-900/10">
-                      <div style={{ width: CHECK_COL, minWidth: CHECK_COL }} />
-                      <div style={{ width: TASK_COL, minWidth: TASK_COL }} className="px-2 py-2.5">
+                      <div
+                        style={{
+                          width: CHECK_COL,
+                          minWidth: CHECK_COL,
+                          paddingLeft: `${Math.min(depth, 6) * TASK_INDENT_STEP}px`,
+                        }}
+                      />
+                      <div
+                        style={{
+                          width: nameColWidth,
+                          minWidth: nameColWidth,
+                          paddingLeft: `${8 + Math.min(depth, 6) * TASK_INDENT_STEP}px`,
+                        }}
+                        className="py-2.5 pr-2"
+                      >
                         <input
                           ref={taskInputRef}
                           value={newTaskTitle}
@@ -1669,12 +2784,12 @@ export function ProjectSpreadsheet({
                             if (e.key === "Enter") submitAddTask(group.id);
                             if (e.key === "Escape") resetTaskDraft();
                           }}
-                          placeholder={tr(locale, "Nom de la tâche…", "Task name...")}
+                          placeholder={trKey(locale, "spreadsheet.auto.019")}
                           className="w-full text-sm text-gray-800 dark:text-gray-100 border border-indigo-300 dark:border-indigo-700 rounded-md px-2 py-1 outline-none focus:ring-2 focus:ring-indigo-200 dark:bg-gray-800/80"
                         />
                       </div>
                       {columns.map((col) => (
-                        <div key={col.id} style={{ width: colW(col.type), minWidth: colW(col.type) }} className="px-2 py-2.5">
+                        <div key={col.id} style={{ width: getColumnWidth(col), minWidth: getColumnWidth(col) }} className="px-2 py-2.5">
                           {col.type === "STATUS" ? (
                             <select
                               value={newTaskFieldDrafts[col.id] ?? ""}
@@ -1683,7 +2798,7 @@ export function ProjectSpreadsheet({
                               className="w-full select-unified select-unified-sm"
                             >
                               <option value="">Statut…</option>
-                              {STATUS_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                              {statusOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                             </select>
                           ) : col.type === "PRIORITY" ? (
                             <select
@@ -1692,26 +2807,26 @@ export function ProjectSpreadsheet({
                               onKeyDown={(e) => { if (e.key === "Enter") submitAddTask(group.id); if (e.key === "Escape") resetTaskDraft(); }}
                               className="w-full select-unified select-unified-sm"
                             >
-                              <option value="">{tr(locale, "Priorité…", "Priority...")}</option>
-                              {PRIORITY_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                              <option value="">{trKey(locale, "spreadsheet.auto.032")}</option>
+                              {priorityOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                             </select>
                           ) : col.type === "OWNER" ? (
-                            (memberNames?.length ?? 0) > 0 ? (
+                            memberOptions.length > 0 ? (
                               <select
                                 value={newTaskFieldDrafts[col.id] ?? ""}
                                 onChange={(e) => setTaskDraftValue(col.id, e.target.value)}
                                 onKeyDown={(e) => { if (e.key === "Enter") submitAddTask(group.id); if (e.key === "Escape") resetTaskDraft(); }}
                                 className="w-full select-unified select-unified-sm"
                               >
-                                <option value="">{tr(locale, "Assigné à…", "Assigned to...")}</option>
-                                {memberNames!.map((n) => <option key={n} value={n}>{n}</option>)}
+                                <option value="">{trKey(locale, "spreadsheet.auto.033")}</option>
+                                {memberOptions.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
                               </select>
                             ) : (
                               <input
                                 value={newTaskFieldDrafts[col.id] ?? ""}
                                 onChange={(e) => setTaskDraftValue(col.id, e.target.value)}
                                 onKeyDown={(e) => { if (e.key === "Enter") submitAddTask(group.id); if (e.key === "Escape") resetTaskDraft(); }}
-                                placeholder={tr(locale, "Assigné à…", "Assigned to...")}
+                                placeholder={trKey(locale, "spreadsheet.auto.033")}
                                 className="w-full text-xs border border-gray-200 dark:border-gray-600 rounded-md px-2 py-1 outline-none bg-white dark:bg-gray-800 dark:text-gray-100"
                               />
                             )
@@ -1721,14 +2836,32 @@ export function ProjectSpreadsheet({
                                 type="date"
                                 value={newTaskFieldDrafts[col.id] ?? ""}
                                 onChange={(e) => setTaskDraftValue(col.id, e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Enter") submitAddTask(group.id); if (e.key === "Escape") resetTaskDraft(); }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    submitAddTask(group.id, { [col.id]: (e.currentTarget as HTMLInputElement).value });
+                                  }
+                                  if (e.key === "Escape") resetTaskDraft();
+                                }}
                                 className="w-full datetime-field"
                               />
                               <input
                                 type="time"
                                 value={newTaskFieldDrafts[dueTimeKey(col.id)] ?? ""}
                                 onChange={(e) => setTaskDraftValue(dueTimeKey(col.id), e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Enter") submitAddTask(group.id); if (e.key === "Escape") resetTaskDraft(); }}
+                                onFocus={() => {
+                                  const key = dueTimeKey(col.id);
+                                  if (!(newTaskFieldDrafts[key] ?? "").trim()) setTaskDraftValue(key, "00:00");
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    const key = dueTimeKey(col.id);
+                                    const normalized = normalizeTimeInput((e.currentTarget as HTMLInputElement).value, newTaskFieldDrafts[key] ?? "");
+                                    submitAddTask(group.id, { [key]: normalized });
+                                  }
+                                  if (e.key === "Escape") resetTaskDraft();
+                                }}
                                 className="w-full datetime-field"
                               />
                             </div>
@@ -1738,28 +2871,66 @@ export function ProjectSpreadsheet({
                                 type="date"
                                 value={newTaskFieldDrafts[timelineStartKey(col.id)] ?? ""}
                                 onChange={(e) => setTaskDraftValue(timelineStartKey(col.id), e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Enter") submitAddTask(group.id); if (e.key === "Escape") resetTaskDraft(); }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    const key = timelineStartKey(col.id);
+                                    submitAddTask(group.id, { [key]: (e.currentTarget as HTMLInputElement).value });
+                                  }
+                                  if (e.key === "Escape") resetTaskDraft();
+                                }}
                                 className="w-full datetime-field"
                               />
                               <input
                                 type="time"
                                 value={newTaskFieldDrafts[timelineStartTimeKey(col.id)] ?? ""}
                                 onChange={(e) => setTaskDraftValue(timelineStartTimeKey(col.id), e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Enter") submitAddTask(group.id); if (e.key === "Escape") resetTaskDraft(); }}
+                                onFocus={() => {
+                                  const key = timelineStartTimeKey(col.id);
+                                  if (!(newTaskFieldDrafts[key] ?? "").trim()) setTaskDraftValue(key, "00:00");
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    const key = timelineStartTimeKey(col.id);
+                                    const normalized = normalizeTimeInput((e.currentTarget as HTMLInputElement).value, newTaskFieldDrafts[key] ?? "");
+                                    submitAddTask(group.id, { [key]: normalized });
+                                  }
+                                  if (e.key === "Escape") resetTaskDraft();
+                                }}
                                 className="w-full datetime-field"
                               />
                               <input
                                 type="date"
                                 value={newTaskFieldDrafts[timelineEndKey(col.id)] ?? ""}
                                 onChange={(e) => setTaskDraftValue(timelineEndKey(col.id), e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Enter") submitAddTask(group.id); if (e.key === "Escape") resetTaskDraft(); }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    const key = timelineEndKey(col.id);
+                                    submitAddTask(group.id, { [key]: (e.currentTarget as HTMLInputElement).value });
+                                  }
+                                  if (e.key === "Escape") resetTaskDraft();
+                                }}
                                 className="w-full datetime-field"
                               />
                               <input
                                 type="time"
                                 value={newTaskFieldDrafts[timelineEndTimeKey(col.id)] ?? ""}
                                 onChange={(e) => setTaskDraftValue(timelineEndTimeKey(col.id), e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Enter") submitAddTask(group.id); if (e.key === "Escape") resetTaskDraft(); }}
+                                onFocus={() => {
+                                  const key = timelineEndTimeKey(col.id);
+                                  if (!(newTaskFieldDrafts[key] ?? "").trim()) setTaskDraftValue(key, "00:00");
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    const key = timelineEndTimeKey(col.id);
+                                    const normalized = normalizeTimeInput((e.currentTarget as HTMLInputElement).value, newTaskFieldDrafts[key] ?? "");
+                                    submitAddTask(group.id, { [key]: normalized });
+                                  }
+                                  if (e.key === "Escape") resetTaskDraft();
+                                }}
                                 className="w-full datetime-field"
                               />
                             </div>
@@ -1776,7 +2947,7 @@ export function ProjectSpreadsheet({
                       ))}
                       <div style={{ width: ACTIONS_COL, minWidth: ACTIONS_COL }} className="px-1 py-2.5 flex items-center justify-center gap-1">
                         <button
-                          onMouseDown={(e) => { e.preventDefault(); submitAddTask(group.id); }}
+                          onClick={() => submitAddTask(group.id)}
                           title="Valider"
                           className="w-6 h-6 rounded-md bg-indigo-500 text-white hover:bg-indigo-600 transition-colors cursor-pointer flex items-center justify-center"
                         >
@@ -1785,7 +2956,7 @@ export function ProjectSpreadsheet({
                           </svg>
                         </button>
                         <button
-                          onMouseDown={(e) => { e.preventDefault(); resetTaskDraft(); }}
+                          onClick={() => resetTaskDraft()}
                           title="Annuler"
                           className="w-6 h-6 rounded-md border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer flex items-center justify-center"
                         >
@@ -1796,20 +2967,43 @@ export function ProjectSpreadsheet({
                       </div>
                     </div>
                   ) : (
-                    <div className="border-t border-gray-100 dark:border-gray-700 px-4 py-1.5">
-                      <button
-                        onClick={() => {
-                          setNewTaskTitle("");
-                          setNewTaskFieldDrafts({});
-                          setAddingTaskIn(group.id);
-                        }}
-                        className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors cursor-pointer"
-                      >
-                        <span className="w-4 h-4 flex items-center justify-center rounded border border-dashed border-gray-300 dark:border-gray-600 hover:border-indigo-400">
-                          +
-                        </span>
-                        {tr(locale, "Ajouter une tâche", "Add task")}
-                      </button>
+                    <div className="border-t border-gray-100 dark:border-gray-700 py-1.5">
+                      <div className="flex items-center">
+                        <div
+                          style={{
+                            width: CHECK_COL,
+                            minWidth: CHECK_COL,
+                            paddingLeft: `${Math.min(depth, 6) * TASK_INDENT_STEP}px`,
+                          }}
+                        />
+                        <div style={{ width: DRAG_HANDLE_GAP, minWidth: DRAG_HANDLE_GAP }} />
+                        <div
+                          style={{
+                            width: nameColWidth,
+                            minWidth: nameColWidth,
+                            paddingLeft: `${8 + Math.min(depth, 6) * TASK_INDENT_STEP}px`,
+                          }}
+                          className="pr-2"
+                        >
+                          <button
+                            onClick={() => {
+                              setNewTaskTitle("");
+                              setNewTaskFieldDrafts({});
+                              setAddingTaskIn(group.id);
+                            }}
+                            className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+                          >
+                            <span className="w-4 h-4 flex items-center justify-center rounded border border-dashed border-gray-300 dark:border-gray-600 hover:border-indigo-400">
+                              +
+                            </span>
+                            {trKey(locale, "spreadsheet.auto.034")}
+                          </button>
+                        </div>
+                        {columns.map((col) => (
+                          <div key={col.id} style={{ width: getColumnWidth(col), minWidth: getColumnWidth(col) }} />
+                        ))}
+                        <div style={{ width: ACTIONS_COL, minWidth: ACTIONS_COL }} />
+                      </div>
                     </div>
                   )}
                 </>
@@ -1827,7 +3021,7 @@ export function ProjectSpreadsheet({
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
-            {showArchives ? tr(locale, "Masquer les archives", "Hide archives") : tr(locale, "Voir les archives", "Show archives")}
+            {showArchives ? trKey(locale, "spreadsheet.auto.025") : trKey(locale, "spreadsheet.auto.026")}
             <svg
               className={`w-3 h-3 ml-auto transition-transform ${showArchives ? "rotate-180" : ""}`}
               fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -1839,9 +3033,9 @@ export function ProjectSpreadsheet({
           {showArchives && (
             <div className="px-4 pb-4">
               {!archivesLoaded ? (
-                <p className="text-xs text-gray-400 dark:text-gray-500 italic py-2">{tr(locale, "Chargement…", "Loading...")}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 italic py-2">{trKey(locale, "spreadsheet.auto.027")}</p>
               ) : archivedTasks.length === 0 ? (
-                <p className="text-xs text-gray-400 dark:text-gray-500 italic py-2">{tr(locale, "Aucune tâche archivée.", "No archived task.")}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 italic py-2">{trKey(locale, "spreadsheet.auto.028")}</p>
               ) : (
                 <div className="space-y-1">
                   {archivedTasks.map((task) => (
@@ -1852,7 +3046,7 @@ export function ProjectSpreadsheet({
                       <button
                         onClick={() => handleRestoreTask(task.id)}
                         className="opacity-0 group-hover/archrow:opacity-100 p-0.5 text-gray-300 hover:text-emerald-500 transition-all cursor-pointer"
-                        title={tr(locale, "Restaurer la tâche", "Restore task")}
+                        title={trKey(locale, "spreadsheet.auto.029")}
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -1880,7 +3074,7 @@ export function ProjectSpreadsheet({
                   if (e.key === "Escape") setAddingGroup(false);
                 }}
                 onBlur={submitAddGroup}
-                placeholder={tr(locale, "Nom du groupe…", "Group name...")}
+                placeholder={trKey(locale, "spreadsheet.auto.030")}
                 className="text-xs font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-300 outline-none bg-transparent placeholder-gray-400 dark:placeholder-gray-600 border-b border-indigo-400 px-0.5"
               />
             </div>
@@ -1896,17 +3090,17 @@ export function ProjectSpreadsheet({
                 <span className="w-4 h-4 flex items-center justify-center rounded border border-dashed border-gray-300 dark:border-gray-600 hover:border-indigo-400">
                   +
                 </span>
-                {tr(locale, "Ajouter un groupe", "Add group")}
+                {trKey(locale, "spreadsheet.auto.031")}
               </button>
               <button
                 onClick={openImportTemplate}
                 className="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors cursor-pointer"
-                title={tr(locale, "Importer un groupe depuis un template", "Import a group from template")}
+                title={trKey(locale, "spreadsheet.auto.035")}
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                {tr(locale, "Importer depuis un template", "Import from template")}
+                {trKey(locale, "spreadsheet.auto.036")}
               </button>
             </>
           )}
@@ -1916,19 +3110,19 @@ export function ProjectSpreadsheet({
         {saveTemplateGroupId && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">
-              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">{tr(locale, "Sauvegarder comme template de groupe", "Save as group template")}</h3>
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">{trKey(locale, "spreadsheet.auto.037")}</h3>
               <input
                 autoFocus
                 value={saveTemplateName}
                 onChange={(e) => { setSaveTemplateName(e.target.value); setSaveTemplateError(""); }}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSaveGroupAsTemplate(); if (e.key === "Escape") setSaveTemplateGroupId(null); }}
-                placeholder={tr(locale, "Nom du template…", "Template name...")}
+                placeholder={trKey(locale, "spreadsheet.auto.038")}
                 className="w-full text-sm border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 placeholder-gray-400"
               />
               {saveTemplateError && <p className="text-xs text-red-500 mt-1">{saveTemplateError}</p>}
               <div className="flex justify-end gap-2 mt-4">
-                <button onClick={() => setSaveTemplateGroupId(null)} className="px-3 py-1.5 text-xs rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors">{tr(locale, "Annuler", "Cancel")}</button>
-                <button onClick={handleSaveGroupAsTemplate} className="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer transition-colors">{tr(locale, "Sauvegarder", "Save")}</button>
+                <button onClick={() => setSaveTemplateGroupId(null)} className="px-3 py-1.5 text-xs rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors">{trKey(locale, "spreadsheet.auto.021")}</button>
+                <button onClick={handleSaveGroupAsTemplate} className="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer transition-colors">{trKey(locale, "spreadsheet.auto.039")}</button>
               </div>
             </div>
           </div>
@@ -1938,9 +3132,9 @@ export function ProjectSpreadsheet({
         {importTemplateOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
             <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">
-              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">{tr(locale, "Importer un groupe depuis un template", "Import a group from template")}</h3>
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">{trKey(locale, "spreadsheet.auto.035")}</h3>
               {groupTemplates.length === 0 ? (
-                <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4">{tr(locale, "Aucun template de groupe disponible.", "No group template available.")}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-4">{trKey(locale, "spreadsheet.auto.040")}</p>
               ) : (
                 <ul className="space-y-1 max-h-64 overflow-y-auto">
                   {groupTemplates.map((tpl) => (
@@ -1954,7 +3148,7 @@ export function ProjectSpreadsheet({
                       <button
                         onClick={() => handleDeleteGroupTemplate(tpl.id)}
                         className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-gray-400 hover:text-red-500 cursor-pointer transition-all"
-                        title={tr(locale, "Supprimer ce template", "Delete this template")}
+                        title={trKey(locale, "spreadsheet.auto.041")}
                       >
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round"/></svg>
                       </button>
@@ -1963,7 +3157,7 @@ export function ProjectSpreadsheet({
                 </ul>
               )}
               <div className="flex justify-end mt-4">
-                <button onClick={() => setImportTemplateOpen(false)} className="px-3 py-1.5 text-xs rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors">{tr(locale, "Fermer", "Close")}</button>
+                <button onClick={() => setImportTemplateOpen(false)} className="px-3 py-1.5 text-xs rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors">{trKey(locale, "spreadsheet.auto.042")}</button>
               </div>
             </div>
           </div>
@@ -1976,7 +3170,7 @@ export function ProjectSpreadsheet({
       <BulkActionBar
         selectedCount={selectedTaskIds.size}
         columns={project.columns}
-        memberNames={readOnlyOwner ? [] : memberNames}
+        ownerOptions={readOnlyOwner ? [] : memberOptions.map((member) => ({ id: member.id, name: member.name }))}
         onClear={() => setSelectedTaskIds(new Set())}
         onStatusChange={handleBulkStatusChange}
         onPriorityChange={handleBulkPriorityChange}
@@ -1989,8 +3183,8 @@ export function ProjectSpreadsheet({
     {/* ── Task detail panel ── */}
     {(() => {
       if (!openTaskId) return null;
-      const openGroup = groups.find((g) => g.tasks.some((t) => t.id === openTaskId));
-      const openTask = openGroup?.tasks.find((t) => t.id === openTaskId) ?? null;
+      const openGroup = groups.find((g) => Boolean(findTaskInGroupTasks(g.tasks, openTaskId)));
+      const openTask = openGroup ? findTaskInGroupTasks(openGroup.tasks, openTaskId) : null;
       if (!openTask || !openGroup) return null;
       return (
         <TaskDetailPanel
@@ -2010,6 +3204,26 @@ export function ProjectSpreadsheet({
         />
       );
     })()}
+
+    {newSubgroupHint && (
+      <div className="fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-[80] px-3">
+        <div className="flex items-center gap-2 rounded-full border border-emerald-200 dark:border-emerald-700 bg-white/95 dark:bg-gray-900/95 shadow-lg px-3 py-2">
+          <span className="text-[11px] text-emerald-700 dark:text-emerald-300 whitespace-nowrap">
+            {locale === "fr" ? "Sous-catégorie créée en bas" : "Sub-category created below"}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              scrollToGroupRow(newSubgroupHint);
+              setNewSubgroupHint(null);
+            }}
+            className="text-[11px] font-medium text-indigo-600 hover:text-indigo-700 transition-colors cursor-pointer whitespace-nowrap"
+          >
+            {locale === "fr" ? "Voir ↓" : "View ↓"}
+          </button>
+        </div>
+      </div>
+    )}
     </>
   );
 }

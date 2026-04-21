@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createProject, inviteMember, listUserGroups, listGroupTemplates } from "@/lib/actions";
 import { Button } from "@/components/ui/Button";
-import { localeFromPathname, tr } from "@/lib/i18n/client";
+import { trKey } from "@/lib/i18n/client";
+import { useClientLocale } from "@/lib/i18n/useClientLocale";
 
 type UserGroupRow = { id: string; name: string; emails: string };
 
@@ -46,7 +47,7 @@ function StepIndicator({ current, locale }: { current: number; locale: "fr" | "e
                 step.id <= current ? "text-indigo-600" : "text-gray-400",
               ].join(" ")}
             >
-              {tr(locale, step.label, step.id === 1 ? "Information" : step.id === 2 ? "Task groups" : "Invitations")}
+              {step.id === 1 ? trKey(locale, "wizard.step.info") : step.id === 2 ? trKey(locale, "wizard.step.taskGroups") : trKey(locale, "wizard.step.invitations")}
             </span>
           </div>
           {i < STEPS.length - 1 && (
@@ -86,18 +87,18 @@ function Step1({ name, onChange, locale }: { name: string; onChange: (v: string)
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">{tr(locale, "Informations de base", "Basic information")}</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{tr(locale, "Donnez un nom à votre projet.", "Give your project a name.")}</p>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">{trKey(locale, "wizard.basicInfo")}</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{trKey(locale, "wizard.giveProjectName")}</p>
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-          {tr(locale, "Nom du projet", "Project name")} <span className="text-red-500">*</span>
+          {trKey(locale, "wizard.projectName")} <span className="text-red-500">*</span>
         </label>
         <input
           type="text"
           value={name}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={tr(locale, "Ex : Campagne Q2, Refonte site, Lancement produit…", "E.g. Q2 campaign, website redesign, product launch...")}
+          placeholder={trKey(locale, "wizard.projectNamePlaceholder")}
           autoFocus
           className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2.5 text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900 transition-all"
         />
@@ -129,15 +130,15 @@ function Step2({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">{tr(locale, "Démarrer avec des groupes existants", "Start with existing groups")}</h2>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">{trKey(locale, "wizard.startWithGroups")}</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          {tr(locale, "Sélectionnez un ou plusieurs groupes de tâches enregistrés à importer dès la création du projet.", "Select one or more saved task groups to import when creating the project.")}
+          {trKey(locale, "wizard.startWithGroupsHint")}
         </p>
       </div>
 
       {templates.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 px-4 py-6 text-sm text-gray-500 dark:text-gray-400 text-center">
-          {tr(locale, "Aucun groupe de tâches enregistré pour le moment.", "No saved task groups yet.")}
+          {trKey(locale, "wizard.noSavedTaskGroups")}
         </div>
       ) : (
         <div className="space-y-2">
@@ -170,7 +171,7 @@ function Step2({
                 </div>
                 <div>
                   <p className={checked ? "text-indigo-700 dark:text-indigo-300 text-sm font-medium" : "text-gray-800 dark:text-gray-100 text-sm font-medium"}>{template.name}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{taskCount} {tr(locale, "tâche", "task")}{taskCount > 1 ? "s" : ""} {tr(locale, "modèle", "template")}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{taskCount} {trKey(locale, "wizard.taskSingular")}{taskCount > 1 ? "s" : ""} {trKey(locale, "wizard.templateSingular")}</p>
                 </div>
               </button>
             );
@@ -199,15 +200,15 @@ function Step3({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">{tr(locale, "Inviter des membres", "Invite members")}</h2>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-50">{trKey(locale, "wizard.inviteMembers")}</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          {tr(locale, "Facultatif. Vous pouvez inviter des emails ou des groupes juste après la création du projet.", "Optional. You can invite emails or groups right after project creation.")}
+          {trKey(locale, "wizard.inviteHint")}
         </p>
       </div>
 
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-          {tr(locale, "Emails à inviter", "Emails to invite")}
+          {trKey(locale, "wizard.inviteEmails")}
         </label>
         <textarea
           value={inviteInput}
@@ -216,13 +217,13 @@ function Step3({
           placeholder="alice@studio.fr, bob@studio.fr"
           className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2.5 text-sm text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900 transition-all"
         />
-        <p className="mt-1 text-xs text-gray-400">{tr(locale, "Séparez par virgule, espace ou retour à la ligne.", "Separate with comma, space, or line break.")}</p>
+        <p className="mt-1 text-xs text-gray-400">{trKey(locale, "wizard.inviteEmailHint")}</p>
       </div>
 
       <div>
-        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{tr(locale, "Groupes de membres", "Member groups")}</p>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{trKey(locale, "wizard.memberGroups")}</p>
         {groups.length === 0 ? (
-          <p className="text-xs text-gray-400">{tr(locale, "Aucun groupe disponible.", "No group available.")}</p>
+          <p className="text-xs text-gray-400">{trKey(locale, "wizard.noGroupAvailable")}</p>
         ) : (
           <div className="space-y-2">
             {groups.map((group) => {
@@ -254,7 +255,7 @@ function Step3({
                   </div>
                   <div>
                     <p className={checked ? "text-indigo-700 dark:text-indigo-300 text-sm font-medium" : "text-gray-800 dark:text-gray-100 text-sm font-medium"}>{group.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{count} {tr(locale, "membre", "member")}{count > 1 ? "s" : ""}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{count} {trKey(locale, "wizard.memberSingular")}{count > 1 ? "s" : ""}</p>
                   </div>
                 </button>
               );
@@ -266,10 +267,10 @@ function Step3({
   );
 }
 
-export function CreateProjectWizard() {
+export function CreateProjectWizard({ initialGroupId }: { initialGroupId?: string }) {
   const router = useRouter();
   const pathname = usePathname();
-  const locale = localeFromPathname(pathname);
+  const locale = useClientLocale(pathname);
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [groupTemplates, setGroupTemplates] = useState<GroupTemplateRow[]>([]);
@@ -314,7 +315,11 @@ export function CreateProjectWizard() {
     setError(null);
     startTransition(async () => {
       try {
-        const projectId = await createProject({ name, groupTemplateIds: selectedTemplateIds });
+        const projectId = await createProject({
+          name,
+          groupTemplateIds: selectedTemplateIds,
+          initialGroupId,
+        });
 
         const inviteEmails = new Set<string>([...normalizeEmails(inviteInput), ...selectedGroupEmails]);
         for (const email of inviteEmails) {
@@ -327,7 +332,7 @@ export function CreateProjectWizard() {
 
         router.push(`/projects/${projectId}`);
       } catch (e) {
-        setError(e instanceof Error ? e.message : tr(locale, "Une erreur est survenue", "An error occurred"));
+        setError(e instanceof Error ? e.message : trKey(locale, "wizard.error"));
       }
     });
   };
@@ -336,9 +341,9 @@ export function CreateProjectWizard() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-2xl">
         <div className="mb-6 sm:mb-8 text-center">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-50">{tr(locale, "Créer un projet", "Create a project")}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-50">{trKey(locale, "wizard.createProjectTitle")}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {tr(locale, "Configurez votre espace de travail en quelques étapes.", "Set up your workspace in a few steps.")}
+            {trKey(locale, "wizard.subtitle")}
           </p>
         </div>
 
@@ -385,14 +390,14 @@ export function CreateProjectWizard() {
               onClick={() => (step === 1 ? (window.location.href = "/") : setStep((s) => s - 1))}
               disabled={isPending}
             >
-              {tr(locale, "← Retour", "← Back")}
+              {trKey(locale, "wizard.back")}
             </Button>
             <div className="flex items-center gap-3">
               <span className="text-xs text-gray-400 dark:text-gray-500">
                 {step} / {STEPS.length}
               </span>
               <Button onClick={handleNext} disabled={!canNext} loading={isPending}>
-                {step === STEPS.length ? tr(locale, "Créer le projet", "Create project") : tr(locale, "Suivant →", "Next →")}
+                {step === STEPS.length ? trKey(locale, "wizard.createProjectAction") : trKey(locale, "wizard.next")}
               </Button>
             </div>
           </div>

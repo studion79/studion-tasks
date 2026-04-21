@@ -26,12 +26,12 @@ export type {
 
 export type TaskWithFields = Task & {
   fieldValues: TaskFieldValue[];
-  subtasks?: SubtaskWithFields[];
+  subtasks?: TaskWithFields[];
   blockerDeps?: { id: string; blockedId: string }[];
   attachments?: { id: string }[];
   comments?: { id: string }[];
 };
-export type SubtaskWithFields = Task & { fieldValues: TaskFieldValue[] };
+export type SubtaskWithFields = TaskWithFields;
 export type GroupWithTasks = Group & { tasks: TaskWithFields[] };
 
 export type ProjectWithRelations = Project & {
@@ -95,6 +95,7 @@ export const AVAILABLE_WIDGETS: WidgetMeta[] = [
 export type CreateProjectInput = {
   name: string;
   groupTemplateIds?: string[];
+  initialGroupId?: string;
 };
 
 export type SpreadsheetFilters = {

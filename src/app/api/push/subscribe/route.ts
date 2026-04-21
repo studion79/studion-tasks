@@ -4,6 +4,7 @@ import { savePushSubscription } from "@/lib/push";
 import { isSuperAdminUserId } from "@/lib/super-admin";
 import { getRequestLocale } from "@/lib/i18n/server";
 import { publishRealtimeEvent } from "@/lib/realtime";
+import { pickByIsEn, pickByLocale } from "@/lib/i18n/pick";
 
 type SubscriptionBody = {
   endpoint?: string;
@@ -64,10 +65,10 @@ export async function POST(req: Request) {
   const isEn = locale === "en";
   const session = await auth();
   const userId = session?.user?.id;
-  if (!userId) return Response.json({ ok: false, error: isEn ? "Not authenticated." : "Non authentifié" }, { status: 401 });
+  if (!userId) return Response.json({ ok: false, error: pickByIsEn(isEn, "Non authentifié", "Not authenticated.") }, { status: 401 });
   if (isSuperAdminUserId(userId)) {
     return Response.json(
-      { ok: false, error: isEn ? "Global super admin cannot receive push notifications." : "Le super-admin global ne peut pas recevoir de notifications push." },
+      { ok: false, error: pickByIsEn(isEn, "Le super-admin global ne peut pas recevoir de notifications push.", "Global super admin cannot receive push notifications.") },
       { status: 400 }
     );
   }
@@ -78,7 +79,7 @@ export async function POST(req: Request) {
     const p256dh = body.keys?.p256dh?.trim();
     const authKey = body.keys?.auth?.trim();
     if (!endpoint || !p256dh || !authKey) {
-      return Response.json({ ok: false, error: isEn ? "Invalid push subscription." : "Abonnement push invalide." }, { status: 400 });
+      return Response.json({ ok: false, error: pickByIsEn(isEn, "Abonnement push invalide.", "Invalid push subscription.") }, { status: 400 });
     }
 
     await savePushSubscription({
@@ -96,7 +97,7 @@ export async function POST(req: Request) {
 
     return Response.json({ ok: true });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : (isEn ? "Server error." : "Erreur serveur");
+    const msg = error instanceof Error ? error.message : (pickByIsEn(isEn, "Erreur serveur", "Server error."));
     return Response.json({ ok: false, error: msg }, { status: 500 });
   }
 }

@@ -10,6 +10,7 @@ import { randomUUID } from "crypto";
 import path from "path";
 import { getRequestLocale } from "@/lib/i18n/server";
 import { emitAdminDataChanged } from "@/lib/actions/_helpers";
+import { pickByIsEn, pickByLocale } from "@/lib/i18n/pick";
 
 type SessionUser = { id?: string; isSuperAdmin?: boolean };
 
@@ -125,9 +126,7 @@ async function validateImportedDatabase(
     if (missingTables.length > 0) {
       return {
         ok: false,
-        error: isEn
-          ? `Imported database incompatible: missing table(s): ${missingTables.join(", ")}.`
-          : `Base importée incompatible: table(s) manquante(s): ${missingTables.join(", ")}.`,
+        error: pickByIsEn(isEn, `Base importée incompatible: table(s) manquante(s): ${missingTables.join(", ")}.`, `Imported database incompatible: missing table(s): ${missingTables.join(", ")}.`),
       };
     }
 
@@ -145,17 +144,13 @@ async function validateImportedDatabase(
     if (missingColumns.length > 0) {
       return {
         ok: false,
-        error: isEn
-          ? `Imported database incompatible: missing column(s): ${missingColumns.join(", ")}.`
-          : `Base importée incompatible: colonne(s) manquante(s): ${missingColumns.join(", ")}.`,
+        error: pickByIsEn(isEn, `Base importée incompatible: colonne(s) manquante(s): ${missingColumns.join(", ")}.`, `Imported database incompatible: missing column(s): ${missingColumns.join(", ")}.`),
       };
     }
   } catch {
     return {
       ok: false,
-      error: isEn
-        ? "Unable to validate imported database structure."
-        : "Impossible de valider la structure de la base importée.",
+      error: pickByIsEn(isEn, "Impossible de valider la structure de la base importée.", "Unable to validate imported database structure."),
     };
   }
 
@@ -263,7 +258,19 @@ async function mergeDatabase(tempPath: string): Promise<MergeSummary> {
           name: group.name,
           color: group.color,
           position: group.position,
+          parentId: null,
         },
+      });
+    }
+
+    for (const group of project.groups) {
+      if (!group.parentId) continue;
+      const mappedId = groupIdMap.get(group.id);
+      const mappedParentId = groupIdMap.get(group.parentId);
+      if (!mappedId || !mappedParentId) continue;
+      await prisma.group.update({
+        where: { id: mappedId },
+        data: { parentId: mappedParentId },
       });
     }
 
@@ -378,7 +385,7 @@ export async function GET(request: Request) {
   const session = await auth();
   const user = session?.user as SessionUser | undefined;
   if (!isAllowed(user)) {
-    return new Response(isEn ? "Access denied" : "Accès refusé", { status: 403 });
+    return new Response(pickByIsEn(isEn, "Accès refusé", "Access denied"), { status: 403 });
   }
 
   const dbPath = resolveDatabaseFilePath();
@@ -402,19 +409,19 @@ export async function POST(request: Request) {
   const session = await auth();
   const user = session?.user as SessionUser | undefined;
   if (!isAllowed(user)) {
-    return Response.json({ ok: false, error: isEn ? "Access denied." : "Accès refusé" }, { status: 403 });
+    return Response.json({ ok: false, error: pickByIsEn(isEn, "Accès refusé", "Access denied.") }, { status: 403 });
   }
 
   const formData = await request.formData();
   const file = formData.get("database");
   const mode: ImportMode = formData.get("mode") === "merge" ? "merge" : "overwrite";
   if (!(file instanceof File) || file.size === 0) {
-    return Response.json({ ok: false, error: isEn ? "No file provided." : "Aucun fichier fourni" }, { status: 400 });
+    return Response.json({ ok: false, error: pickByIsEn(isEn, "Aucun fichier fourni", "No file provided.") }, { status: 400 });
   }
 
   const bytes = Buffer.from(await file.arrayBuffer());
   if (!hasSqliteHeader(bytes)) {
-    return Response.json({ ok: false, error: isEn ? "Invalid file: expected SQLite database (.db)." : "Fichier invalide: base SQLite attendue (.db)." }, { status: 400 });
+    return Response.json({ ok: false, error: pickByIsEn(isEn, "Fichier invalide: base SQLite attendue (.db).", "Invalid file: expected SQLite database (.db).") }, { status: 400 });
   }
 
   const dbPath = resolveDatabaseFilePath();
@@ -429,7 +436,7 @@ export async function POST(request: Request) {
   const imported = await stat(tempPath);
   if (imported.size === 0) {
     await unlink(tempPath).catch(() => {});
-    return Response.json({ ok: false, error: isEn ? "Imported database is empty." : "La base importée est vide." }, { status: 400 });
+    return Response.json({ ok: false, error: pickByIsEn(isEn, "La base importée est vide.", "Imported database is empty.") }, { status: 400 });
   }
 
   const validation = await validateImportedDatabase(tempPath, mode, isEn);
@@ -445,18 +452,14 @@ export async function POST(request: Request) {
       emitAdminDataChanged();
       return Response.json({
         ok: true,
-        message: isEn
-          ? `Merged import: ${merged.projects} project(s) and ${merged.tasks} task(s) added.`
-          : `Import fusionné: ${merged.projects} projet(s) et ${merged.tasks} tâche(s) ajoutés.`,
+        message: pickByIsEn(isEn, `Import fusionné: ${merged.projects} projet(s) et ${merged.tasks} tâche(s) ajoutés.`, `Merged import: ${merged.projects} project(s) and ${merged.tasks} task(s) added.`),
       });
     } catch {
       await unlink(tempPath).catch(() => {});
       return Response.json(
         {
           ok: false,
-          error: isEn
-            ? "Merged import failed. Verify the source database comes from the same application version."
-            : "Échec de l'import fusionné. Vérifiez que la base source provient de la même version de l'application.",
+          error: pickByIsEn(isEn, "Échec de l'import fusionné. Vérifiez que la base source provient de la même version de l'application.", "Merged import failed. Verify the source database comes from the same application version."),
         },
         { status: 400 }
       );
@@ -483,9 +486,7 @@ export async function POST(request: Request) {
 
   return Response.json({
     ok: true,
-    message: isEn
-      ? "Database imported successfully (full replacement of active database)."
-      : "Base importée avec succès (remplacement complet de la base active).",
+    message: pickByIsEn(isEn, "Base importée avec succès (remplacement complet de la base active).", "Database imported successfully (full replacement of active database)."),
     backupFile: path.basename(backupPath),
   });
 }

@@ -21,6 +21,13 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - task-app-data:/app/prisma
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health/live >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
   cron:
     image: curlimages/curl:8.13.0
@@ -41,6 +48,32 @@ services:
           sleep 60
         done
       '
+
+  backup:
+    image: TON_USER_DOCKERHUB/task-app:latest
+    container_name: task-app-backup
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      LIBSQL_DATABASE_URL: "${LIBSQL_DATABASE_URL:-file:/app/prisma/dev.db}"
+      BACKUP_DIR: "/backups"
+      BACKUP_RETENTION_DAYS: "${BACKUP_RETENTION_DAYS:-14}"
+      BACKUP_KEEP_COUNT: "${BACKUP_KEEP_COUNT:-3}"
+    command: >
+      sh -c '
+        while true; do
+          /app/scripts/backup-db.sh || true
+          if [ "$$(date +%d)" = "01" ]; then
+            /app/scripts/restore-smoke-check.sh || true
+          fi
+          sleep 86400
+        done
+      '
+    volumes:
+      - task-app-data:/app/prisma
+      - ./backups:/backups
 
 volumes:
   task-app-data:

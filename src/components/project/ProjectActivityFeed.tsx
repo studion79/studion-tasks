@@ -3,8 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getUiLocale } from "@/lib/ui-locale";
 import { getProjectActivityLog } from "@/lib/actions";
-import { localeFromPathname, tr } from "@/lib/i18n/client";
+import { trKey } from "@/lib/i18n/client";
+import { useClientLocale } from "@/lib/i18n/useClientLocale";
 import { usePathname } from "next/navigation";
+import { pickByIsEn, pickByLocale } from "@/lib/i18n/pick";
 
 type ActivityEntry = Awaited<ReturnType<typeof getProjectActivityLog>>[number];
 
@@ -37,8 +39,8 @@ function dayLabel(date: Date, locale: "fr" | "en"): string {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const diff = Math.round((today.getTime() - d.getTime()) / 86_400_000);
-  if (diff === 0) return locale === "en" ? "Today" : "Aujourd'hui";
-  if (diff === 1) return locale === "en" ? "Yesterday" : "Hier";
+  if (diff === 0) return pickByLocale(locale, "Aujourd'hui", "Today");
+  if (diff === 1) return pickByLocale(locale, "Hier", "Yesterday");
   if (diff < 7) return d.toLocaleDateString(getUiLocale(), { weekday: "long" });
   return d.toLocaleDateString(getUiLocale(), { day: "numeric", month: "long", year: "numeric" });
 }
@@ -62,7 +64,7 @@ function getActionMeta(action: string, details: string | null, locale: "fr" | "e
             <path d="M12 4v16m8-8H4" strokeWidth="2" strokeLinecap="round" />
           </svg>
         ),
-        label: tr(locale, "Tâche créée", "Task created"),
+        label: trKey(locale, "activity.taskCreated"),
         color: "bg-emerald-100 text-emerald-600",
       };
     case "ARCHIVED":
@@ -72,7 +74,7 @@ function getActionMeta(action: string, details: string | null, locale: "fr" | "e
             <path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         ),
-        label: tr(locale, "Archivée", "Archived"),
+        label: trKey(locale, "activity.archived"),
         color: "bg-gray-100 text-gray-500",
       };
     case "RESTORED":
@@ -82,7 +84,7 @@ function getActionMeta(action: string, details: string | null, locale: "fr" | "e
             <path d="M4 4v5h5M20 20v-5h-5M4 9a9 9 0 0114.7-3.4M20 15a9 9 0 01-14.7 3.4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         ),
-        label: tr(locale, "Restaurée", "Restored"),
+        label: trKey(locale, "activity.restored"),
         color: "bg-blue-100 text-blue-600",
       };
     case "COMMENT_ADDED":
@@ -92,7 +94,7 @@ function getActionMeta(action: string, details: string | null, locale: "fr" | "e
             <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         ),
-        label: tr(locale, "Commentaire", "Comment"),
+        label: trKey(locale, "activity.comment"),
         color: "bg-indigo-100 text-indigo-600",
       };
     case "TITLE_UPDATED":
@@ -102,11 +104,11 @@ function getActionMeta(action: string, details: string | null, locale: "fr" | "e
             <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         ),
-        label: tr(locale, "Titre modifié", "Title updated"),
+        label: trKey(locale, "activity.titleUpdated"),
         color: "bg-amber-100 text-amber-700",
       };
     case "FIELD_UPDATED": {
-      const field = (parsed.field as string) ?? tr(locale, "champ", "field");
+      const field = (parsed.field as string) ?? trKey(locale, "activity.field");
       const val = parsed.value ? ` → ${parsed.value}` : "";
       return {
         icon: (
@@ -141,7 +143,7 @@ export function ProjectActivityFeed({
   onOpenTask?: (taskId: string) => void;
 }) {
   const pathname = usePathname();
-  const locale = localeFromPathname(pathname);
+  const locale = useClientLocale(pathname);
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const [rangeFilter, setRangeFilter] = useState<"today" | "week" | "all">("all");
   const [visibleCount, setVisibleCount] = useState(120);
@@ -159,7 +161,7 @@ export function ProjectActivityFeed({
       const data = await getProjectActivityLog(projectId);
       setEntries(data);
     } catch {
-      setError(tr(locale, "Impossible de charger le journal.", "Unable to load activity log."));
+      setError(trKey(locale, "activity.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -232,7 +234,7 @@ export function ProjectActivityFeed({
         <svg className="w-5 h-5 animate-spin mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
-        {tr(locale, "Chargement…", "Loading...")}
+        {trKey(locale, "project.loading")}
       </div>
     );
   }
@@ -242,7 +244,7 @@ export function ProjectActivityFeed({
       <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2">
         <p className="text-sm">{error}</p>
         <button onClick={load} className="text-xs text-indigo-500 hover:underline cursor-pointer">
-          {tr(locale, "Réessayer", "Retry")}
+          {trKey(locale, "activity.retry")}
         </button>
       </div>
     );
@@ -254,7 +256,7 @@ export function ProjectActivityFeed({
         <svg className="w-10 h-10 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
-        <p className="text-sm">{tr(locale, "Aucune activité enregistrée.", "No activity recorded.")}</p>
+        <p className="text-sm">{trKey(locale, "activity.noneRecorded")}</p>
       </div>
     );
   }
@@ -279,17 +281,17 @@ export function ProjectActivityFeed({
             style={{ transform: `translateY(${Math.min(pullDistance / 3, 10)}px)` }}
           >
             {isPullRefreshing
-              ? tr(locale, "Actualisation...", "Refreshing...")
+              ? trKey(locale, "project.refreshing")
               : pullDistance > 56
-              ? tr(locale, "Relâchez pour actualiser", "Release to refresh")
-              : tr(locale, "Tirez pour actualiser", "Pull to refresh")}
+              ? trKey(locale, "project.releaseToRefresh")
+              : trKey(locale, "project.pullToRefresh")}
           </div>
         </div>
         <div className="max-w-2xl mx-auto flex items-center gap-1.5 sm:gap-2">
           {([
-            { key: "today", label: tr(locale, "Aujourd'hui", "Today") },
-            { key: "week", label: tr(locale, "7 jours", "7 days") },
-            { key: "all", label: tr(locale, "Tout", "All") },
+            { key: "today", label: trKey(locale, "dashboard.today") },
+            { key: "week", label: trKey(locale, "activity.sevenDays") },
+            { key: "all", label: trKey(locale, "dashboard.all") },
           ] as const).map((option) => (
             <button
               key={option.key}
@@ -315,7 +317,7 @@ export function ProjectActivityFeed({
             <svg className="w-9 h-9 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
-            <p className="text-sm">{tr(locale, "Aucune activité sur cette période.", "No activity for this period.")}</p>
+            <p className="text-sm">{trKey(locale, "activity.noneForPeriod")}</p>
           </div>
         ) : (
         <>
@@ -355,7 +357,7 @@ export function ProjectActivityFeed({
                         </button>
                         {/* Group badge */}
                         <span className="text-[10px] text-gray-400 flex-shrink-0">
-                          {tr(locale, "dans", "in")}{" "}
+                          {trKey(locale, "activity.in")}{" "}
                           <span
                             className="font-medium"
                             style={{ color: entry.task.group.color }}
@@ -388,7 +390,7 @@ export function ProjectActivityFeed({
 
         {entries.length >= 200 && (
           <p className="text-center text-xs text-gray-400 py-2">
-            {tr(locale, "Affichage limité aux 200 dernières entrées", "Display limited to the last 200 entries")}
+            {trKey(locale, "activity.last200")}
           </p>
         )}
         {visibleCount < filteredEntries.length && (
@@ -397,7 +399,7 @@ export function ProjectActivityFeed({
               onClick={() => setVisibleCount((prev) => prev + 80)}
               className="text-xs px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300"
             >
-              {tr(locale, "Afficher plus", "Show more")}
+              {trKey(locale, "activity.showMore")}
             </button>
           </div>
         )}

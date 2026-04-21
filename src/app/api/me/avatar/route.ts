@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { getRequestLocale } from "@/lib/i18n/server";
 import { publishRealtimeEvent } from "@/lib/realtime";
+import { pickByIsEn, pickByLocale } from "@/lib/i18n/pick";
 
 const ALLOWED_AVATAR_TYPES = new Set([
   "image/jpeg",
@@ -16,6 +17,17 @@ const ALLOWED_AVATAR_TYPES = new Set([
   "image/avif",
 ]);
 const MAX_AVATAR_UPLOAD_BYTES = 20 * 1024 * 1024; // 20MB
+function userAvatarFilename(userId: string) {
+  return `${userId}.jpg`;
+}
+
+function userAvatarStaticUrl(userId: string, ts: number) {
+  return `/uploads/avatars/${userAvatarFilename(userId)}?t=${ts}`;
+}
+
+function userAvatarApiUrl(userId: string, ts: number) {
+  return `/api/users/${userId}/avatar?t=${ts}`;
+}
 
 export async function POST(request: Request) {
   const locale = getRequestLocale(request);
@@ -24,23 +36,23 @@ export async function POST(request: Request) {
     const session = await auth();
     const userId = session?.user?.id;
     if (!userId) {
-      return NextResponse.json({ ok: false, error: isEn ? "Not authenticated." : "Non authentifié" }, { status: 401 });
+      return NextResponse.json({ ok: false, error: pickByIsEn(isEn, "Non authentifié", "Not authenticated.") }, { status: 401 });
     }
 
     const formData = await request.formData();
     const file = formData.get("avatar");
     if (!(file instanceof File) || file.size === 0) {
-      return NextResponse.json({ ok: false, error: isEn ? "No file provided." : "Aucun fichier fourni" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: pickByIsEn(isEn, "Aucun fichier fourni", "No file provided.") }, { status: 400 });
     }
     if (!ALLOWED_AVATAR_TYPES.has(file.type)) {
       return NextResponse.json(
-        { ok: false, error: isEn ? "Unsupported format. Use JPG, PNG, WebP, GIF or AVIF." : "Format non supporté. Utilisez JPG, PNG, WebP, GIF ou AVIF." },
+        { ok: false, error: pickByIsEn(isEn, "Format non supporté. Utilisez JPG, PNG, WebP, GIF ou AVIF.", "Unsupported format. Use JPG, PNG, WebP, GIF or AVIF.") },
         { status: 400 }
       );
     }
     if (file.size > MAX_AVATAR_UPLOAD_BYTES) {
       return NextResponse.json(
-        { ok: false, error: isEn ? "Image too large (maximum 20MB)." : "Image trop volumineuse (maximum 20MB)." },
+        { ok: false, error: pickByIsEn(isEn, "Image trop volumineuse (maximum 20MB).", "Image too large (maximum 20MB).") },
         { status: 413 }
       );
     }
@@ -48,7 +60,7 @@ export async function POST(request: Request) {
     const dir = path.resolve(process.cwd(), "public/uploads/avatars");
     await mkdir(dir, { recursive: true });
 
-    const filename = `${userId}.jpg`;
+    const filename = userAvatarFilename(userId);
     const inputBuffer = Buffer.from(await file.arrayBuffer());
     const compressed = await sharp(inputBuffer)
       .resize(256, 256, { fit: "cover", position: "centre" })
@@ -57,19 +69,28 @@ export async function POST(request: Request) {
 
     await writeFile(path.join(dir, filename), compressed);
 
-    const avatarUrl = `/uploads/avatars/${filename}?t=${Date.now()}`;
-    await prisma.user.update({ where: { id: userId }, data: { avatar: avatarUrl } });
+    const ts = Date.now();
+    await prisma.user.update({
+      where: { id: userId },
+      // Keep a stable API URL in DB so avatar loading remains reliable everywhere.
+      // Static file is still written for backward compatibility and direct access if needed.
+      data: { avatar: userAvatarApiUrl(userId, ts) },
+    });
     publishRealtimeEvent({
       type: "PROFILE_CHANGED",
       scope: `user:${userId}`,
       userId,
     });
 
-    return NextResponse.json({ ok: true, url: avatarUrl });
+    return NextResponse.json({
+      ok: true,
+      url: userAvatarApiUrl(userId, ts),
+      staticUrl: userAvatarStaticUrl(userId, ts),
+    });
   } catch (error) {
     console.error("Avatar upload failed:", error);
     return NextResponse.json(
-      { ok: false, error: isEn ? "Unable to process this image. Try JPG, PNG or WebP." : "Impossible de traiter cette image. Essayez une image JPG, PNG ou WebP." },
+      { ok: false, error: pickByIsEn(isEn, "Impossible de traiter cette image. Essayez une image JPG, PNG ou WebP.", "Unable to process this image. Try JPG, PNG or WebP.") },
       { status: 500 }
     );
   }

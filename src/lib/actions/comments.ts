@@ -1,6 +1,6 @@
 "use server";
 
-import { prisma, requireMember, logActivity, notifyUser, findUserByNameInProject, emitTaskChanged } from "./_helpers";
+import { prisma, requireMember, logActivity, notifyUser, findUserByOwnerValueInProject, emitTaskChanged } from "./_helpers";
 
 export async function getTaskComments(taskId: string) {
   return prisma.comment.findMany({
@@ -25,7 +25,7 @@ export async function createComment(taskId: string, content: string, author = "M
   {
     const ownerField = task.fieldValues.find((fv) => fv.column.type === "OWNER");
     if (ownerField?.value && ownerField.value !== author) {
-      const ownerUser = await findUserByNameInProject(task.group.projectId, ownerField.value);
+      const ownerUser = await findUserByOwnerValueInProject(task.group.projectId, ownerField.value);
       if (ownerUser) {
         await notifyUser(
           ownerUser.id,

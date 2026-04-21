@@ -5,10 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { getUiLocale } from "@/lib/ui-locale";
 import type { ProjectWithRelations, TaskWithFields } from "@/lib/types";
 import { AVAILABLE_WIDGETS } from "@/lib/types";
-import { STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/lib/constants";
+import { getPriorityOptions, getStatusOptions } from "@/lib/constants";
 import { toggleDashboardWidgetByType } from "@/lib/actions";
 import type { WidgetType } from "@/generated/prisma";
-import { localeFromPathname, tr } from "@/lib/i18n/client";
+import { trKey } from "@/lib/i18n/client";
+import { useClientLocale } from "@/lib/i18n/useClientLocale";
+import { useProjectContext } from "./ProjectContext";
 
 // --- Helpers ---
 function fv(task: TaskWithFields, colId: string | undefined): string | null {
@@ -81,7 +83,7 @@ function LineChart({
   if (points.length < 2 && (!idealPoints || idealPoints.length < 2)) {
     return (
       <div className="flex items-center justify-center h-24 text-xs text-gray-300 italic">
-        {tr(locale, "Pas encore de données", "No data yet")}
+        {trKey(locale, "dashboard.auto.001")}
       </div>
     );
   }
@@ -176,7 +178,7 @@ function BarChart({
   if (bars.length === 0 || bars.every((b) => b.value === 0)) {
     return (
       <div className="flex items-center justify-center h-24 text-xs text-gray-300 italic">
-        {tr(locale, "Pas encore de données", "No data yet")}
+        {trKey(locale, "dashboard.auto.001")}
       </div>
     );
   }
@@ -228,7 +230,7 @@ function BarChart({
 // --- Main ---
 export function ProjectDashboard({ project }: { project: ProjectWithRelations }) {
   const pathname = usePathname();
-  const locale = localeFromPathname(pathname);
+  const locale = useClientLocale(pathname);
   const router = useRouter();
   const [widgetStates, setWidgetStates] = useState(
     Object.fromEntries(
@@ -292,6 +294,9 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
   const displayedWidgetTypes = isMobile && !showAllWidgetsMobile
     ? activeWidgetTypes.slice(0, 5)
     : activeWidgetTypes;
+  const statusOptions = getStatusOptions(locale);
+  const priorityOptions = getPriorityOptions(locale);
+  const { resolveOwnerName } = useProjectContext();
   const { groups, columns } = project;
   const allTasks = groups.flatMap((g) => g.tasks);
   const total = allTasks.length;
@@ -306,7 +311,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
   const in30 = toDateStr(addDays(new Date(), 30));
 
   // Status distribution
-  const statusCounts = STATUS_OPTIONS.map((opt) => ({
+  const statusCounts = statusOptions.map((opt) => ({
     ...opt,
     count: allTasks.filter((t) => fv(t, statusCol?.id) === opt.value).length,
   }));
@@ -323,8 +328,9 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
   // Owner distribution
   const ownerMap = new Map<string, number>();
   for (const task of allTasks) {
-    const o = fv(task, ownerCol?.id);
-    if (o) ownerMap.set(o, (ownerMap.get(o) ?? 0) + 1);
+    const ownerRaw = fv(task, ownerCol?.id);
+    const owner = resolveOwnerName(ownerRaw);
+    if (owner) ownerMap.set(owner, (ownerMap.get(owner) ?? 0) + 1);
   }
   const ownerEntries = Array.from(ownerMap.entries()).sort((a, b) => b[1] - a[1]);
 
@@ -346,7 +352,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
   };
 
   // --- Priority breakdown ---
-  const priorityCounts = PRIORITY_OPTIONS.map((opt) => ({
+  const priorityCounts = priorityOptions.map((opt) => ({
     ...opt,
     count: allTasks.filter((t) => fv(t, columns.find((c) => c.type === "PRIORITY")?.id) === opt.value).length,
   }));
@@ -416,16 +422,16 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
   }
 
   const widgetLabels: Record<string, string> = {
-    TASK_OVERVIEW: tr(locale, "Vue d'ensemble", "Overview"),
-    BY_STATUS: tr(locale, "Répartition par statut", "Status breakdown"),
-    BY_OWNER: tr(locale, "Par responsable", "By owner"),
-    OVERDUE: tr(locale, "Tâches en retard", "Late tasks"),
-    BY_DUE_DATE: tr(locale, "Par échéance", "By due date"),
-    PRIORITY_BREAKDOWN: tr(locale, "Par priorité", "By priority"),
-    COMPLETION_BY_GROUP: tr(locale, "Avancement par groupe", "Progress by group"),
-    BUDGET_TOTAL: tr(locale, "Budget total", "Total budget"),
-    BURNDOWN: tr(locale, "Burndown — tâches complétées", "Burndown — completed tasks"),
-    VELOCITY: tr(locale, "Vélocité — tâches/semaine", "Velocity — tasks/week"),
+    TASK_OVERVIEW: trKey(locale, "dashboard.auto.002"),
+    BY_STATUS: trKey(locale, "dashboard.auto.003"),
+    BY_OWNER: trKey(locale, "dashboard.auto.004"),
+    OVERDUE: trKey(locale, "dashboard.auto.005"),
+    BY_DUE_DATE: trKey(locale, "dashboard.auto.006"),
+    PRIORITY_BREAKDOWN: trKey(locale, "dashboard.auto.007"),
+    COMPLETION_BY_GROUP: trKey(locale, "dashboard.auto.008"),
+    BUDGET_TOTAL: trKey(locale, "dashboard.auto.009"),
+    BURNDOWN: trKey(locale, "dashboard.auto.010"),
+    VELOCITY: trKey(locale, "dashboard.auto.011"),
   };
 
   // Widget span (some charts need 2 cols)
@@ -440,17 +446,17 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
         <div className="flex items-end justify-between mb-4">
           <div>
             <p className="text-4xl font-bold text-gray-900 dark:text-gray-50 leading-none">{total}</p>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{total} {tr(locale, "tâche", "task")}{total !== 1 ? "s" : ""} {tr(locale, "au total", "in total")}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{total} {trKey(locale, "dashboard.auto.012")}{total !== 1 ? "s" : ""} {trKey(locale, "dashboard.auto.013")}</p>
           </div>
           <div className="text-right">
             <p className="text-2xl font-bold text-indigo-600 leading-none">{completionPct}%</p>
-            <p className="text-xs text-gray-400 mt-1">{tr(locale, "complétées", "completed")}</p>
+            <p className="text-xs text-gray-400 mt-1">{trKey(locale, "dashboard.auto.014")}</p>
           </div>
         </div>
         <Bar pct={completionPct} className="bg-indigo-500" />
         <div className="flex items-center justify-between mt-3 text-xs text-gray-500 dark:text-gray-400">
-          <span>{doneCount} {tr(locale, "terminées", "completed")}</span>
-          <span>{total - doneCount} {tr(locale, "restantes", "remaining")}</span>
+          <span>{doneCount} {trKey(locale, "dashboard.auto.015")}</span>
+          <span>{total - doneCount} {trKey(locale, "dashboard.auto.016")}</span>
         </div>
       </div>
     ),
@@ -478,14 +484,14 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
             />
           </div>
         ))}
-        {total === 0 && <p className="text-sm text-gray-400 italic">{tr(locale, "Aucune tâche", "No task")}</p>}
+        {total === 0 && <p className="text-sm text-gray-400 italic">{trKey(locale, "dashboard.auto.017")}</p>}
       </div>
     ),
 
     BY_OWNER: (
       <div>
         {ownerEntries.length === 0 ? (
-          <p className="text-sm text-gray-400 italic">{tr(locale, "Aucun responsable assigné", "No assigned owner")}</p>
+          <p className="text-sm text-gray-400 italic">{trKey(locale, "dashboard.auto.018")}</p>
         ) : (
           <div className="space-y-2.5">
             {ownerEntries.slice(0, 6).map(([name, count]) => (
@@ -539,7 +545,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
             >
               {overdueTasksList.length}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{overdueTasksList.length} {tr(locale, "tâche", "task")}{overdueTasksList.length !== 1 ? "s" : ""} {tr(locale, "en retard", "late")}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{overdueTasksList.length} {trKey(locale, "dashboard.auto.012")}{overdueTasksList.length !== 1 ? "s" : ""} {trKey(locale, "dashboard.auto.019")}</p>
           </div>
         </div>
         {overdueTasksList.length > 0 && (
@@ -551,7 +557,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
               </p>
             ))}
             {overdueTasksList.length > 4 && (
-              <p className="text-xs text-gray-400">+{overdueTasksList.length - 4} {tr(locale, "autres", "others")}</p>
+              <p className="text-xs text-gray-400">+{overdueTasksList.length - 4} {trKey(locale, "dashboard.auto.020")}</p>
             )}
           </div>
         )}
@@ -561,14 +567,14 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
     BY_DUE_DATE: (
       <div>
         {!dueDateCol ? (
-          <p className="text-sm text-gray-400 italic">Colonne "Due date" inactive</p>
+          <p className="text-sm text-gray-400 italic">{trKey(locale, "dashboard.columnDueDateInactive")}</p>
         ) : (
           <div className="space-y-2">
             {[
-              { label: tr(locale, "En retard", "Late"), count: dueGroups.overdue, color: "text-red-600", dot: "bg-red-400" },
-              { label: tr(locale, "Cette semaine", "This week"), count: dueGroups.thisWeek, color: "text-amber-700", dot: "bg-amber-400" },
-              { label: tr(locale, "Ce mois", "This month"), count: dueGroups.thisMonth, color: "text-blue-700", dot: "bg-blue-400" },
-              { label: tr(locale, "Plus tard", "Later"), count: dueGroups.later, color: "text-gray-600", dot: "bg-gray-300" },
+              { label: trKey(locale, "dashboard.auto.021"), count: dueGroups.overdue, color: "text-red-600", dot: "bg-red-400" },
+              { label: trKey(locale, "dashboard.auto.022"), count: dueGroups.thisWeek, color: "text-amber-700", dot: "bg-amber-400" },
+              { label: trKey(locale, "dashboard.auto.023"), count: dueGroups.thisMonth, color: "text-blue-700", dot: "bg-blue-400" },
+              { label: trKey(locale, "dashboard.auto.024"), count: dueGroups.later, color: "text-gray-600", dot: "bg-gray-300" },
             ].map(({ label, count, color, dot }) => (
               <div key={label} className="flex items-center gap-2.5 py-0.5">
                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} />
@@ -601,18 +607,18 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
         ))}
         {noPriority > 0 && (
           <div className="flex items-center justify-between text-xs text-gray-400 dark:text-gray-500 pt-1 border-t border-gray-100 dark:border-gray-700">
-            <span>{tr(locale, "Sans priorité", "No priority")}</span>
+            <span>{trKey(locale, "dashboard.auto.025")}</span>
             <span>{noPriority}</span>
           </div>
         )}
-        {total === 0 && <p className="text-sm text-gray-400 italic">{tr(locale, "Aucune tâche", "No task")}</p>}
+        {total === 0 && <p className="text-sm text-gray-400 italic">{trKey(locale, "dashboard.auto.017")}</p>}
       </div>
     ),
 
     COMPLETION_BY_GROUP: (
       <div className="space-y-3">
         {groupProgress.length === 0 ? (
-          <p className="text-sm text-gray-400 italic">{tr(locale, "Aucun groupe", "No group")}</p>
+          <p className="text-sm text-gray-400 italic">{trKey(locale, "dashboard.auto.026")}</p>
         ) : (
           groupProgress.map((g) => (
             <div key={g.name}>
@@ -646,7 +652,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
     BUDGET_TOTAL: (
       <div>
         {!budgetCol ? (
-          <p className="text-sm text-gray-400 italic">Colonne "Budget" inactive</p>
+          <p className="text-sm text-gray-400 italic">{trKey(locale, "dashboard.columnBudgetInactive")}</p>
         ) : (
           <>
             <div className="flex items-end justify-between mb-4">
@@ -654,14 +660,14 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
                 <p className="text-3xl font-bold text-gray-900 dark:text-gray-50 leading-none">
                   {budgetTotal.toLocaleString(getUiLocale(), { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{tr(locale, "budget total alloué", "total allocated budget")}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{trKey(locale, "dashboard.auto.027")}</p>
               </div>
               {budgetTotal > 0 && (
                 <div className="text-right">
                   <p className="text-xl font-bold text-emerald-600 leading-none">
                     {budgetDone.toLocaleString(getUiLocale(), { style: "currency", currency: "EUR", maximumFractionDigits: 0 })}
                   </p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{tr(locale, "tâches terminées", "completed tasks")}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{trKey(locale, "dashboard.auto.028")}</p>
                 </div>
               )}
             </div>
@@ -669,8 +675,8 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
               <>
                 <Bar pct={(budgetDone / budgetTotal) * 100} className="bg-emerald-500" />
                 <div className="flex items-center justify-between mt-2 text-xs text-gray-400 dark:text-gray-500">
-                  <span>{Math.round((budgetDone / budgetTotal) * 100)}% {tr(locale, "du budget complété", "of budget completed")}</span>
-                  <span>{(budgetTotal - budgetDone).toLocaleString(getUiLocale(), { style: "currency", currency: "EUR", maximumFractionDigits: 0 })} {tr(locale, "restant", "remaining")}</span>
+                  <span>{Math.round((budgetDone / budgetTotal) * 100)}% {trKey(locale, "dashboard.auto.029")}</span>
+                  <span>{(budgetTotal - budgetDone).toLocaleString(getUiLocale(), { style: "currency", currency: "EUR", maximumFractionDigits: 0 })} {trKey(locale, "dashboard.auto.030")}</span>
                 </div>
               </>
             )}
@@ -684,11 +690,11 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
         <div className="flex items-center gap-4 mb-3 text-xs text-gray-400 dark:text-gray-500">
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-6 border-t-2 border-dashed border-gray-300" />
-            {tr(locale, "Idéal (linéaire)", "Ideal (linear)")}
+            {trKey(locale, "dashboard.auto.031")}
           </span>
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-6 border-t-2 border-indigo-500" />
-            {tr(locale, "Réel", "Actual")}
+            {trKey(locale, "dashboard.auto.032")}
           </span>
         </div>
         <LineChart
@@ -700,14 +706,14 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
           color="#6366f1"
         />
         {burndownPoints.length === 0 && total === 0 && (
-          <p className="text-xs text-gray-400 italic text-center -mt-2">{tr(locale, "Aucune tâche dans ce projet", "No task in this project")}</p>
+          <p className="text-xs text-gray-400 italic text-center -mt-2">{trKey(locale, "dashboard.auto.033")}</p>
         )}
       </div>
     ),
 
     VELOCITY: (
       <div>
-        <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">{tr(locale, "Tâches complétées par semaine (6 dernières semaines)", "Tasks completed per week (last 6 weeks)")}</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">{trKey(locale, "dashboard.auto.034")}</p>
         <BarChart bars={velocityBars} locale={locale} color="#6366f1" height={120} />
       </div>
     ),
@@ -733,10 +739,10 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
             style={{ transform: `translateY(${Math.min(pullDistance / 3, 10)}px)` }}
           >
             {isPullRefreshing
-              ? tr(locale, "Actualisation...", "Refreshing...")
+              ? trKey(locale, "dashboard.auto.035")
               : pullDistance > 56
-              ? tr(locale, "Relâchez pour actualiser", "Release to refresh")
-              : tr(locale, "Tirez pour actualiser", "Pull to refresh")}
+              ? trKey(locale, "dashboard.auto.036")
+              : trKey(locale, "dashboard.auto.037")}
           </div>
         </div>
       )}
@@ -750,14 +756,14 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
             <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" strokeWidth="1.5" />
             <circle cx="12" cy="12" r="3" strokeWidth="1.5" />
           </svg>
-          {tr(locale, "Configurer", "Configure")}
+          {trKey(locale, "dashboard.auto.038")}
         </button>
       </div>
 
       {/* Config panel */}
       {showConfig && (
         <div className="mb-5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-sm">
-          <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">{tr(locale, "Widgets affichés", "Displayed widgets")}</p>
+          <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">{trKey(locale, "dashboard.auto.039")}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {AVAILABLE_WIDGETS.map((w) => {
               const active = widgetStates[w.type];
@@ -792,9 +798,9 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
             <rect x="3" y="10" width="8" height="11" rx="1" strokeWidth="1.5" />
             <rect x="13" y="14" width="8" height="7" rx="1" strokeWidth="1.5" />
           </svg>
-          <p className="text-sm">{tr(locale, "Aucun widget actif.", "No active widget.")}</p>
+          <p className="text-sm">{trKey(locale, "dashboard.auto.040")}</p>
           <button onClick={() => setShowConfig(true)} className="mt-2 text-xs text-indigo-600 hover:underline cursor-pointer">
-            {tr(locale, "Configurer le dashboard", "Configure dashboard")}
+            {trKey(locale, "dashboard.auto.041")}
           </button>
         </div>
       ) : (
@@ -807,7 +813,7 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
               span={widgetSpan[widgetType] ?? 1}
             >
               {widgets[widgetType] ?? (
-                <p className="text-sm text-gray-400 italic">{tr(locale, "Widget non disponible", "Widget unavailable")}</p>
+                <p className="text-sm text-gray-400 italic">{trKey(locale, "dashboard.auto.042")}</p>
               )}
             </Widget>
           ))}
@@ -819,8 +825,8 @@ export function ProjectDashboard({ project }: { project: ProjectWithRelations })
               className="text-xs px-3 py-1.5 rounded-full border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300"
             >
               {showAllWidgetsMobile
-                ? tr(locale, "Afficher moins", "Show less")
-                : tr(locale, "Afficher plus", "Show more")}
+                ? trKey(locale, "dashboard.auto.043")
+                : trKey(locale, "dashboard.auto.044")}
             </button>
           </div>
         )}

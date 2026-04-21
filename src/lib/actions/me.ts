@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { randomUUID } from "crypto";
 import { prisma, revalidatePath, getAuthUserId, emitPreferencesChanged, emitProfileChanged, emitTaskChanged, emitArchiveChanged } from "./_helpers";
 import { toCanonicalStatus } from "@/lib/status";
+import { formatUserNameParts } from "@/lib/name-format";
 
 const ALLOWED_AVATAR_TYPES = new Set([
   "image/jpeg",
@@ -17,6 +18,13 @@ const ALLOWED_AVATAR_TYPES = new Set([
   "image/avif",
 ]);
 const MAX_AVATAR_UPLOAD_BYTES = 20 * 1024 * 1024; // 20MB
+function userAvatarFilename(userId: string) {
+  return `${userId}.jpg`;
+}
+
+function userAvatarApiUrl(userId: string, ts: number) {
+  return `/api/users/${userId}/avatar?t=${ts}`;
+}
 
 type DisplaySettings = {
   syncAcrossDevices: boolean;
@@ -25,6 +33,7 @@ type DisplaySettings = {
   mondayFirst: boolean;
   dateFormat: "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD";
   language: "fr" | "en";
+  themeMode: "system" | "light" | "dark";
 };
 
 const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
@@ -34,6 +43,7 @@ const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   mondayFirst: true,
   dateFormat: "DD/MM/YYYY",
   language: "fr",
+  themeMode: "system",
 };
 
 let displaySettingsTableEnsured = false;
@@ -49,6 +59,7 @@ async function ensureDisplaySettingsTable() {
       "mondayFirst" BOOLEAN NOT NULL DEFAULT true,
       "dateFormat" TEXT NOT NULL DEFAULT 'DD/MM/YYYY',
       "language" TEXT NOT NULL DEFAULT 'fr',
+      "themeMode" TEXT NOT NULL DEFAULT 'system',
       "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "UserDisplaySettings_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
@@ -99,6 +110,13 @@ async function ensureDisplaySettingsTable() {
   } catch {
     // already exists
   }
+  try {
+    await prisma.$executeRawUnsafe(
+      `ALTER TABLE "UserDisplaySettings" ADD COLUMN "themeMode" TEXT NOT NULL DEFAULT 'system'`
+    );
+  } catch {
+    // already exists
+  }
   displaySettingsTableEnsured = true;
 }
 
@@ -109,6 +127,7 @@ function normalizeDisplaySettings(input: {
   mondayFirst?: unknown;
   dateFormat?: unknown;
   language?: unknown;
+  themeMode?: unknown;
 }): DisplaySettings {
   const defaultView = ["SPREADSHEET", "KANBAN", "CARDS", "GANTT", "TIMELINE", "CALENDAR"].includes(String(input.defaultView))
     ? (input.defaultView as DisplaySettings["defaultView"])
@@ -119,6 +138,7 @@ function normalizeDisplaySettings(input: {
     ? (input.dateFormat as DisplaySettings["dateFormat"])
     : DEFAULT_DISPLAY_SETTINGS.dateFormat;
   const language = input.language === "en" ? "en" : "fr";
+  const themeMode = input.themeMode === "light" || input.themeMode === "dark" ? input.themeMode : "system";
   const syncAcrossDevices = input.syncAcrossDevices === undefined
     ? DEFAULT_DISPLAY_SETTINGS.syncAcrossDevices
     : Boolean(input.syncAcrossDevices);
@@ -130,6 +150,7 @@ function normalizeDisplaySettings(input: {
     mondayFirst,
     dateFormat,
     language,
+    themeMode,
   };
 }
 
@@ -143,8 +164,9 @@ export async function getMyDisplaySettings(): Promise<DisplaySettings> {
     mondayFirst: boolean;
     dateFormat: string;
     language: string;
+    themeMode: string;
   }>>(
-    `SELECT "syncAcrossDevices","defaultView","density","mondayFirst","dateFormat","language"
+    `SELECT "syncAcrossDevices","defaultView","density","mondayFirst","dateFormat","language","themeMode"
      FROM "UserDisplaySettings"
      WHERE "userId" = ?
      LIMIT 1`,
@@ -161,8 +183,8 @@ export async function updateMyDisplaySettings(input: Partial<DisplaySettings>) {
 
   await prisma.$executeRawUnsafe(
     `INSERT INTO "UserDisplaySettings"
-      ("id","userId","syncAcrossDevices","defaultView","density","mondayFirst","dateFormat","language","createdAt","updatedAt")
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ("id","userId","syncAcrossDevices","defaultView","density","mondayFirst","dateFormat","language","themeMode","createdAt","updatedAt")
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
      ON CONFLICT("userId") DO UPDATE SET
       "syncAcrossDevices" = COALESCE(?, "syncAcrossDevices"),
       "defaultView" = COALESCE(?, "defaultView"),
@@ -170,6 +192,7 @@ export async function updateMyDisplaySettings(input: Partial<DisplaySettings>) {
       "mondayFirst" = COALESCE(?, "mondayFirst"),
       "dateFormat" = COALESCE(?, "dateFormat"),
       "language" = COALESCE(?, "language"),
+      "themeMode" = COALESCE(?, "themeMode"),
       "updatedAt" = CURRENT_TIMESTAMP`,
     randomUUID(),
     userId,
@@ -179,12 +202,14 @@ export async function updateMyDisplaySettings(input: Partial<DisplaySettings>) {
     normalized.mondayFirst,
     normalized.dateFormat,
     normalized.language,
+    normalized.themeMode,
     input.syncAcrossDevices === undefined ? null : normalized.syncAcrossDevices,
     input.defaultView === undefined ? null : normalized.defaultView,
     input.density === undefined ? null : normalized.density,
     input.mondayFirst === undefined ? null : normalized.mondayFirst,
     input.dateFormat === undefined ? null : normalized.dateFormat,
-    input.language === undefined ? null : normalized.language
+    input.language === undefined ? null : normalized.language,
+    input.themeMode === undefined ? null : normalized.themeMode
   );
   emitPreferencesChanged(userId);
 }
@@ -199,8 +224,11 @@ export async function getMyTasks() {
     where: {
       fieldValues: {
         some: {
-          value: user.name,
           column: { type: "OWNER" },
+          OR: [
+            { value: userId },
+            { value: user.name },
+          ],
         },
       },
       group: {
@@ -234,6 +262,7 @@ export async function getMyTasks() {
       status: toCanonicalStatus(getField("STATUS")),
       priority: getField("PRIORITY"),
       dueDate: getField("DUE_DATE"),
+      timeline: getField("TIMELINE"),
     };
   });
 }
@@ -273,7 +302,7 @@ export async function getMyProjects() {
   return memberships.map((m) => {
     const allTasks = m.project.groups.flatMap((g) => g.tasks);
     const myTaskCount = allTasks.filter((t) =>
-      t.fieldValues.some((fv) => fv.value === user.name)
+      t.fieldValues.some((fv) => fv.value === userId || fv.value === user.name)
     ).length;
     const completedCount = allTasks.filter((t) => t.completedAt).length;
     return {
@@ -288,10 +317,24 @@ export async function getMyProjects() {
   });
 }
 
-export async function updateMyProfile(name: string) {
+export async function updateMyProfile(firstName: string, lastName: string) {
   const userId = await getAuthUserId();
-  if (!name.trim()) throw new Error("Name cannot be empty.");
-  await prisma.user.update({ where: { id: userId }, data: { name: name.trim() } });
+  const currentUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true },
+  });
+  if (!currentUser) throw new Error("User not found.");
+  const formattedName = formatUserNameParts(firstName, lastName);
+  if (!formattedName) throw new Error("Name cannot be empty.");
+  // Migration safety: keep existing owner assignments stable by switching legacy owner-name values to immutable userId.
+  await prisma.taskFieldValue.updateMany({
+    where: {
+      value: currentUser.name,
+      column: { type: "OWNER" },
+    },
+    data: { value: userId },
+  });
+  await prisma.user.update({ where: { id: userId }, data: { name: formattedName } });
   emitProfileChanged(userId);
   revalidatePath("/me");
 }
@@ -330,7 +373,7 @@ export async function updateMyAvatar(formData: FormData) {
     await mkdir(dir, { recursive: true });
 
     // Always save as JPEG for consistency
-    const filename = `${userId}.jpg`;
+    const filename = userAvatarFilename(userId);
     const inputBuffer = Buffer.from(await file.arrayBuffer());
 
     // Compress & resize: max 256×256, JPEG quality 82, strip metadata
@@ -341,7 +384,7 @@ export async function updateMyAvatar(formData: FormData) {
 
     await writeFile(path.join(dir, filename), compressed);
 
-    const avatarUrl = `/uploads/avatars/${filename}?t=${Date.now()}`;
+    const avatarUrl = userAvatarApiUrl(userId, Date.now());
     await prisma.user.update({ where: { id: userId }, data: { avatar: avatarUrl } });
     emitProfileChanged(userId);
     revalidatePath("/me");

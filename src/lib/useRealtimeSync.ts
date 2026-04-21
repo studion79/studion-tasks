@@ -21,9 +21,11 @@ function uniqueScopes(scopes: RealtimeScope[]): RealtimeScope[] {
 export function useRealtimeSync(params: UseRealtimeSyncParams) {
   const { enabled = true, onEvent } = params;
   const router = useRouter();
+  const onEventRef = useRef<typeof onEvent>(onEvent);
   const seenIdsRef = useRef<Set<string>>(new Set());
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshQueuedRef = useRef(false);
+  const lastMessageAtRef = useRef<number>(0);
 
   const normalizedScopes = useMemo(
     () => uniqueScopes(params.scopes).sort(),
@@ -32,11 +34,16 @@ export function useRealtimeSync(params: UseRealtimeSyncParams) {
   const scopesParam = useMemo(() => normalizedScopes.join(","), [normalizedScopes]);
 
   useEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
+
+  useEffect(() => {
     if (!enabled || normalizedScopes.length === 0) return;
 
     let cancelled = false;
     let retryIndex = 0;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let heartbeatWatchdog: ReturnType<typeof setInterval> | null = null;
     let eventSource: EventSource | null = null;
     let reconnectCount = 0;
 
@@ -72,6 +79,8 @@ export function useRealtimeSync(params: UseRealtimeSyncParams) {
 
     const connect = () => {
       if (cancelled) return;
+      clearReconnectTimer();
+      lastMessageAtRef.current = Date.now();
       const query = new URLSearchParams({
         scopes: scopesParam,
         rc: String(reconnectCount),
@@ -80,6 +89,7 @@ export function useRealtimeSync(params: UseRealtimeSyncParams) {
 
       eventSource.addEventListener("ready", () => {
         retryIndex = 0;
+        lastMessageAtRef.current = Date.now();
       });
 
       eventSource.addEventListener("update", (message) => {
@@ -89,7 +99,8 @@ export function useRealtimeSync(params: UseRealtimeSyncParams) {
           const event = JSON.parse(payload) as RealtimeEvent;
           if (!event?.id) return;
           if (!rememberEventId(event.id)) return;
-          onEvent?.(event);
+          lastMessageAtRef.current = Date.now();
+          onEventRef.current?.(event);
           scheduleRefresh();
         } catch {
           // ignore malformed event
@@ -98,6 +109,7 @@ export function useRealtimeSync(params: UseRealtimeSyncParams) {
 
       eventSource.addEventListener("heartbeat", () => {
         // keep-alive only
+        lastMessageAtRef.current = Date.now();
       });
 
       eventSource.onerror = () => {
@@ -116,11 +128,45 @@ export function useRealtimeSync(params: UseRealtimeSyncParams) {
       };
     };
 
+    const forceReconnect = () => {
+      if (cancelled) return;
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      connect();
+    };
+
+    const onOnline = () => {
+      forceReconnect();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && !eventSource) {
+        forceReconnect();
+      }
+    };
+
     connect();
+    heartbeatWatchdog = setInterval(() => {
+      if (cancelled || !eventSource) return;
+      const elapsed = Date.now() - lastMessageAtRef.current;
+      // If no heartbeat/update arrives for too long, force a clean reconnect.
+      if (elapsed > 45_000) {
+        forceReconnect();
+      }
+    }, 10_000);
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       cancelled = true;
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisible);
       clearReconnectTimer();
+      if (heartbeatWatchdog) {
+        clearInterval(heartbeatWatchdog);
+        heartbeatWatchdog = null;
+      }
       if (eventSource) {
         eventSource.close();
         eventSource = null;
@@ -131,6 +177,5 @@ export function useRealtimeSync(params: UseRealtimeSyncParams) {
       }
       refreshQueuedRef.current = false;
     };
-  }, [enabled, normalizedScopes.length, onEvent, router, scopesParam]);
+  }, [enabled, normalizedScopes.length, router, scopesParam]);
 }
-

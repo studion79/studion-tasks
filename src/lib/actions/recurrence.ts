@@ -6,7 +6,7 @@ import {
   requireMember,
   projectIdFromTask,
   notifyUser,
-  findUserByNameInProject,
+  findUserByOwnerValueInProject,
   emitTaskChanged,
   emitArchiveChanged,
   emitProjectChanged,
@@ -202,7 +202,7 @@ export async function generateDueDateReminders(projectId: string) {
     const ownerFv = task.fieldValues.find((fv) => fv.column.type === "OWNER");
     if (!ownerFv?.value) continue;
 
-    const ownerUser = await findUserByNameInProject(projectId, ownerFv.value);
+    const ownerUser = await findUserByOwnerValueInProject(projectId, ownerFv.value);
     if (!ownerUser) continue;
 
     // Idempotency: skip if already notified in the last 7 days
@@ -253,7 +253,7 @@ export async function generateOverdueReminders(projectId: string) {
     const ownerName = task.fieldValues.find((fv) => fv.column.type === "OWNER")?.value ?? null;
     if (!ownerName) continue;
 
-    const ownerUser = await findUserByNameInProject(projectId, ownerName);
+    const ownerUser = await findUserByOwnerValueInProject(projectId, ownerName);
     if (!ownerUser) continue;
 
     const existing = await prisma.notification.findFirst({
@@ -315,7 +315,7 @@ export async function generateTaskTimeReminders(projectId: string) {
 
     const ownerName = task.fieldValues.find((fv) => fv.column.type === "OWNER")?.value ?? null;
     if (!ownerName) continue;
-    const ownerUser = await findUserByNameInProject(projectId, ownerName);
+    const ownerUser = await findUserByOwnerValueInProject(projectId, ownerName);
     if (!ownerUser) continue;
 
     const scheduledAt = pickTaskScheduledDateTime(task);
@@ -413,7 +413,10 @@ export async function generateDailySummaries() {
         archivedAt: null,
         parentId: null,
         fieldValues: {
-          some: { value: user.name, column: { type: "OWNER" } },
+          some: {
+            column: { type: "OWNER" },
+            OR: [{ value: user.id }, { value: user.name }],
+          },
         },
         group: { project: { members: { some: { userId: user.id } } } },
       },

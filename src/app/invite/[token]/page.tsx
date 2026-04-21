@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@/auth";
 import { getInvitationByToken, acceptInvitation } from "@/lib/actions";
 import InviteClient from "./InviteClient";
+import { pickByIsEn, pickByLocale } from "@/lib/i18n/pick";
 
 interface Props {
   params: Promise<{ token: string }>;
@@ -23,12 +24,12 @@ export default async function InvitePage({ params }: Props) {
               <path d="M6 18L18 6M6 6l12 12" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </div>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-2">{locale === "en" ? "Invalid invitation" : "Invitation invalide"}</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-2">{pickByLocale(locale, "Invitation invalide", "Invalid invitation")}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-            {locale === "en" ? "This invitation link is invalid or has expired." : "Ce lien d'invitation est invalide ou a expiré."}
+            {pickByLocale(locale, "Ce lien d'invitation est invalide ou a expiré.", "This invitation link is invalid or has expired.")}
           </p>
           <a href="/" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
-            {locale === "en" ? "Back to home" : "Retour à l'accueil"}
+            {pickByLocale(locale, "Retour à l'accueil", "Back to home")}
           </a>
         </div>
       </div>
@@ -44,12 +45,12 @@ export default async function InvitePage({ params }: Props) {
               <path d="M5 13l4 4L19 7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-2">{locale === "en" ? "Already accepted" : "Déjà acceptée"}</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-2">{pickByLocale(locale, "Déjà acceptée", "Already accepted")}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-            {locale === "en" ? "This invitation has already been accepted." : "Cette invitation a déjà été acceptée."}
+            {pickByLocale(locale, "Cette invitation a déjà été acceptée.", "This invitation has already been accepted.")}
           </p>
           <a href={`/projects/${invitation.projectId}`} className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
-            {locale === "en" ? "Open project" : "Ouvrir le projet"}
+            {pickByLocale(locale, "Ouvrir le projet", "Open project")}
           </a>
         </div>
       </div>
@@ -65,12 +66,12 @@ export default async function InvitePage({ params }: Props) {
               <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </div>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-2">{locale === "en" ? "Invitation expired" : "Invitation expirée"}</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-50 mb-2">{pickByLocale(locale, "Invitation expirée", "Invitation expired")}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-            {locale === "en" ? "This invitation link has expired. Ask to be invited again." : "Ce lien d'invitation a expiré. Demandez à être réinvité."}
+            {pickByLocale(locale, "Ce lien d'invitation a expiré. Demandez à être réinvité.", "This invitation link has expired. Ask to be invited again.")}
           </p>
           <a href="/" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
-            {locale === "en" ? "Back to home" : "Retour à l'accueil"}
+            {pickByLocale(locale, "Retour à l'accueil", "Back to home")}
           </a>
         </div>
       </div>

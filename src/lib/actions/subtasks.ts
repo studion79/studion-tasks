@@ -6,9 +6,53 @@ import { upsertTaskField } from "./tasks";
 export async function createSubtask(parentId: string, groupId: string, title: string) {
   const projectId = await projectIdFromGroup(groupId);
   await requireMember(projectId);
-  const count = await prisma.task.count({ where: { parentId, archivedAt: null } });
+  const [count, parent] = await Promise.all([
+    prisma.task.count({ where: { parentId, archivedAt: null } }),
+    prisma.task.findUnique({
+      where: { id: parentId },
+      select: {
+        id: true,
+        groupId: true,
+        fieldValues: {
+          where: {
+            column: {
+              projectId,
+              type: "OWNER",
+            },
+          },
+          select: {
+            columnId: true,
+            value: true,
+          },
+          take: 1,
+        },
+      },
+    }),
+  ]);
+
+  if (!parent || parent.groupId !== groupId) {
+    throw new Error("Parent task not found.");
+  }
+
+  const inheritedOwner = parent.fieldValues[0];
   const created = await prisma.task.create({
-    data: { groupId, parentId, title, position: count },
+    data: {
+      groupId,
+      parentId,
+      title,
+      position: count,
+      fieldValues:
+        inheritedOwner?.value && inheritedOwner.columnId
+          ? {
+              create: [
+                {
+                  columnId: inheritedOwner.columnId,
+                  value: inheritedOwner.value,
+                },
+              ],
+            }
+          : undefined,
+    },
     include: { fieldValues: true },
   });
   emitTaskChanged(projectId, parentId);

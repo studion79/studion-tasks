@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useTransition, useRef, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { getUiLocale } from "@/lib/ui-locale";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deleteProject, renameProject, togglePinProject, assignProjectToGroup, archiveProject } from "@/lib/actions";
+import { pickByIsEn, pickByLocale } from "@/lib/i18n/pick";
 
 function DeleteConfirmModal({
   projectName,
@@ -28,10 +30,10 @@ function DeleteConfirmModal({
       } catch (e) {
         const message = e instanceof Error ? e.message : "";
         if (message.includes("FORBIDDEN_DELETE_PERSONAL_PROJECT")) {
-          setError(isEn ? "Personal projects cannot be deleted." : "Un projet personnel ne peut pas être supprimé.");
+          setError(pickByIsEn(isEn, "Un projet personnel ne peut pas être supprimé.", "Personal projects cannot be deleted."));
           return;
         }
-        setError(isEn ? "Unable to delete this project." : "Impossible de supprimer ce projet.");
+        setError(pickByIsEn(isEn, "Impossible de supprimer ce projet.", "Unable to delete this project."));
       }
     });
   };
@@ -48,12 +50,12 @@ function DeleteConfirmModal({
               </svg>
             </div>
             <div>
-              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">{isEn ? "Delete project" : "Supprimer le projet"}</h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{isEn ? "This action is irreversible" : "Cette action est irréversible"}</p>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">{pickByIsEn(isEn, "Supprimer le projet", "Delete project")}</h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{pickByIsEn(isEn, "Cette action est irréversible", "This action is irreversible")}</p>
             </div>
           </div>
           <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
-            {isEn ? "To confirm, type the project name:" : "Pour confirmer, saisissez le nom du projet :"}{" "}
+            {pickByIsEn(isEn, "Pour confirmer, saisissez le nom du projet :", "To confirm, type the project name:")}{" "}
             <span className="font-semibold text-gray-900 dark:text-gray-50">{projectName}</span>
           </p>
           <input
@@ -70,14 +72,14 @@ function DeleteConfirmModal({
               onClick={onClose}
               className="flex-1 border border-gray-200 dark:border-gray-600 text-sm text-gray-600 dark:text-gray-300 rounded-lg py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
             >
-              {isEn ? "Cancel" : "Annuler"}
+              {pickByIsEn(isEn, "Annuler", "Cancel")}
             </button>
             <button
               onClick={handleDelete}
               disabled={confirm !== projectName || isPending}
               className="flex-1 bg-red-600 text-white text-sm font-medium rounded-lg py-2 hover:bg-red-700 transition-colors disabled:opacity-50 cursor-pointer"
             >
-              {isPending ? (isEn ? "Deleting..." : "Suppression…") : (isEn ? "Delete" : "Supprimer")}
+              {isPending ? (pickByIsEn(isEn, "Suppression…", "Deleting...")) : (pickByIsEn(isEn, "Supprimer", "Delete"))}
             </button>
           </div>
           {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
@@ -123,7 +125,7 @@ export function ProjectCard({
   canGroup?: boolean;
 }) {
   const isEn = getUiLocale().startsWith("en");
-  const displayProjectName = project.isPersonal && isEn ? "Personnal" : project.name;
+  const displayProjectName = project.isPersonal ? pickByIsEn(isEn, project.name, "Personnal") : project.name;
   const [showMenu, setShowMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -132,9 +134,12 @@ export function ProjectCard({
   const [renameError, setRenameError] = useState("");
   const [actionError, setActionError] = useState("");
   const [avatarBroken, setAvatarBroken] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuPanelRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const allTasks = project.groups.flatMap((g) => g.tasks);
@@ -165,11 +170,29 @@ export function ProjectCard({
 
   useEffect(() => {
     if (!showMenu) return;
+    const updatePos = () => {
+      const rect = menuButtonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = 176;
+      const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+      const top = rect.bottom + 8;
+      setMenuPos({ top, left });
+    };
+    updatePos();
+    window.addEventListener("resize", updatePos);
+    window.addEventListener("scroll", updatePos, true);
     const handler = (e: MouseEvent) => {
-      if (!menuRef.current?.contains(e.target as Node)) setShowMenu(false);
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target)) return;
+      if (menuPanelRef.current?.contains(target)) return;
+      setShowMenu(false);
     };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      window.removeEventListener("resize", updatePos);
+      window.removeEventListener("scroll", updatePos, true);
+    };
   }, [showMenu]);
 
   const handleRename = () => {
@@ -182,7 +205,7 @@ export function ProjectCard({
         setRenaming(false);
         router.refresh();
       } catch (e) {
-        setRenameError(e instanceof Error ? e.message : (isEn ? "Error" : "Erreur"));
+        setRenameError(e instanceof Error ? e.message : (pickByIsEn(isEn, "Erreur", "Error")));
       }
     });
   };
@@ -207,14 +230,14 @@ export function ProjectCard({
 
   return (
     <div
-      className={`relative overflow-visible bg-white dark:bg-gray-800 rounded-xl border p-5 hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-sm transition-all group ${pinned ? "border-indigo-200 dark:border-indigo-700" : "border-gray-200 dark:border-gray-700"}`}
+      className={`relative overflow-visible rounded-xl border bg-white p-5 transition-all group hover:border-indigo-300 hover:shadow-sm dark:bg-gray-800 dark:hover:border-indigo-600 ${showMenu ? "z-[120]" : "z-0"} ${pinned ? "border-indigo-200 dark:border-indigo-700" : "border-gray-200 dark:border-gray-700"}`}
     >
       {/* Pin button */}
       {canPin && (
         <button
           onClick={handlePin}
-          aria-label={pinned ? (isEn ? "Unpin project" : "Désépingler le projet") : (isEn ? "Pin project" : "Épingler le projet")}
-          title={pinned ? (isEn ? "Unpin" : "Désépingler") : (isEn ? "Pin" : "Épingler")}
+          aria-label={pinned ? (pickByIsEn(isEn, "Désépingler le projet", "Unpin project")) : (pickByIsEn(isEn, "Épingler le projet", "Pin project"))}
+          title={pinned ? (pickByIsEn(isEn, "Désépingler", "Unpin")) : (pickByIsEn(isEn, "Épingler", "Pin"))}
           className={`absolute top-3 left-3 p-1 rounded transition-all cursor-pointer ${pinned ? "opacity-100 text-indigo-500" : "opacity-0 group-hover:opacity-100 text-gray-300 hover:text-indigo-400"}`}
         >
           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
@@ -223,10 +246,26 @@ export function ProjectCard({
         </button>
       )}
       {/* Context menu trigger */}
-      <div ref={menuRef} className="absolute top-3 right-3 z-30">
+      <div ref={menuRef} className="absolute top-3 right-3 z-[130]">
         <button
-          onClick={(e) => { e.preventDefault(); setShowMenu((v) => !v); }}
-          aria-label={isEn ? "Project actions" : "Actions du projet"}
+          ref={menuButtonRef}
+          onClick={(e) => {
+            e.preventDefault();
+            const next = !showMenu;
+            if (!next) {
+              setShowMenu(false);
+              return;
+            }
+            const rect = menuButtonRef.current?.getBoundingClientRect();
+            if (rect) {
+              const width = 176;
+              const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+              const top = rect.bottom + 8;
+              setMenuPos({ top, left });
+            }
+            setShowMenu(true);
+          }}
+          aria-label={pickByIsEn(isEn, "Actions du projet", "Project actions")}
           className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all cursor-pointer"
         >
           <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
@@ -234,8 +273,12 @@ export function ProjectCard({
           </svg>
         </button>
 
-        {showMenu && (
-          <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 z-[60] w-44">
+        {showMenu && menuPos && createPortal(
+          <div
+            ref={menuPanelRef}
+            className="fixed w-44 rounded-xl border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800 z-[2147483647]"
+            style={{ top: menuPos.top, left: menuPos.left }}
+          >
             <button
               onClick={() => { setShowMenu(false); setRenaming(true); }}
               className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer flex items-center gap-2"
@@ -243,12 +286,12 @@ export function ProjectCard({
               <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
-              {isEn ? "Rename" : "Renommer"}
+              {pickByIsEn(isEn, "Renommer", "Rename")}
             </button>
             {canGroup && userGroups && userGroups.length > 0 && (
               <>
                 <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
-                <p className="px-3 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{isEn ? "Move to" : "Déplacer vers"}</p>
+                <p className="px-3 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{pickByIsEn(isEn, "Déplacer vers", "Move to")}</p>
                 {userGroups.map((g) => (
                   <button
                     key={g.id}
@@ -277,7 +320,7 @@ export function ProjectCard({
                     }}
                     className="w-full text-left px-3 py-1.5 text-sm text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer italic"
                   >
-                    {isEn ? "Ungrouped" : "Sans groupe"}
+                    {pickByIsEn(isEn, "Sans groupe", "Ungrouped")}
                   </button>
                 )}
               </>
@@ -294,9 +337,9 @@ export function ProjectCard({
                   } catch (e) {
                     const raw = e instanceof Error ? e.message : "";
                     if (raw.includes("FORBIDDEN_ARCHIVE_PROJECT")) {
-                      setActionError(isEn ? "You are not allowed to archive this project." : "Vous n'êtes pas autorisé à archiver ce projet.");
+                      setActionError(pickByIsEn(isEn, "Vous n'êtes pas autorisé à archiver ce projet.", "You are not allowed to archive this project."));
                     } else {
-                      setActionError(isEn ? "Unable to archive this project." : "Impossible d'archiver ce projet.");
+                      setActionError(pickByIsEn(isEn, "Impossible d'archiver ce projet.", "Unable to archive this project."));
                     }
                   }
                 });
@@ -306,7 +349,7 @@ export function ProjectCard({
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M20 7v10a2 2 0 01-2 2H6a2 2 0 01-2-2V7m16 0l-2-3H6L4 7m16 0H4m5 4h6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              {isEn ? "Archive" : "Archiver"}
+              {pickByIsEn(isEn, "Archiver", "Archive")}
             </button>
             <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
             {!project.isPersonal && (
@@ -317,10 +360,11 @@ export function ProjectCard({
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
-                {isEn ? "Delete" : "Supprimer"}
+                {pickByIsEn(isEn, "Supprimer", "Delete")}
               </button>
             )}
-          </div>
+          </div>,
+          document.body
         )}
       </div>
 
@@ -329,7 +373,7 @@ export function ProjectCard({
           {avatarSrc && !avatarBroken ? (
             <img
               src={avatarSrc}
-              alt={`${isEn ? "Project avatar" : "Avatar projet"} ${displayProjectName}`}
+              alt={`${pickByIsEn(isEn, "Avatar projet", "Project avatar")} ${displayProjectName}`}
               className="w-9 h-9 rounded-lg object-cover border border-gray-200 dark:border-gray-700 flex-shrink-0"
               onError={() => setAvatarBroken(true)}
             />
@@ -347,7 +391,7 @@ export function ProjectCard({
                 </h3>
                 {project.isPersonal && (
                   <span className="inline-flex mt-1 items-center rounded-full bg-indigo-100 dark:bg-indigo-900/40 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">
-                    {isEn ? "Personnal" : "Personnel"}
+                    {pickByIsEn(isEn, "Personnel", "Personnal")}
                   </span>
                 )}
                 {actionError && (
@@ -358,7 +402,7 @@ export function ProjectCard({
             {totalTasks > 0 && (
               <div className="mt-2.5">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500">{doneTasks}/{totalTasks} {isEn ? "completed" : "terminées"}</span>
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500">{doneTasks}/{totalTasks} {pickByIsEn(isEn, "terminées", "completed")}</span>
                   <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">{pct}%</span>
                 </div>
                 <div className="h-1 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -372,13 +416,13 @@ export function ProjectCard({
 
             <div className="flex items-center gap-3 mt-2.5 flex-wrap">
               <span className="text-[11px] text-gray-400 dark:text-gray-500">
-                {totalTasks} {isEn ? "task" : "tâche"}{totalTasks !== 1 ? "s" : ""}
+                {totalTasks} {pickByIsEn(isEn, "tâche", "task")}{totalTasks !== 1 ? "s" : ""}
               </span>
               {project._count.members > 0 && (
                 <>
                   <span className="text-gray-200 dark:text-gray-700">·</span>
                   <span className="text-[11px] text-gray-400 dark:text-gray-500">
-                    {project._count.members} {isEn ? "member" : "membre"}{project._count.members !== 1 ? "s" : ""}
+                    {project._count.members} {pickByIsEn(isEn, "membre", "member")}{project._count.members !== 1 ? "s" : ""}
                   </span>
                 </>
               )}
@@ -386,7 +430,7 @@ export function ProjectCard({
                 <>
                   <span className="text-gray-200 dark:text-gray-700">·</span>
                   <span className="text-[11px] text-red-400 font-medium">
-                    {overdueTasks} {isEn ? "late" : "en retard"}
+                    {overdueTasks} {pickByIsEn(isEn, "en retard", "late")}
                   </span>
                 </>
               )}
@@ -394,8 +438,8 @@ export function ProjectCard({
 
             <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-1">
               {lastUpdated
-                ? `${isEn ? "Updated on" : "Modifié le"} ${new Date(lastUpdated).toLocaleDateString(getUiLocale(), { day: "numeric", month: "short" })}`
-                : `${isEn ? "Created on" : "Créé le"} ${new Date(project.createdAt).toLocaleDateString(getUiLocale(), { day: "numeric", month: "short", year: "numeric" })}`}
+                ? `${pickByIsEn(isEn, "Modifié le", "Updated on")} ${new Date(lastUpdated).toLocaleDateString(getUiLocale(), { day: "numeric", month: "short" })}`
+                : `${pickByIsEn(isEn, "Créé le", "Created on")} ${new Date(project.createdAt).toLocaleDateString(getUiLocale(), { day: "numeric", month: "short", year: "numeric" })}`}
             </p>
           </>
         )}
@@ -416,7 +460,7 @@ export function ProjectCard({
             className="w-full text-sm font-semibold border-b border-indigo-400 outline-none bg-transparent text-gray-900 dark:text-gray-50 pr-2"
           />
           {renameError && <p className="text-[10px] text-red-500 mt-0.5">{renameError}</p>}
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">{isEn ? "Enter to confirm, Esc to cancel" : "Entrée pour valider, Échap pour annuler"}</p>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">{pickByIsEn(isEn, "Entrée pour valider, Échap pour annuler", "Enter to confirm, Esc to cancel")}</p>
         </div>
       )}
 

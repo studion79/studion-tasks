@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { acceptInvitation, declineInvitation } from "@/lib/actions";
+import { useClientLocale } from "@/lib/i18n/useClientLocale";
+import { tKey } from "@/lib/i18n/messages";
 
 type Invitation = {
   id: string;
@@ -22,6 +24,8 @@ export function PendingInvitationsSection({
 }) {
   const [list, setList] = useState(invitations);
   const [isPending, startTransition] = useTransition();
+  const pathname = usePathname();
+  const locale = useClientLocale(pathname);
   const router = useRouter();
 
   const handleAccept = (token: string) => {
@@ -46,7 +50,7 @@ export function PendingInvitationsSection({
         <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center">
           {list.length}
         </span>
-        Invitation{list.length > 1 ? "s" : ""} en attente
+        {list.length > 1 ? tKey(locale, "home.pendingInvitations") : tKey(locale, "home.pendingInvitation")}
       </h2>
       <div className="space-y-3">
         {list.map((inv) => (
@@ -76,14 +80,14 @@ export function PendingInvitationsSection({
                 disabled={isPending}
                 className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer disabled:opacity-50"
               >
-                Refuser
+                {tKey(locale, "home.decline")}
               </button>
               <button
                 onClick={() => handleAccept(inv.token)}
                 disabled={isPending}
                 className="text-xs font-medium bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors cursor-pointer disabled:opacity-50"
               >
-                Rejoindre
+                {tKey(locale, "home.join")}
               </button>
             </div>
           </div>

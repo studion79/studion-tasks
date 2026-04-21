@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { localeFromPathname, tr } from "@/lib/i18n/client";
+import { trKey } from "@/lib/i18n/client";
+import { useClientLocale } from "@/lib/i18n/useClientLocale";
 
 type Item = {
   href: string;
@@ -59,17 +60,18 @@ const ITEMS: Item[] = [
 
 export function MobileBottomNav() {
   const pathname = usePathname();
-  const locale = localeFromPathname(pathname);
+  const locale = useClientLocale(pathname);
+  const t = (key: Parameters<typeof trKey>[1]) => trKey(locale, key);
 
   const label = (key: Item["key"]) => {
-    if (key === "home") return tr(locale, "Accueil", "Home");
-    if (key === "templates") return tr(locale, "Templates", "Templates");
-    if (key === "new") return tr(locale, "Nouveau", "New");
-    return tr(locale, "Mon espace", "My space");
+    if (key === "home") return t("mobile.home");
+    if (key === "templates") return t("mobile.templates");
+    if (key === "new") return t("mobile.new");
+    return t("mobile.mySpace");
   };
 
   return (
-    <nav className="sm:hidden fixed left-1/2 -translate-x-1/2 w-[min(92vw,21rem)] mobile-safe-bottom z-40 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 bg-white/95 dark:bg-gray-900/95 backdrop-blur shadow-lg">
+    <nav className="sm:hidden fixed left-1/2 -translate-x-1/2 w-[min(90vw,20rem)] mobile-safe-bottom z-40 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 bg-white/94 dark:bg-gray-900/94 backdrop-blur-xl shadow-[0_18px_40px_-24px_rgba(15,23,42,0.5)]">
       <ul className="grid grid-cols-4 gap-0.5 p-1">
         {ITEMS.map((item) => {
           const active = item.match(pathname);
@@ -78,7 +80,7 @@ export function MobileBottomNav() {
               <Link
                 href={item.href}
                 className={[
-                  "flex flex-col items-center justify-center min-h-10 rounded-xl text-[9.5px] font-medium",
+                  "flex flex-col items-center justify-center min-h-10 rounded-xl text-[9px] font-medium",
                   active
                     ? "text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/40"
                     : "text-gray-500 dark:text-gray-400",

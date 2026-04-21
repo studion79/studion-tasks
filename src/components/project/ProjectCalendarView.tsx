@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname } from "next/navigation";
 import type { ProjectWithRelations, TaskWithFields } from "@/lib/types";
-import { STATUS_OPTIONS } from "@/lib/constants";
+import { getStatusOptions } from "@/lib/constants";
 import { getFieldValue } from "./cells";
 import { TaskDetailPanel } from "./TaskDetailPanel";
 import {
@@ -13,8 +13,11 @@ import {
 } from "@/lib/actions";
 import { toCanonicalStatus } from "@/lib/status";
 import { getUiLocale } from "@/lib/ui-locale";
-import { localeFromPathname, tr } from "@/lib/i18n/client";
+import { trKey } from "@/lib/i18n/client";
+import { useClientLocale } from "@/lib/i18n/useClientLocale";
 import { dateKeyFromValue, parseTimelineValue, splitDateTimeValue } from "@/lib/task-schedule";
+import { pickByIsEn, pickByLocale } from "@/lib/i18n/pick";
+import { sortGroupsByHierarchy } from "@/lib/group-tree";
 
 // --- Calendar helpers ---
 
@@ -138,8 +141,9 @@ function TaskChip({
   locale: "fr" | "en";
   onClick: () => void;
 }) {
+  const t = (key: Parameters<typeof trKey>[1]) => trKey(locale, key);
   const statusVal = statusColId ? toCanonicalStatus(getFieldValue(task.fieldValues, statusColId)) : null;
-  const statusMeta = STATUS_OPTIONS.find((o) => o.value === statusVal);
+  const statusMeta = getStatusOptions(locale).find((o) => o.value === statusVal);
 
   // Use a thin left border colored by status
   const borderColor = statusMeta
@@ -153,7 +157,7 @@ function TaskChip({
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onClick(); }}
-      title={`${task.title}${isGhost ? ` (${tr(locale, "récurrent", "recurring")})` : ""}`}
+      title={`${task.title}${isGhost ? ` (${t("recurrence.label")})` : ""}`}
       className={[
         "w-full text-left text-[11px] font-medium rounded px-1.5 py-0.5 truncate transition-colors cursor-pointer",
         "border border-l-2",
@@ -172,7 +176,8 @@ function TaskChip({
 // --- Main ---
 export function ProjectCalendarView({ project }: { project: ProjectWithRelations }) {
   const pathname = usePathname();
-  const appLocale = localeFromPathname(pathname);
+  const appLocale = useClientLocale(pathname);
+  const t = (key: Parameters<typeof trKey>[1]) => trKey(appLocale, key);
   const locale = getUiLocale();
   const isEn = appLocale === "en";
   const weekdays = getWeekdays(locale);
@@ -180,6 +185,7 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
   const statusCol = columns.find((c) => c.type === "STATUS") ?? null;
   const dueDateCol = columns.find((c) => c.type === "DUE_DATE") ?? null;
   const timelineCol = columns.find((c) => c.type === "TIMELINE") ?? null;
+  const orderedGroups = sortGroupsByHierarchy(project.groups);
 
   const allTasks = project.groups.flatMap((g) => g.tasks);
   const taskGroupMap = new Map(
@@ -198,9 +204,12 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
   const [mobileSelectedDate, setMobileSelectedDate] = useState(toLocalDateStr(now));
   const [viewMode, setViewMode] = useState<"month" | "day">("month");
   const [dayViewDate, setDayViewDate] = useState(toLocalDateStr(now));
+  const [activeDateFeedback, setActiveDateFeedback] = useState<string | null>(null);
   const [taskGroupOverrides, setTaskGroupOverrides] = useState<Record<string, string>>({});
   const [calendarError, setCalendarError] = useState<string | null>(null);
   const [isCreatingTaskFromDay, setIsCreatingTaskFromDay] = useState(false);
+  const [currentMinuteOfDay, setCurrentMinuteOfDay] = useState(() => now.getHours() * 60 + now.getMinutes());
+  const dayTimelineRef = useRef<HTMLDivElement | null>(null);
   const [, startTransition] = useTransition();
 
   const prevMonth = () => {
@@ -239,7 +248,7 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
           allDay: !dueParts.hasTime,
           startMinute: dueParts.hasTime ? minuteOfDay(dueParts.time) : null,
           endMinute: dueParts.hasTime ? Math.min(24 * 60, minuteOfDay(dueParts.time) + 30) : null,
-          label: dueParts.hasTime ? dueParts.time : tr(appLocale, "Sans heure", "No time"),
+          label: dueParts.hasTime ? dueParts.time : t("calendar.noTime"),
         });
 
         const cfg = parseRecurrence(task.recurrence ?? null);
@@ -260,7 +269,7 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
               allDay: !dueParts.hasTime,
               startMinute: dueParts.hasTime ? minuteOfDay(dueParts.time) : null,
               endMinute: dueParts.hasTime ? Math.min(24 * 60, minuteOfDay(dueParts.time) + 30) : null,
-              label: dueParts.hasTime ? dueParts.time : tr(appLocale, "Sans heure", "No time"),
+              label: dueParts.hasTime ? dueParts.time : t("calendar.noTime"),
             });
           }
         }
@@ -291,9 +300,9 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
             if (startMinute !== null && endMinute !== null && endMinute <= startMinute) {
               endMinute = Math.min(24 * 60, startMinute + 30);
             }
-            const labelStart = startParts.hasTime ? startParts.time : tr(appLocale, "Début", "Start");
-            const labelEnd = endParts.hasTime ? endParts.time : tr(appLocale, "Fin", "End");
-            const label = hasAnyTime ? `${labelStart} → ${labelEnd}` : tr(appLocale, "Période", "Period");
+            const labelStart = startParts.hasTime ? startParts.time : t("common.start");
+            const labelEnd = endParts.hasTime ? endParts.time : t("common.end");
+            const label = hasAnyTime ? `${labelStart} → ${labelEnd}` : t("common.period");
             tasksByDate.get(dayKey)!.push({
               task,
               isGhost: false,
@@ -332,21 +341,22 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
 
   const openTask = openTaskId ? tasks.find((t) => t.id === openTaskId) ?? null : null;
   const openGroupId = openTaskId ? (taskGroupOverrides[openTaskId] ?? taskGroupMap.get(openTaskId) ?? null) : null;
-  const openGroup = openGroupId ? project.groups.find((g) => g.id === openGroupId) ?? null : null;
+  const openGroup = openGroupId ? orderedGroups.find((g) => g.id === openGroupId) ?? null : null;
 
   const openCreatePanelForDate = async (dateStr: string) => {
     setMobileSelectedDate(dateStr);
     setDayViewDate(dateStr);
+    setActiveDateFeedback(dateStr);
     if (isCreatingTaskFromDay) return;
-    const targetGroupId = project.groups[0]?.id;
+    const targetGroupId = orderedGroups[0]?.id;
     if (!targetGroupId) {
-      setCalendarError(tr(appLocale, "Aucune catégorie disponible.", "No category available."));
+      setCalendarError(t("calendar.noCategoryAvailable"));
       return;
     }
     setCalendarError(null);
     setIsCreatingTaskFromDay(true);
     try {
-      const created = await createTask(targetGroupId, tr(appLocale, "Nouvelle tâche", "New task"), "Calendar");
+      const created = await createTask(targetGroupId, t("calendar.newTask"), "Calendar");
       if (dueDateCol) {
         await upsertTaskField(created.id, dueDateCol.id, dateStr);
       } else if (timelineCol) {
@@ -383,11 +393,40 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
       setTaskGroupOverrides((prev) => ({ ...prev, [created.id]: targetGroupId }));
       setOpenTaskId(created.id);
     } catch {
-      setCalendarError(tr(appLocale, "Impossible de créer la tâche.", "Unable to create task."));
+      setCalendarError(t("calendar.createTaskFailed"));
     } finally {
       setIsCreatingTaskFromDay(false);
     }
   };
+
+  useEffect(() => {
+    if (!activeDateFeedback) return;
+    const timer = window.setTimeout(() => setActiveDateFeedback((current) => (current === activeDateFeedback ? null : current)), 260);
+    return () => window.clearTimeout(timer);
+  }, [activeDateFeedback]);
+
+  useEffect(() => {
+    if (viewMode !== "day" || dayViewDate !== today) return;
+    const refresh = () => {
+      const nowDate = new Date();
+      setCurrentMinuteOfDay(nowDate.getHours() * 60 + nowDate.getMinutes());
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 30_000);
+    return () => window.clearInterval(interval);
+  }, [dayViewDate, today, viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== "day" || dayViewDate !== today) return;
+    const container = dayTimelineRef.current;
+    if (!container) return;
+    const hourHeight = 56;
+    const top = (currentMinuteOfDay / 60) * hourHeight;
+    const target = Math.max(0, top - container.clientHeight * 0.35);
+    container.scrollTo({ top: target, behavior: "smooth" });
+    // Intentionally run only when opening today in day view.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayViewDate, today, viewMode]);
 
   useEffect(() => {
     const selected = new Date(`${mobileSelectedDate}T00:00:00`);
@@ -407,8 +446,8 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
   if (!dueDateCol && !timelineCol) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-gray-400">
-        <p className="text-sm">{tr(appLocale, "Les colonnes \"Date d'échéance\" et \"Période\" sont inactives.", "The \"Due date\" and \"Timeline\" columns are not active.")}</p>
-        <p className="text-xs mt-1 text-gray-300">{tr(appLocale, "Activez au moins l'une des deux depuis les paramètres du projet.", "Enable at least one of them in project settings.")}</p>
+        <p className="text-sm">{t("calendar.noDateColumns")}</p>
+        <p className="text-xs mt-1 text-gray-300">{t("calendar.noDateColumnsHint")}</p>
       </div>
     );
   }
@@ -417,7 +456,7 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
     <>
       <div className="flex flex-col h-full">
         {/* Calendar header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-3 sm:px-5 py-3 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 px-2.5 sm:px-5 py-3 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
           <div className="flex items-center justify-between sm:justify-start gap-3 w-full sm:w-auto">
             <button
               onClick={prevMonth}
@@ -439,8 +478,8 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
               </svg>
             </button>
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2 self-end sm:self-auto">
-            <div className="inline-flex items-center rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
+          <div className="grid w-full grid-cols-2 gap-1.5 sm:flex sm:w-auto sm:items-center sm:gap-2">
+            <div className="col-span-2 inline-flex items-center rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden sm:col-auto">
               <button
                 onClick={() => setViewMode("month")}
                 className={`px-2.5 py-1 text-[11px] sm:text-xs transition-colors cursor-pointer ${
@@ -449,7 +488,7 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
                     : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 }`}
               >
-                {tr(appLocale, "Mois", "Month")}
+                {t("calendar.month")}
               </button>
               <button
                 onClick={() => setViewMode("day")}
@@ -459,24 +498,24 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
                     : "bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 }`}
               >
-                {tr(appLocale, "Journée", "Day")}
+                {t("calendar.day")}
               </button>
             </div>
             <button
               onClick={goToday}
-              className="text-[11px] sm:text-xs whitespace-nowrap text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 sm:px-3 py-1 sm:py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+              className="w-full text-[11px] sm:w-auto sm:text-xs whitespace-nowrap text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 sm:px-3 py-1 sm:py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
             >
-              {tr(appLocale, "Auj.", "Today")}
+              {t("dashboard.abbrToday")}
             </button>
             <button
               onClick={() => setShowCompleted((prev) => !prev)}
-              className={`text-[11px] sm:text-xs whitespace-nowrap px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg transition-colors cursor-pointer ${
+              className={`w-full text-[11px] sm:w-auto sm:text-xs whitespace-nowrap px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg transition-colors cursor-pointer ${
                 showCompleted
                   ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700"
                   : "text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
               }`}
             >
-              {showCompleted ? tr(appLocale, "Masquer cochées", "Hide completed") : tr(appLocale, "Afficher cochées", "Show completed")}
+              {showCompleted ? t("common.hideCompleted") : t("common.showCompleted")}
             </button>
           </div>
         </div>
@@ -484,7 +523,7 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
         {/* Mobile agenda */}
         {viewMode === "month" && (
         <div className="sm:hidden flex-1 overflow-y-auto">
-          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+          <div className="px-3 py-3 border-b border-gray-100 dark:border-gray-700">
             <div className="flex gap-2 overflow-x-auto pb-1">
               {monthDays.map((day) => {
                 const dateStr = toLocalDateStr(day);
@@ -495,23 +534,25 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
                   <button
                     key={dateStr}
                     onClick={() => {
+                      setActiveDateFeedback(dateStr);
                       setMobileSelectedDate(dateStr);
                       setDayViewDate(dateStr);
                     }}
                     className={[
-                      "min-w-[3.4rem] px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer",
+                      "min-w-[3.05rem] px-1.5 py-2 rounded-lg border text-center transition-all cursor-pointer active:scale-95",
                       selected
                         ? "bg-indigo-600 text-white border-indigo-600"
                         : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200",
+                      activeDateFeedback === dateStr ? "scale-[0.97] shadow-[0_0_0_2px_rgba(99,102,241,0.22)]" : "",
                     ].join(" ")}
                   >
-                    <p className="text-[10px] uppercase tracking-wide opacity-80">
+                    <p className="text-[9px] uppercase tracking-wide opacity-80">
                       {new Intl.DateTimeFormat(locale, { weekday: "short" }).format(day)}
                     </p>
                     <p className="text-sm font-semibold">{day.getDate()}</p>
-                    <p className="text-[10px] opacity-80 leading-none truncate max-w-[3.3rem] mx-auto">
+                    <p className="text-[10px] opacity-80 leading-none truncate max-w-[2.9rem] mx-auto">
                       {isToday
-                        ? tr(appLocale, "Auj.", "Today")
+                        ? t("dashboard.abbrToday")
                         : hasTasks
                         ? `${tasksByDate.get(dateStr)!.length}`
                         : "·"}
@@ -521,10 +562,10 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
               })}
             </div>
           </div>
-          <div className="p-4 space-y-2">
+          <div className="px-2.5 py-3 space-y-2">
             {(tasksByDate.get(mobileSelectedDate) ?? []).length === 0 ? (
-              <div className="rounded-xl border border-dashed border-gray-200 dark:border-gray-700 px-4 py-6 text-center text-sm text-gray-400">
-                {tr(appLocale, "Aucune tâche pour cette date", "No task for this date")}
+              <div className="mobile-surface-soft rounded-xl border-dashed px-4 py-6 text-center text-sm text-gray-400">
+                {t("dashboard.noTasksOnDate")}
               </div>
             ) : (
               (tasksByDate.get(mobileSelectedDate) ?? []).map(({ task, isGhost, source }) => {
@@ -550,32 +591,32 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
 
         {/* Day agenda */}
         {viewMode === "day" && (
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            <div className="flex items-center gap-2">
+          <div className="flex-1 overflow-y-auto p-2.5 sm:p-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
               <input
                 type="date"
                 value={dayViewDate}
                 onChange={(e) => setDayViewDate(e.target.value)}
-                className="datetime-field"
+                className="datetime-field w-full sm:w-auto sm:max-w-[10rem]"
               />
-              <span className="text-xs text-gray-500 dark:text-gray-400">
+              <span className="w-full sm:w-auto text-xs text-gray-500 dark:text-gray-400">
                 {new Date(`${dayViewDate}T12:00:00`).toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })}
               </span>
               <button
                 type="button"
                 onClick={() => void openCreatePanelForDate(dayViewDate)}
                 disabled={isCreatingTaskFromDay}
-                className="ml-auto text-xs px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors cursor-pointer"
+                className="sm:ml-auto w-full sm:w-auto text-xs px-2.5 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors cursor-pointer"
               >
-                {isCreatingTaskFromDay ? tr(appLocale, "Création…", "Creating...") : tr(appLocale, "Ajouter une tâche", "Add task")}
+                {isCreatingTaskFromDay ? t("calendar.creating") : t("cards.addTask")}
               </button>
             </div>
             {calendarError && (
               <p className="text-xs text-red-500">{calendarError}</p>
             )}
             {(tasksByDate.get(dayViewDate) ?? []).length === 0 ? (
-              <div className="rounded-xl border border-dashed border-gray-200 dark:border-gray-700 px-4 py-8 text-center text-sm text-gray-400">
-                {tr(appLocale, "Aucune tâche planifiée", "No scheduled task")}
+              <div className="mobile-surface-soft rounded-xl border-dashed px-4 py-8 text-center text-sm text-gray-400">
+                {t("calendar.noScheduledTask")}
               </div>
             ) : (
               (() => {
@@ -592,9 +633,9 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
                 return (
                   <div className="space-y-4">
                     {allDay.length > 0 && (
-                      <section className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 space-y-2">
+                      <section className="mobile-surface-soft rounded-xl p-3 space-y-2">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                          {tr(appLocale, "Toute la journée", "All day")}
+                          {t("calendar.allDay")}
                         </p>
                         {allDay.map((item) => (
                           <button
@@ -609,15 +650,16 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
                             <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{item.task.title}</p>
                             <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
                               {item.source === "timeline"
-                                ? tr(appLocale, "Période sans horaire", "Period without time")
-                                : tr(appLocale, "Échéance sans horaire", "Due date without time")}
+                                ? t("calendar.periodWithoutTime")
+                                : t("calendar.dueDateWithoutTime")}
                             </p>
                           </button>
                         ))}
                       </section>
                     )}
 
-                    <section className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+                    <section className="mobile-surface-soft rounded-xl overflow-hidden">
+                      <div ref={dayTimelineRef} className="relative overflow-y-auto" style={{ height: `${Math.min(dayHeight, 680)}px` }}>
                       <div className="relative" style={{ height: `${dayHeight}px` }}>
                         {Array.from({ length: 24 }).map((_, hour) => (
                           <div
@@ -630,8 +672,19 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
                             </span>
                           </div>
                         ))}
+                        {dayViewDate === today && (
+                          <div
+                            className="absolute left-0 right-0 pointer-events-none z-20"
+                            style={{ top: `${(currentMinuteOfDay / 60) * hourHeight}px` }}
+                          >
+                            <div className="absolute -top-[9px] left-1.5 rounded bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow">
+                              {`${String(Math.floor(currentMinuteOfDay / 60)).padStart(2, "0")}:${String(currentMinuteOfDay % 60).padStart(2, "0")}`}
+                            </div>
+                            <div className="ml-12 mr-2 h-[2px] rounded-full bg-rose-500 shadow-[0_0_0_3px_rgba(244,63,94,0.16)]" />
+                          </div>
+                        )}
 
-                        <div className="absolute inset-y-0 left-14 right-2">
+                        <div className="absolute inset-y-0 left-12 right-2">
                           {timed.map((item, index) => {
                             const start = Math.max(0, item.startMinute ?? 0);
                             const end = Math.max(start + 15, item.endMinute ?? start + 30);
@@ -658,6 +711,7 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
                             );
                           })}
                         </div>
+                      </div>
                       </div>
                     </section>
                   </div>
@@ -696,11 +750,13 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
                     key={di}
                     onClick={() => void openCreatePanelForDate(dateStr)}
                     className={[
-                      "min-h-[100px] p-2 cursor-pointer",
+                      "min-h-[100px] p-2 cursor-pointer transition-all active:scale-[0.99]",
                       di < 6 ? "border-r border-gray-100 dark:border-gray-700" : "",
                       isCurrentMonth
                         ? "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/40"
                         : "bg-gray-50/60 dark:bg-gray-900/50 hover:bg-gray-100/70 dark:hover:bg-gray-800/60",
+                      dayViewDate === dateStr ? "ring-2 ring-indigo-200/80 dark:ring-indigo-700/70" : "",
+                      activeDateFeedback === dateStr ? "shadow-[0_0_0_3px_rgba(99,102,241,0.16)]" : "",
                     ].join(" ")}
                   >
                     {/* Day number */}
@@ -740,7 +796,7 @@ export function ProjectCalendarView({ project }: { project: ProjectWithRelations
                       })}
                       {overflow > 0 && (
                         <span className="text-[10px] text-gray-400 px-1">
-                          +{overflow} {isEn ? "more" : `autre${overflow > 1 ? "s" : ""}`}
+                          +{overflow} {pickByIsEn(isEn, `autre${overflow > 1 ? "s" : ""}`, "more")}
                         </span>
                       )}
                     </div>

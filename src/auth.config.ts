@@ -9,10 +9,14 @@ export const authConfig: NextAuthConfig = {
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
+      const isPublicHealthApi =
+        nextUrl.pathname === "/api/health" || nextUrl.pathname === "/api/health/live";
       const isAuthPage =
         nextUrl.pathname === "/login" ||
         nextUrl.pathname === "/register" ||
-        /^\/(fr|en)\/(login|register)$/.test(nextUrl.pathname);
+        nextUrl.pathname === "/verify-email" ||
+        /^\/(fr|en)\/(login|register|verify-email)$/.test(nextUrl.pathname);
+      if (isPublicHealthApi) return true;
       if (isAuthPage) return true;
       return isLoggedIn;
     },

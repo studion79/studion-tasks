@@ -9,7 +9,9 @@ import {
   deleteAutomation,
 } from "@/lib/actions";
 import type { AutomationTrigger, AutomationAction } from "@/lib/actions";
-import { localeFromPathname, tr } from "@/lib/i18n/client";
+import type { AppLocale } from "@/i18n/config";
+import { trKey } from "@/lib/i18n/client";
+import { useClientLocale } from "@/lib/i18n/useClientLocale";
 
 type AutomationRow = {
   id: string;
@@ -20,31 +22,31 @@ type AutomationRow = {
   createdAt: Date;
 };
 
-function getValuesFor(field: string, locale: ReturnType<typeof localeFromPathname>) {
+function getValuesFor(field: string, locale: AppLocale) {
   if (field === "STATUS") {
     return [
-      { value: "todo", label: tr(locale, "À faire", "To do") },
-      { value: "in_progress", label: tr(locale, "En cours", "In progress") },
-      { value: "done", label: tr(locale, "Terminé", "Done") },
-      { value: "blocked", label: tr(locale, "Bloqué", "Blocked") },
+      { value: "todo", label: trKey(locale, "automation.todo") },
+      { value: "in_progress", label: trKey(locale, "automation.inProgress") },
+      { value: "done", label: trKey(locale, "automation.done") },
+      { value: "blocked", label: trKey(locale, "automation.blocked") },
     ];
   }
   if (field === "PRIORITY") {
     return [
-      { value: "low", label: tr(locale, "Basse", "Low") },
-      { value: "medium", label: tr(locale, "Moyenne", "Medium") },
-      { value: "high", label: tr(locale, "Haute", "High") },
-      { value: "critical", label: tr(locale, "Critique", "Critical") },
+      { value: "low", label: trKey(locale, "automation.low") },
+      { value: "medium", label: trKey(locale, "automation.medium") },
+      { value: "high", label: trKey(locale, "automation.high") },
+      { value: "critical", label: trKey(locale, "automation.critical") },
     ];
   }
   return [];
 }
 
-function describeAutomation(trigger: string, action: string, locale: ReturnType<typeof localeFromPathname>): string {
+function describeAutomation(trigger: string, action: string, locale: AppLocale): string {
   const fieldLabels: Record<string, string> = {
-    STATUS: tr(locale, "Statut", "Status"),
-    PRIORITY: tr(locale, "Priorité", "Priority"),
-    OWNER: tr(locale, "Responsable", "Owner"),
+    STATUS: trKey(locale, "automation.status"),
+    PRIORITY: trKey(locale, "automation.priority"),
+    OWNER: trKey(locale, "automation.owner"),
   };
   try {
     const t = JSON.parse(trigger) as AutomationTrigger;
@@ -56,11 +58,11 @@ function describeAutomation(trigger: string, action: string, locale: ReturnType<
       const aVals = getValuesFor(a.field, locale);
       const aLabel = aVals.find((v) => v.value === a.value)?.label ?? a.value;
       const aField = fieldLabels[a.field] ?? a.field;
-      return `${tr(locale, "Quand", "When")} ${tField} → "${tLabel}" · ${tr(locale, "Définir", "Set")} ${aField} = "${aLabel}"`;
+      return `${trKey(locale, "automation.when")} ${tField} → "${tLabel}" · ${trKey(locale, "automation.set")} ${aField} = "${aLabel}"`;
     }
-    return `${tr(locale, "Quand", "When")} ${tField} → "${tLabel}" · ${tr(locale, "Notifier le responsable", "Notify owner")}`;
+    return `${trKey(locale, "automation.when")} ${tField} → "${tLabel}" · ${trKey(locale, "automation.notifyOwner")}`;
   } catch {
-    return tr(locale, "Règle invalide", "Invalid rule");
+    return trKey(locale, "automation.invalidRule");
   }
 }
 
@@ -72,7 +74,7 @@ export function AutomationsPanel({
   onClose: () => void;
 }) {
   const pathname = usePathname();
-  const locale = localeFromPathname(pathname);
+  const locale = useClientLocale(pathname);
   const [automations, setAutomations] = useState<AutomationRow[] | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [, startTransition] = useTransition();
@@ -130,8 +132,8 @@ export function AutomationsPanel({
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-gray-700">
           <div>
-            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">{tr(locale, "Automatisations", "Automations")}</h2>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{tr(locale, "Règles déclenchées automatiquement lors de modifications", "Rules triggered automatically on updates")}</p>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">{trKey(locale, "automation.title")}</h2>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{trKey(locale, "automation.subtitle")}</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -143,7 +145,7 @@ export function AutomationsPanel({
         {/* List */}
         <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-4 space-y-2">
           {!loaded ? (
-            <p className="text-sm text-gray-400 text-center py-8">{tr(locale, "Chargement…", "Loading...")}</p>
+            <p className="text-sm text-gray-400 text-center py-8">{trKey(locale, "project.loading")}</p>
           ) : automations?.length === 0 && !showForm ? (
             <div className="text-center py-12">
               <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center mx-auto mb-3">
@@ -151,8 +153,8 @@ export function AutomationsPanel({
                   <path d="M13 10V3L4 14h7v7l9-11h-7z" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-              <p className="text-sm text-gray-500 font-medium">{tr(locale, "Aucune règle configurée", "No configured rule")}</p>
-              <p className="text-xs text-gray-400 mt-1">{tr(locale, "Créez une règle pour automatiser les actions répétitives", "Create a rule to automate repetitive actions")}</p>
+              <p className="text-sm text-gray-500 font-medium">{trKey(locale, "automation.noneConfigured")}</p>
+              <p className="text-xs text-gray-400 mt-1">{trKey(locale, "automation.noneConfiguredHint")}</p>
             </div>
           ) : (
             automations?.map((auto) => (
@@ -160,7 +162,7 @@ export function AutomationsPanel({
                 <button
                   onClick={() => handleToggle(auto.id, !auto.isActive)}
                   className={`relative w-8 h-4.5 h-[18px] rounded-full transition-colors cursor-pointer flex-shrink-0 ${auto.isActive ? "bg-indigo-500" : "bg-gray-300 dark:bg-gray-600"}`}
-                  title={auto.isActive ? tr(locale, "Désactiver", "Disable") : tr(locale, "Activer", "Enable")}
+                  title={auto.isActive ? trKey(locale, "automation.disable") : trKey(locale, "automation.enable")}
                 >
                   <span className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-all ${auto.isActive ? "left-[18px]" : "left-0.5"}`} />
                 </button>
@@ -185,14 +187,14 @@ export function AutomationsPanel({
             <div className="border border-indigo-200 dark:border-indigo-700 bg-indigo-50/40 dark:bg-indigo-900/20 rounded-xl p-4 space-y-3 mt-2">
               <input
                 type="text"
-                placeholder={tr(locale, "Nom de la règle (ex. Clôture auto)", "Rule name (e.g. Auto close)")}
+                placeholder={trKey(locale, "automation.ruleNamePlaceholder")}
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 outline-none focus:border-indigo-400 bg-white dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-500"
                 autoFocus
               />
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-gray-500 font-medium">{tr(locale, "Quand", "When")}</span>
+                <span className="text-xs text-gray-500 font-medium">{trKey(locale, "automation.when")}</span>
                 <select
                   value={triggerField}
                   onChange={(e) => {
@@ -202,14 +204,14 @@ export function AutomationsPanel({
                   className="select-unified select-unified-sm"
                 >
                   {Object.entries({
-                    STATUS: tr(locale, "Statut", "Status"),
-                    PRIORITY: tr(locale, "Priorité", "Priority"),
-                    OWNER: tr(locale, "Responsable", "Owner"),
+                    STATUS: trKey(locale, "automation.status"),
+                    PRIORITY: trKey(locale, "automation.priority"),
+                    OWNER: trKey(locale, "automation.owner"),
                   }).map(([k, v]) => (
                     <option key={k} value={k}>{v}</option>
                   ))}
                 </select>
-                <span className="text-xs text-gray-400">{tr(locale, "devient", "becomes")}</span>
+                <span className="text-xs text-gray-400">{trKey(locale, "automation.becomes")}</span>
                 <select
                   value={triggerValue}
                   onChange={(e) => setTriggerValue(e.target.value)}
@@ -221,14 +223,14 @@ export function AutomationsPanel({
                 </select>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-gray-500 font-medium">{tr(locale, "Alors", "Then")}</span>
+                <span className="text-xs text-gray-500 font-medium">{trKey(locale, "automation.then")}</span>
                 <select
                   value={actionType}
                   onChange={(e) => setActionType(e.target.value as "SET_FIELD" | "NOTIFY_OWNER")}
                   className="select-unified select-unified-sm"
                 >
-                  <option value="SET_FIELD">{tr(locale, "Définir un champ", "Set a field")}</option>
-                  <option value="NOTIFY_OWNER">{tr(locale, "Notifier le responsable", "Notify owner")}</option>
+                  <option value="SET_FIELD">{trKey(locale, "automation.setField")}</option>
+                  <option value="NOTIFY_OWNER">{trKey(locale, "automation.notifyOwner")}</option>
                 </select>
                 {actionType === "SET_FIELD" && (
                   <>
@@ -241,9 +243,9 @@ export function AutomationsPanel({
                       className="select-unified select-unified-sm"
                     >
                       {Object.entries({
-                        STATUS: tr(locale, "Statut", "Status"),
-                        PRIORITY: tr(locale, "Priorité", "Priority"),
-                        OWNER: tr(locale, "Responsable", "Owner"),
+                        STATUS: trKey(locale, "automation.status"),
+                        PRIORITY: trKey(locale, "automation.priority"),
+                        OWNER: trKey(locale, "automation.owner"),
                       }).map(([k, v]) => (
                         <option key={k} value={k}>{v}</option>
                       ))}
@@ -267,13 +269,13 @@ export function AutomationsPanel({
                   disabled={!formName.trim()}
                   className="text-xs bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-lg px-3 py-1.5 transition-colors cursor-pointer"
                 >
-                  {tr(locale, "Créer", "Create")}
+                  {trKey(locale, "automation.create")}
                 </button>
                 <button
                   onClick={() => { setShowForm(false); setFormName(""); }}
                   className="text-xs text-gray-500 hover:text-gray-700 transition-colors cursor-pointer"
                 >
-                  {tr(locale, "Annuler", "Cancel")}
+                  {trKey(locale, "common.cancel")}
                 </button>
               </div>
             </div>
@@ -290,13 +292,13 @@ export function AutomationsPanel({
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M12 4v16m8-8H4" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
-              {tr(locale, "Nouvelle règle", "New rule")}
+              {trKey(locale, "automation.newRule")}
             </button>
             <button
               onClick={onClose}
               className="sm:hidden text-xs text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5"
             >
-              {tr(locale, "Fermer", "Close")}
+              {trKey(locale, "common.close")}
             </button>
           </div>
         </div>

@@ -3,12 +3,14 @@
 import { useState, useEffect, useRef } from "react";
 import { getUiLocale } from "@/lib/ui-locale";
 import { usePathname } from "next/navigation";
-import { STATUS_OPTIONS, PRIORITY_OPTIONS } from "@/lib/constants";
+import { getPriorityOptions, getStatusOptions } from "@/lib/constants";
 import type { ProjectColumn, TaskFieldValue } from "@/lib/types";
 import { useProjectContext } from "./ProjectContext";
-import { localeFromPathname, tr } from "@/lib/i18n/client";
+import { trKey } from "@/lib/i18n/client";
+import { useClientLocale } from "@/lib/i18n/useClientLocale";
 import { setTaskReminderPreference } from "@/lib/actions";
 import { composeDateTimeValue, composeTimelineValue, parseTimelineValue, splitDateTimeValue } from "@/lib/task-schedule";
+import { normalizeTimeInput } from "@/lib/time-input";
 
 export function getFieldValue(
   fieldValues: TaskFieldValue[],
@@ -21,31 +23,32 @@ export function getFieldValue(
 
 export function recurrenceLabel(recurrence: string | null, locale: "fr" | "en"): string | null {
   if (!recurrence) return null;
-  const isEn = locale === "en";
   try {
     const { frequency, interval, endDate } = JSON.parse(recurrence) as {
       frequency: string;
       interval: number;
       endDate?: string | null;
     };
-    const labels: Record<string, string> = isEn
-      ? { daily: "day", weekly: "week", monthly: "month" }
-      : { daily: "jour", weekly: "semaine", monthly: "mois" };
+    const labels: Record<string, string> = {
+      daily: trKey(locale, "recurrence.unit.day"),
+      weekly: trKey(locale, "recurrence.unit.week"),
+      monthly: trKey(locale, "recurrence.unit.month"),
+    };
     const unit = labels[frequency] ?? frequency;
     const base = interval === 1
-      ? (isEn ? `Recurring · every ${unit}` : `Récurrent · chaque ${unit}`)
-      : (isEn ? `Recurring · every ${interval} ${unit}s` : `Récurrent · tous les ${interval} ${unit}s`);
+      ? `${trKey(locale, "recurrence.label")} · ${trKey(locale, "recurrence.everyEach")} ${unit}`
+      : `${trKey(locale, "recurrence.label")} · ${trKey(locale, "recurrence.everyPlural")} ${interval} ${unit}s`;
     if (!endDate) return base;
     const formattedEnd = new Date(`${endDate}T00:00:00`).toLocaleDateString(getUiLocale());
-    return isEn ? `${base} (until ${formattedEnd})` : `${base} (jusqu'au ${formattedEnd})`;
+    return `${base} (${trKey(locale, "recurrence.until")} ${formattedEnd})`;
   } catch {
-    return isEn ? "Recurring" : "Recurrent";
+    return trKey(locale, "recurrence.label");
   }
 }
 
 /** Small repeat icon badge — drop it next to any task title */
 export function RecurrenceIcon({ recurrence }: { recurrence: string | null }) {
-  const locale = localeFromPathname(usePathname());
+  const locale = useClientLocale(usePathname());
   const label = recurrenceLabel(recurrence, locale);
   if (!label) return null;
   return (
@@ -109,7 +112,7 @@ export function SelectCell({
         )}
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg min-w-[160px] py-1">
+        <div className="absolute top-full right-0 mt-1 z-50 min-w-[150px] max-w-[calc(100vw-1rem)] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 sm:left-0 sm:right-auto">
           {options.map((opt) => (
             <button
               key={opt.value}
@@ -218,7 +221,8 @@ export function DateCell({
   taskId?: string;
   reminderOffsetMinutes?: number | null;
 }) {
-  const locale = localeFromPathname(usePathname());
+  const locale = useClientLocale(usePathname());
+  const t = (key: Parameters<typeof trKey>[1]) => trKey(locale, key);
   const [editing, setEditing] = useState(false);
   const [dateDraft, setDateDraft] = useState("");
   const [timeDraft, setTimeDraft] = useState("");
@@ -246,8 +250,8 @@ export function DateCell({
       ? new Date((parsedForDisplay.date || "") + (parsedForDisplay.hasTime ? `T${parsedForDisplay.time}:00` : "T00:00:00")) < new Date()
       : false;
 
-  const handleReminderSave = async () => {
-    if (!taskId || !timeDraft) return;
+  const handleReminderSave = async (normalizedTime: string) => {
+    if (!taskId || !normalizedTime) return;
     const minutes =
       reminderChoice === "custom"
         ? Math.max(0, Math.min(24 * 60, Number.parseInt(customReminder || "0", 10) || 0))
@@ -255,11 +259,13 @@ export function DateCell({
     await setTaskReminderPreference(taskId, Number.isFinite(minutes) ? minutes : 0);
   };
 
-  const saveAndClose = async () => {
-    const composed = dateDraft ? composeDateTimeValue(dateDraft, timeDraft || null) : "";
+  const saveAndClose = async (timeOverride?: string) => {
+    const effectiveTime = timeOverride ?? timeDraft;
+    const normalizedTime = normalizeTimeInput(effectiveTime, parsedForDisplay.time);
+    const composed = dateDraft ? composeDateTimeValue(dateDraft, normalizedTime || null) : "";
     onSave(composed || null);
     if (taskId) {
-      if (timeDraft) await handleReminderSave();
+      if (normalizedTime) await handleReminderSave(normalizedTime);
       else await setTaskReminderPreference(taskId, null);
     }
     setEditing(false);
@@ -303,37 +309,52 @@ export function DateCell({
           />
           <div
             onMouseDown={(e) => e.stopPropagation()}
-            className="absolute right-0 sm:right-auto sm:left-0 top-full mt-1 z-[91] rounded-lg border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-gray-800 p-2 space-y-2 w-[min(12.5rem,calc(100vw-1rem))] sm:w-[15.5rem] max-w-[calc(100vw-1rem)] overflow-x-hidden shadow-xl"
+            className="absolute left-1/2 top-full mt-1 z-[91] w-[min(12.5rem,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] -translate-x-1/2 overflow-x-hidden rounded-lg border border-indigo-300 bg-white p-2 space-y-2 shadow-xl sm:left-0 sm:w-[15.5rem] sm:translate-x-0 dark:border-indigo-700 dark:bg-gray-800"
           >
             <div className="grid grid-cols-1 gap-1.5">
               <input
                 type="date"
                 value={dateDraft}
                 onChange={(e) => setDateDraft(e.target.value)}
-                className="datetime-field mx-auto block w-[9rem] max-w-full min-w-0"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void saveAndClose();
+                  if (e.key === "Escape") setEditing(false);
+                }}
+                className="datetime-field mx-auto block w-full min-w-0"
               />
               <input
                 type="time"
                 value={timeDraft}
                 onChange={(e) => setTimeDraft(e.target.value)}
-                className="datetime-field mx-auto block w-[9rem] max-w-full min-w-0"
+                onFocus={() => {
+                  if (!timeDraft.trim()) setTimeDraft("00:00");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const normalized = normalizeTimeInput((e.currentTarget as HTMLInputElement).value || timeDraft, parsedForDisplay.time);
+                    setTimeDraft(normalized);
+                    void saveAndClose(normalized);
+                  }
+                  if (e.key === "Escape") setEditing(false);
+                }}
+                className="datetime-field mx-auto block w-full min-w-0"
               />
             </div>
             {timeDraft && taskId && (
               <div className="space-y-1 min-w-0">
-                <p className="text-[10px] text-gray-500 dark:text-gray-400">{tr(locale, "Rappel", "Reminder")}</p>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">{t("home.reminder")}</p>
                 <div className="flex flex-col gap-1.5 min-w-0">
                   <select
                     value={reminderChoice}
                     onChange={(e) => setReminderChoice(e.target.value)}
                     className="w-full min-w-0 select-unified select-unified-sm"
                   >
-                    <option value="0">{tr(locale, "À l'heure", "At time")}</option>
-                    <option value="2">{tr(locale, "2 min avant", "2 min before")}</option>
-                    <option value="5">{tr(locale, "5 min avant", "5 min before")}</option>
-                    <option value="15">{tr(locale, "15 min avant", "15 min before")}</option>
-                    <option value="30">{tr(locale, "30 min avant", "30 min before")}</option>
-                    <option value="custom">{tr(locale, "Personnalisé", "Custom")}</option>
+                    <option value="0">{t("home.atTime")}</option>
+                    <option value="2">{t("home.minutesBefore2")}</option>
+                    <option value="5">{t("home.minutesBefore5")}</option>
+                    <option value="15">{t("home.minutesBefore15")}</option>
+                    <option value="30">{t("home.minutesBefore30")}</option>
+                    <option value="custom">{t("home.custom")}</option>
                   </select>
                   {reminderChoice === "custom" && (
                     <input
@@ -342,7 +363,11 @@ export function DateCell({
                       max={1440}
                       value={customReminder}
                       onChange={(e) => setCustomReminder(e.target.value)}
-                      className="datetime-field mx-auto block w-[9rem] max-w-full min-w-0"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void saveAndClose();
+                        if (e.key === "Escape") setEditing(false);
+                      }}
+                      className="datetime-field mx-auto block w-full min-w-0"
                       placeholder="min"
                     />
                   )}
@@ -361,7 +386,7 @@ export function DateCell({
                 }}
                 className="text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors cursor-pointer"
               >
-                {tr(locale, "Effacer", "Clear")}
+                {t("common.clear")}
               </button>
               <button
                 type="button"
@@ -386,7 +411,8 @@ export function TimelineCell({
   value: string | null;
   onSave: (v: string | null) => void;
 }) {
-  const locale = localeFromPathname(usePathname());
+  const locale = useClientLocale(usePathname());
+  const t = (key: Parameters<typeof trKey>[1]) => trKey(locale, key);
   const parsed = parseTimelineValue(value);
 
   const [editing, setEditing] = useState(false);
@@ -395,9 +421,22 @@ export function TimelineCell({
   const [endDate, setEndDate] = useState("");
   const [endTime, setEndTime] = useState("");
 
-  const save = () => {
-    const normalizedStart = startDate ? composeDateTimeValue(startDate, startTime || null) : "";
-    const normalizedEnd = endDate ? composeDateTimeValue(endDate, endTime || null) : "";
+  const save = (overrides?: {
+    startDate?: string;
+    startTime?: string;
+    endDate?: string;
+    endTime?: string;
+  }) => {
+    const baseStart = splitDateTimeValue(parsed?.start ?? "");
+    const baseEnd = splitDateTimeValue(parsed?.end ?? "");
+    const effectiveStartDate = overrides?.startDate ?? startDate;
+    const effectiveStartTime = overrides?.startTime ?? startTime;
+    const effectiveEndDate = overrides?.endDate ?? endDate;
+    const effectiveEndTime = overrides?.endTime ?? endTime;
+    const normalizedStartTime = normalizeTimeInput(effectiveStartTime, baseStart.time);
+    const normalizedEndTime = normalizeTimeInput(effectiveEndTime, baseEnd.time);
+    const normalizedStart = effectiveStartDate ? composeDateTimeValue(effectiveStartDate, normalizedStartTime || null) : "";
+    const normalizedEnd = effectiveEndDate ? composeDateTimeValue(effectiveEndDate, normalizedEndTime || null) : "";
     onSave(composeTimelineValue(normalizedStart, normalizedEnd));
     setEditing(false);
   };
@@ -459,7 +498,7 @@ export function TimelineCell({
           />
           <div
             onMouseDown={(e) => e.stopPropagation()}
-            className="absolute right-0 sm:right-auto sm:left-0 top-full mt-1 z-[91] rounded-lg border border-indigo-300 dark:border-indigo-700 bg-white dark:bg-gray-800 p-2 space-y-2 w-[min(12.75rem,calc(100vw-1rem))] sm:w-[17rem] max-w-[calc(100vw-1rem)] overflow-x-hidden shadow-xl"
+            className="absolute left-1/2 top-full mt-1 z-[91] w-[min(12.75rem,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] -translate-x-1/2 overflow-x-hidden rounded-lg border border-indigo-300 bg-white p-2 space-y-2 shadow-xl sm:left-0 sm:w-[17rem] sm:translate-x-0 dark:border-indigo-700 dark:bg-gray-800"
           >
             <div className="grid grid-cols-1 gap-1 items-center">
               <div className="grid grid-cols-1 gap-1">
@@ -467,13 +506,29 @@ export function TimelineCell({
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="datetime-field mx-auto block w-[9rem] max-w-full min-w-0"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") save({ startDate: (e.currentTarget as HTMLInputElement).value });
+                    if (e.key === "Escape") setEditing(false);
+                  }}
+                  className="datetime-field mx-auto block w-full min-w-0"
                 />
                 <input
                   type="time"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
-                  className="datetime-field mx-auto block w-[9rem] max-w-full min-w-0"
+                  onFocus={() => {
+                    if (!startTime.trim()) setStartTime("00:00");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const base = splitDateTimeValue(parsed?.start ?? "");
+                      const normalized = normalizeTimeInput((e.currentTarget as HTMLInputElement).value || startTime, base.time);
+                      setStartTime(normalized);
+                      save({ startTime: normalized });
+                    }
+                    if (e.key === "Escape") setEditing(false);
+                  }}
+                  className="datetime-field mx-auto block w-full min-w-0"
                 />
               </div>
               <span className="text-gray-400 text-xs text-center">→</span>
@@ -482,17 +537,29 @@ export function TimelineCell({
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="datetime-field mx-auto block w-[9rem] max-w-full min-w-0"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") save({ endDate: (e.currentTarget as HTMLInputElement).value });
+                    if (e.key === "Escape") setEditing(false);
+                  }}
+                  className="datetime-field mx-auto block w-full min-w-0"
                 />
                 <input
                   type="time"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
+                  onFocus={() => {
+                    if (!endTime.trim()) setEndTime("00:00");
+                  }}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") save();
+                    if (e.key === "Enter") {
+                      const base = splitDateTimeValue(parsed?.end ?? "");
+                      const normalized = normalizeTimeInput((e.currentTarget as HTMLInputElement).value || endTime, base.time);
+                      setEndTime(normalized);
+                      save({ endTime: normalized });
+                    }
                     if (e.key === "Escape") setEditing(false);
                   }}
-                  className="datetime-field mx-auto block w-[9rem] max-w-full min-w-0"
+                  className="datetime-field mx-auto block w-full min-w-0"
                 />
               </div>
             </div>
@@ -505,11 +572,11 @@ export function TimelineCell({
                 }}
                 className="text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors cursor-pointer"
               >
-                {tr(locale, "Effacer", "Clear")}
+                {t("common.clear")}
               </button>
               <button
                 type="button"
-                onClick={save}
+                onClick={() => save()}
                 className="text-[11px] text-indigo-600 hover:text-indigo-700 transition-colors cursor-pointer"
               >
                 OK
@@ -533,31 +600,35 @@ export function OwnerCell({
   memberNames: string[];
 }) {
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState(value ?? "");
+  const [draft, setDraft] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { memberAvatars } = useProjectContext();
+  const { memberAvatars, memberOptions, resolveOwnerName, resolveOwnerAvatar, normalizeOwnerValue } = useProjectContext();
+  const displayValue = resolveOwnerName(value) ?? "";
 
   useEffect(() => {
     if (!open) return;
-    setDraft(value ?? "");
+    setDraft(displayValue);
     setTimeout(() => inputRef.current?.focus(), 0);
     const handler = (e: MouseEvent) => {
       if (!ref.current?.contains(e.target as Node)) {
         setOpen(false);
-        setDraft(value ?? "");
+        setDraft(displayValue);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [open, value]);
+  }, [open, displayValue]);
 
+  const ownerChoices = memberOptions.length > 0
+    ? memberOptions
+    : memberNames.map((name) => ({ id: name, name, avatar: memberAvatars[name] ?? null }));
   const filtered = draft
-    ? memberNames.filter((n) => n.toLowerCase().includes(draft.toLowerCase()))
-    : memberNames;
+    ? ownerChoices.filter((m) => m.name.toLowerCase().includes(draft.toLowerCase()))
+    : ownerChoices;
 
   const commit = (v: string) => {
-    onSave(v || null);
+    onSave(normalizeOwnerValue(v) || null);
     setOpen(false);
   };
 
@@ -574,15 +645,15 @@ export function OwnerCell({
         {value ? (
           <span className="flex items-center gap-1.5">
             <span className="w-5 h-5 rounded-full flex-shrink-0 overflow-hidden">
-              {memberAvatars[value] ? (
-                <img src={memberAvatars[value]!} alt={value} className="w-full h-full object-cover rounded-full" />
+              {resolveOwnerAvatar(value) ? (
+                <img src={resolveOwnerAvatar(value)!} alt={resolveOwnerName(value) ?? value} className="w-full h-full object-cover rounded-full" />
               ) : (
                 <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 font-bold text-[10px] flex items-center justify-center">
-                  {value.charAt(0).toUpperCase()}
+                  {(resolveOwnerName(value) ?? value).charAt(0).toUpperCase()}
                 </span>
               )}
             </span>
-            <span className="truncate">{value}</span>
+            <span className="truncate">{resolveOwnerName(value) ?? value}</span>
           </span>
         ) : (
           <span className="text-gray-300">—</span>
@@ -590,7 +661,7 @@ export function OwnerCell({
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-50 w-44 overflow-hidden">
+        <div className="absolute top-full right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-50 w-[min(11rem,calc(100vw-1rem))] overflow-hidden sm:left-0 sm:right-auto sm:w-44">
           <div className="p-2 border-b border-gray-100 dark:border-gray-700">
             <input
               ref={inputRef}
@@ -599,7 +670,7 @@ export function OwnerCell({
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") commit(draft.trim());
-                if (e.key === "Escape") { setOpen(false); setDraft(value ?? ""); }
+                if (e.key === "Escape") { setOpen(false); setDraft(displayValue); }
               }}
               placeholder="Nom…"
               className="w-full text-xs px-2 py-1.5 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-50 dark:placeholder-gray-400 rounded-lg outline-none focus:border-indigo-400 transition-colors"
@@ -614,31 +685,34 @@ export function OwnerCell({
                 Effacer
               </button>
             )}
-            {filtered.map((name) => (
+            {filtered.map((member) => (
               <button
-                key={name}
-                onClick={() => commit(name)}
-                className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors cursor-pointer ${value === name ? "text-indigo-600 dark:text-indigo-400 font-medium" : "text-gray-700 dark:text-gray-200"}`}
+                key={member.id}
+                onClick={() => commit(member.id)}
+                className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors cursor-pointer ${normalizeOwnerValue(value) === member.id ? "text-indigo-600 dark:text-indigo-400 font-medium" : "text-gray-700 dark:text-gray-200"}`}
               >
                 <span className="w-5 h-5 rounded-full flex-shrink-0 overflow-hidden">
-                  {memberAvatars[name] ? (
-                    <img src={memberAvatars[name]!} alt={name} className="w-full h-full object-cover rounded-full" />
+                  {member.avatar ? (
+                    <img src={member.avatar} alt={member.name} className="w-full h-full object-cover rounded-full" />
                   ) : (
                     <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 font-bold text-[10px] flex items-center justify-center">
-                      {name.charAt(0).toUpperCase()}
+                      {member.name.charAt(0).toUpperCase()}
                     </span>
                   )}
                 </span>
-                {name}
+                {member.name}
               </button>
             ))}
-            {filtered.length === 0 && draft && (
+            {filtered.length === 0 && draft && memberOptions.length === 0 && (
               <button
                 onClick={() => commit(draft.trim())}
                 className="w-full text-left px-3 py-1.5 text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
               >
                 Utiliser «{draft}»
               </button>
+            )}
+            {filtered.length === 0 && draft && memberOptions.length > 0 && (
+              <p className="px-3 py-2 text-xs text-gray-400 dark:text-gray-500">Aucun membre</p>
             )}
           </div>
         </div>
@@ -663,14 +737,16 @@ export function CellRenderer({
   memberNames?: string[];
   readOnlyOwner?: boolean;
 }) {
+  const locale = useClientLocale(usePathname());
+  const { resolveOwnerName } = useProjectContext();
   const value = getFieldValue(fieldValues, column.id);
   const save = (v: string | null) => onSave(column.id, v);
 
   switch (column.type) {
     case "STATUS":
-      return <SelectCell value={value} options={STATUS_OPTIONS} onSave={save} />;
+      return <SelectCell value={value} options={getStatusOptions(locale)} onSave={save} />;
     case "PRIORITY":
-      return <SelectCell value={value} options={PRIORITY_OPTIONS} onSave={save} />;
+      return <SelectCell value={value} options={getPriorityOptions(locale)} onSave={save} />;
     case "DUE_DATE":
       return (
         <DateCell
@@ -689,7 +765,7 @@ export function CellRenderer({
         return (
           <div className="w-full px-1 py-1 min-h-[24px] flex items-center">
             {value ? (
-              <span className="text-xs text-gray-700 dark:text-gray-300 truncate">{value}</span>
+              <span className="text-xs text-gray-700 dark:text-gray-300 truncate">{resolveOwnerName(value) ?? value}</span>
             ) : (
               <span className="text-gray-300 text-xs select-none">—</span>
             )}

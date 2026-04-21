@@ -5,6 +5,8 @@ import { notifyUser } from "@/lib/actions/_helpers";
 import { isSuperAdminUserId } from "@/lib/super-admin";
 import { toCanonicalStatus } from "@/lib/status";
 import { formatDailySummary, getRequestLocale, getUserLocale } from "@/lib/i18n/server";
+import { parseTimelineValue } from "@/lib/task-schedule";
+import { pickByIsEn } from "@/lib/i18n/pick";
 
 type SessionUser = { id?: string; isSuperAdmin?: boolean };
 
@@ -39,7 +41,7 @@ export async function GET(request: Request) {
   const session = await auth();
   const user = session?.user as SessionUser | undefined;
   if (!isAllowed(user)) {
-    return Response.json({ ok: false, error: isEn ? "Access denied." : "Accès refusé" }, { status: 403 });
+    return Response.json({ ok: false, error: pickByIsEn(isEn, "Accès refusé", "Access denied.") }, { status: 403 });
   }
 
   const users = await prisma.user.findMany({
@@ -56,7 +58,7 @@ export async function POST(request: Request) {
   const session = await auth();
   const user = session?.user as SessionUser | undefined;
   if (!isAllowed(user)) {
-    return Response.json({ ok: false, error: isEn ? "Access denied." : "Accès refusé" }, { status: 403 });
+    return Response.json({ ok: false, error: pickByIsEn(isEn, "Accès refusé", "Access denied.") }, { status: 403 });
   }
 
   await ensurePushSubscriptionStorage().catch(() => {});
@@ -65,7 +67,7 @@ export async function POST(request: Request) {
   const userId = body.userId?.trim();
   const mode = body.mode === "daily-summary" ? "daily-summary" : "push";
   if (!userId) {
-    return Response.json({ ok: false, error: isEn ? "Missing user." : "Utilisateur manquant." }, { status: 400 });
+    return Response.json({ ok: false, error: pickByIsEn(isEn, "Utilisateur manquant.", "Missing user.") }, { status: 400 });
   }
 
   const target = await prisma.user.findUnique({
@@ -73,7 +75,7 @@ export async function POST(request: Request) {
     select: { id: true, name: true, email: true },
   });
   if (!target) {
-    return Response.json({ ok: false, error: isEn ? "User not found." : "Utilisateur introuvable." }, { status: 404 });
+    return Response.json({ ok: false, error: pickByIsEn(isEn, "Utilisateur introuvable.", "User not found.") }, { status: 404 });
   }
 
   if (mode === "daily-summary") {
@@ -85,7 +87,12 @@ export async function POST(request: Request) {
       where: {
         archivedAt: null,
         parentId: null,
-        fieldValues: { some: { value: target.name, column: { type: "OWNER" } } },
+        fieldValues: {
+          some: {
+            column: { type: "OWNER" },
+            OR: [{ value: target.id }, { value: target.name }],
+          },
+        },
         group: { project: { members: { some: { userId: target.id } } } },
       },
       include: { fieldValues: { include: { column: true } } },
@@ -107,14 +114,29 @@ export async function POST(request: Request) {
       return canonical === "STUCK" || canonical === "WAITING";
     }).length;
 
-    const todayTasks = activeTasks
-      .filter((task) => {
-        const dueRaw = task.fieldValues.find((fv) => fv.column.type === "DUE_DATE")?.value ?? null;
-        if (!dueRaw) return false;
-        return dueRaw.slice(0, 10) === todayKey;
-      })
-      .map((task) => task.title.trim())
-      .filter(Boolean);
+    const todayTaskSet = new Set<string>();
+    for (const task of activeTasks) {
+      const title = task.title.trim();
+      if (!title) continue;
+      const dueRaw = task.fieldValues.find((fv) => fv.column.type === "DUE_DATE")?.value ?? null;
+      const dueToday = Boolean(dueRaw && dueRaw.slice(0, 10) === todayKey);
+      const timelineRaw = task.fieldValues.find((fv) => fv.column.type === "TIMELINE")?.value ?? null;
+      const timeline = parseTimelineValue(timelineRaw);
+      const startKey = timeline?.start ? timeline.start.slice(0, 10) : null;
+      const endKey = timeline?.end ? timeline.end.slice(0, 10) : null;
+      const normalizedStart = startKey || endKey;
+      const normalizedEnd = endKey || startKey;
+      const periodInProgress = Boolean(
+        normalizedStart &&
+          normalizedEnd &&
+          normalizedStart <= todayKey &&
+          todayKey <= normalizedEnd
+      );
+      if (dueToday || periodInProgress) {
+        todayTaskSet.add(title);
+      }
+    }
+    const todayTasks = Array.from(todayTaskSet);
     const message = formatDailySummary(targetLocale, {
       activeTasks: activeTasks.length,
       dueTodayCount,
@@ -125,9 +147,7 @@ export async function POST(request: Request) {
 
     return Response.json({
       ok: true,
-      message: isEn
-        ? `Test daily summary sent to ${target.name || target.email}.`
-        : `Résumé quotidien de test envoyé à ${target.name || target.email}.`,
+      message: pickByIsEn(isEn, `Résumé quotidien de test envoyé à ${target.name || target.email}.`, `Test daily summary sent to ${target.name || target.email}.`),
       stats: {
         activeTasks: activeTasks.length,
         dueToday: dueTodayCount,
@@ -150,9 +170,7 @@ export async function POST(request: Request) {
   if (!subscriptionCount) {
     return Response.json({
       ok: false,
-      error: isEn
-        ? `No push subscription found for ${target.name || target.email}.`
-        : `Aucun abonnement push trouvé pour ${target.name || target.email}.`,
+      error: pickByIsEn(isEn, `Aucun abonnement push trouvé pour ${target.name || target.email}.`, `No push subscription found for ${target.name || target.email}.`),
     }, { status: 400 });
   }
 
@@ -170,9 +188,7 @@ export async function POST(request: Request) {
 
   return Response.json({
     ok: true,
-    message: isEn
-      ? `Push test notification sent to ${target.name || target.email}.`
-      : `Notification push de test envoyée à ${target.name || target.email}.`,
+    message: pickByIsEn(isEn, `Notification push de test envoyée à ${target.name || target.email}.`, `Push test notification sent to ${target.name || target.email}.`),
     subscriptionCount,
   });
 }

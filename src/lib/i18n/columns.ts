@@ -55,7 +55,8 @@ function normalizeLabel(value: string): string {
 
 export function getSystemColumnLabel(type: ColumnType, locale: AppLocale): string {
   const entry = SYSTEM_COLUMN_LABELS[type];
-  return locale === "en" ? entry.en : entry.fr;
+  if (locale === "en") return entry.en;
+  return entry.fr;
 }
 
 export function getDisplayColumnLabel(column: ColumnLike, locale: AppLocale): string {

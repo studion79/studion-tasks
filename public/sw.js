@@ -8,6 +8,62 @@ const PRECACHE_URLS = [
   "/icons/icon-512.png",
 ];
 
+const BADGE_CACHE = "task-app-badge";
+const BADGE_COUNT_KEY = "/__badge_count__";
+
+async function readBadgeCount() {
+  try {
+    const cache = await caches.open(BADGE_CACHE);
+    const response = await cache.match(BADGE_COUNT_KEY);
+    if (!response) return 0;
+    const payload = await response.json();
+    const count = Number(payload?.count ?? 0);
+    return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function writeBadgeCount(count) {
+  try {
+    const safeCount = Math.max(0, Math.floor(Number(count) || 0));
+    const cache = await caches.open(BADGE_CACHE);
+    await cache.put(
+      BADGE_COUNT_KEY,
+      new Response(JSON.stringify({ count: safeCount }), {
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+  } catch {
+    // ignore
+  }
+}
+
+async function applyAppBadge(count) {
+  const safeCount = Math.max(0, Math.floor(Number(count) || 0));
+  try {
+    const nav = self.navigator;
+    if (nav && typeof nav.setAppBadge === "function") {
+      if (safeCount > 0) await nav.setAppBadge(safeCount);
+      else if (typeof nav.clearAppBadge === "function") await nav.clearAppBadge();
+      else await nav.setAppBadge(0);
+      return;
+    }
+  } catch {
+    // continue fallback
+  }
+
+  try {
+    if (self.registration && typeof self.registration.setAppBadge === "function") {
+      if (safeCount > 0) await self.registration.setAppBadge(safeCount);
+      else if (typeof self.registration.clearAppBadge === "function") await self.registration.clearAppBadge();
+      else await self.registration.setAppBadge(0);
+    }
+  } catch {
+    // ignore unsupported API/runtime
+  }
+}
+
 // Install — précache uniquement les assets non-HTML
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -100,8 +156,13 @@ self.addEventListener("push", (event) => {
   } catch {
     // ignore malformed payload
   }
-  event.waitUntil(
-    self.registration.showNotification(data.title, {
+  event.waitUntil((async () => {
+    const currentCount = await readBadgeCount();
+    const nextCount = currentCount + 1;
+    await writeBadgeCount(nextCount);
+    await applyAppBadge(nextCount);
+
+    await self.registration.showNotification(data.title, {
       body: data.body,
       icon: "/icons/icon-192.png",
       badge: "/icons/icon-192.png",
@@ -109,8 +170,8 @@ self.addEventListener("push", (event) => {
       renotify: false,
       actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : [],
       data: { url: data.url || "/" },
-    })
-  );
+    });
+  })());
 });
 
 self.addEventListener("notificationclick", (event) => {
@@ -118,8 +179,13 @@ self.addEventListener("notificationclick", (event) => {
   const action = event.action || "open";
   if (action !== "open") return;
   const targetUrl = event.notification?.data?.url || "/";
-  event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+  event.waitUntil((async () => {
+    const currentCount = await readBadgeCount();
+    const nextCount = Math.max(0, currentCount - 1);
+    await writeBadgeCount(nextCount);
+    await applyAppBadge(nextCount);
+
+    return clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
       for (const client of windowClients) {
         const clientUrl = "url" in client ? client.url : "";
         if ("focus" in client && clientUrl) {
@@ -132,6 +198,18 @@ self.addEventListener("notificationclick", (event) => {
         }
       }
       return clients.openWindow(targetUrl);
-    })
-  );
+    });
+  })());
+});
+
+self.addEventListener("message", (event) => {
+  const data = event.data;
+  if (!data || typeof data !== "object") return;
+  if (data.type !== "TASKAPP_BADGE_SYNC") return;
+
+  const count = Number(data.count ?? 0);
+  event.waitUntil((async () => {
+    await writeBadgeCount(count);
+    await applyAppBadge(count);
+  })());
 });

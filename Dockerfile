@@ -21,14 +21,16 @@ FROM base AS runner
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
-ARG APP_VERSION=dev
-ENV NEXT_PUBLIC_APP_VERSION=${APP_VERSION}
 
 RUN apk add --no-cache libc6-compat
 RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --legacy-peer-deps && npm cache clean --force
+COPY --from=deps /app/node_modules ./node_modules
+RUN npm prune --omit=dev --legacy-peer-deps && npm cache clean --force
+
+ARG APP_VERSION=dev
+ENV NEXT_PUBLIC_APP_VERSION=${APP_VERSION}
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./

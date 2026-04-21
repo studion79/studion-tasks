@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
 
 # next.js
 /.next/
@@ -50,6 +52,9 @@ prisma/dev.db
 
 # User uploads (runtime data)
 /public/uploads/
+
+# Generated demo/export artifacts
+/artifacts/
 
 # Local dev / tooling
 .claude/

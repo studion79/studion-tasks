@@ -1,13 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { getUiLocale } from "@/lib/ui-locale";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createQuickTask, toggleMyTask } from "@/lib/actions";
 import { getStatusLabel, toCanonicalStatus } from "@/lib/status";
-import { localeFromPathname, tr } from "@/lib/i18n/client";
-import { dateKeyFromValue, parseDateTimeToDate, splitDateTimeValue } from "@/lib/task-schedule";
+import { getPriorityLabelByLocale } from "@/lib/constants";
+import { normalizeTimeInput } from "@/lib/time-input";
+import { trKey } from "@/lib/i18n/client";
+import { useClientLocale } from "@/lib/i18n/useClientLocale";
+import { dateKeyFromValue, parseDateTimeToDate, parseTimelineValue, splitDateTimeValue } from "@/lib/task-schedule";
+import { pickByIsEn, pickByLocale } from "@/lib/i18n/pick";
 
 type MyTask = {
   id: string;
@@ -20,6 +25,7 @@ type MyTask = {
   status: string | null;
   priority: string | null;
   dueDate: string | null;
+  timeline?: string | null;
 };
 
 type Filter = "all" | "today" | "week" | "late" | "done" | "all_tasks";
@@ -43,6 +49,12 @@ type QuickSelectOption = {
   hint?: string;
 };
 
+type HierarchicalTaskRow = {
+  task: MyTask;
+  depth: number;
+  hasChildren: boolean;
+};
+
 function PrettySelect({
   value,
   onChange,
@@ -55,24 +67,65 @@ function PrettySelect({
   placeholder: string;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuStyle, setMenuStyle] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
   const selected = options.find((option) => option.value === value);
+
+  const updateMenuPosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const margin = 8;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const width = Math.min(Math.max(rect.width, 180), viewportWidth - margin * 2);
+    const left = Math.min(Math.max(rect.left, margin), viewportWidth - width - margin);
+    const availableBelow = viewportHeight - rect.bottom - margin;
+    const availableAbove = rect.top - margin;
+    const openAbove = availableBelow < 180 && availableAbove > availableBelow;
+    const maxHeight = Math.max(140, Math.min(260, openAbove ? availableAbove : availableBelow));
+    const top = openAbove
+      ? Math.max(margin, rect.top - maxHeight - 6)
+      : Math.min(viewportHeight - maxHeight - margin, rect.bottom + 6);
+    setMenuStyle({ top, left, width, maxHeight });
+  }, []);
 
   useEffect(() => {
     if (!open) return;
+    updateMenuPosition();
     const onClickOutside = (event: MouseEvent) => {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setOpen(false);
     };
+    const onReposition = () => updateMenuPosition();
     document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [open, updateMenuPosition]);
+
+  useEffect(() => {
+    if (!open) setMenuStyle(null);
   }, [open]);
 
   return (
-    <div ref={ref} className="relative">
+    <div className="relative min-w-0">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="w-full h-8 px-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-left text-xs text-gray-900 dark:text-gray-50 flex items-center justify-between hover:border-indigo-300 dark:hover:border-indigo-500 transition-colors cursor-pointer"
+        className="w-full min-w-0 h-8 px-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-left text-xs text-gray-900 dark:text-gray-50 flex items-center justify-between hover:border-indigo-300 dark:hover:border-indigo-500 transition-colors cursor-pointer"
       >
         <span className={`truncate ${selected ? "text-gray-900 dark:text-gray-50" : "text-gray-400 dark:text-gray-500"}`}>
           {selected?.label ?? placeholder}
@@ -81,8 +134,19 @@ function PrettySelect({
           <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
-      {open && (
-        <div className="absolute z-50 mt-1 w-full max-h-64 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl">
+      {open && menuStyle && createPortal(
+        <div
+          ref={menuRef}
+          style={{
+            position: "fixed",
+            top: `${menuStyle.top}px`,
+            left: `${menuStyle.left}px`,
+            width: `${menuStyle.width}px`,
+            maxHeight: `${menuStyle.maxHeight}px`,
+            zIndex: 1200,
+          }}
+          className="overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-2xl ring-1 ring-black/5 dark:ring-white/10"
+        >
           {options.map((option) => (
             <button
               type="button"
@@ -99,7 +163,8 @@ function PrettySelect({
               {option.hint && <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 truncate">{option.hint}</p>}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -127,6 +192,46 @@ const PRIORITY_COLORS: Record<string, string> = {
   Medium: "text-yellow-500",
   Low: "text-blue-400",
 };
+
+function buildHierarchicalTaskRows(tasks: MyTask[]): HierarchicalTaskRow[] {
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const order = new Map(tasks.map((task, index) => [task.id, index]));
+  const childrenByParent = new Map<string, MyTask[]>();
+  const roots: MyTask[] = [];
+
+  for (const task of tasks) {
+    if (task.parentId && byId.has(task.parentId)) {
+      const children = childrenByParent.get(task.parentId) ?? [];
+      children.push(task);
+      childrenByParent.set(task.parentId, children);
+    } else {
+      roots.push(task);
+    }
+  }
+
+  for (const children of childrenByParent.values()) {
+    children.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+  }
+
+  const rows: HierarchicalTaskRow[] = [];
+  const visited = new Set<string>();
+  const visit = (task: MyTask, depth: number) => {
+    if (visited.has(task.id)) return;
+    visited.add(task.id);
+    const children = childrenByParent.get(task.id) ?? [];
+    rows.push({ task, depth, hasChildren: children.length > 0 });
+    for (const child of children) visit(child, depth + 1);
+  };
+
+  roots.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+  for (const root of roots) visit(root, 0);
+
+  for (const task of tasks) {
+    if (!visited.has(task.id)) visit(task, 0);
+  }
+
+  return rows;
+}
 
 function isToday(d: string | null) {
   const v = parseDateTimeToDate(d);
@@ -164,6 +269,28 @@ function isLate(task: MyTask) {
   return due < new Date();
 }
 
+function isTaskInTodayPlan(task: MyTask): boolean {
+  const now = new Date();
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const keyToComparable = (value: string) => Number.parseInt(value.replaceAll("-", ""), 10);
+
+  const timeline = parseTimelineValue(task.timeline ?? null);
+  const startParts = splitDateTimeValue(timeline?.start ?? null);
+  const endParts = splitDateTimeValue(timeline?.end ?? null);
+  if (startParts.date || endParts.date) {
+    const startDate = startParts.date || endParts.date;
+    const endDate = endParts.date || startParts.date;
+    if (startDate && endDate) {
+      const todayComparable = keyToComparable(todayKey);
+      const startComparable = keyToComparable(startDate);
+      const endComparable = keyToComparable(endDate);
+      if (startComparable <= todayComparable && todayComparable <= endComparable) return true;
+    }
+  }
+
+  return splitDateTimeValue(task.dueDate).date === todayKey;
+}
+
 function fmtDate(d: string | null, format: DisplayPrefs["dateFormat"]) {
   const parts = splitDateTimeValue(d);
   if (!parts.date) return null;
@@ -177,9 +304,9 @@ function fmtDate(d: string | null, format: DisplayPrefs["dateFormat"]) {
   yesterday.setDate(today.getDate() - 1);
   const yesterdayKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
   const isEn = getUiLocale().startsWith("en");
-  if (parts.date === todayKey) return isEn ? "Today" : "Aujourd'hui";
-  if (parts.date === tomorrowKey) return isEn ? "Tomorrow" : "Demain";
-  if (parts.date === yesterdayKey) return isEn ? "Yesterday" : "Hier";
+  if (parts.date === todayKey) return pickByIsEn(isEn, "Aujourd'hui", "Today");
+  if (parts.date === tomorrowKey) return pickByIsEn(isEn, "Demain", "Tomorrow");
+  if (parts.date === yesterdayKey) return pickByIsEn(isEn, "Hier", "Yesterday");
   if (format === "YYYY-MM-DD") {
     const yyyy = v.getFullYear();
     const mm = String(v.getMonth() + 1).padStart(2, "0");
@@ -206,6 +333,7 @@ function MiniCalendar({
   locale: "fr" | "en";
 }) {
   const [offset, setOffset] = useState(0);
+  const [feedbackDayKey, setFeedbackDayKey] = useState<string | null>(null);
   const base = new Date();
   const year = base.getFullYear();
   const month = base.getMonth() + offset;
@@ -219,13 +347,37 @@ function MiniCalendar({
   const daysInMonth = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate();
 
   const tasksByDay: Record<number, MyTask[]> = {};
-  for (const task of tasks) {
-    const d = parseDate(task.dueDate);
-    if (!d) continue;
-    if (d.getFullYear() === viewDate.getFullYear() && d.getMonth() === viewDate.getMonth()) {
-      const day = d.getDate();
-      if (!tasksByDay[day]) tasksByDay[day] = [];
+  const pushTaskForDay = (day: number, task: MyTask) => {
+    if (!tasksByDay[day]) tasksByDay[day] = [];
+    if (!tasksByDay[day].some((candidate) => candidate.id === task.id)) {
       tasksByDay[day].push(task);
+    }
+  };
+  for (const task of tasks) {
+    const due = parseDate(task.dueDate);
+    if (due && due.getFullYear() === viewDate.getFullYear() && due.getMonth() === viewDate.getMonth()) {
+      pushTaskForDay(due.getDate(), task);
+    }
+
+    const timeline = parseTimelineValue(task.timeline ?? null);
+    const startParts = splitDateTimeValue(timeline?.start ?? null);
+    const endParts = splitDateTimeValue(timeline?.end ?? null);
+    const startDate = startParts.date || endParts.date;
+    const endDate = endParts.date || startParts.date;
+    if (!startDate || !endDate) continue;
+    const start = new Date(`${startDate}T00:00:00`);
+    const end = new Date(`${endDate}T00:00:00`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue;
+    const from = start <= end ? start : end;
+    const to = start <= end ? end : start;
+    let cursor = new Date(from);
+    let spanGuard = 0;
+    while (cursor <= to && spanGuard <= 120) {
+      if (cursor.getFullYear() === viewDate.getFullYear() && cursor.getMonth() === viewDate.getMonth()) {
+        pushTaskForDay(cursor.getDate(), task);
+      }
+      cursor.setDate(cursor.getDate() + 1);
+      spanGuard += 1;
     }
   }
 
@@ -240,6 +392,12 @@ function MiniCalendar({
   ];
   while (cells.length % 7 !== 0) cells.push(null);
 
+  useEffect(() => {
+    if (!feedbackDayKey) return;
+    const timer = window.setTimeout(() => setFeedbackDayKey((current) => (current === feedbackDayKey ? null : current)), 220);
+    return () => window.clearTimeout(timer);
+  }, [feedbackDayKey]);
+
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
@@ -252,10 +410,16 @@ function MiniCalendar({
         </button>
       </div>
       <div className="grid grid-cols-7 mb-1">
-        {(mondayFirst
-          ? (locale === "en" ? ["M", "T", "W", "T", "F", "S", "S"] : ["L", "M", "M", "J", "V", "S", "D"])
-          : (locale === "en" ? ["S", "M", "T", "W", "T", "F", "S"] : ["D", "L", "M", "M", "J", "V", "S"])
-        ).map((d, i) => (
+        {(() => {
+          const mondayFirstDaysEn = ["M", "T", "W", "T", "F", "S", "S"];
+          const mondayFirstDaysFr = ["L", "M", "M", "J", "V", "S", "D"];
+          const sundayFirstDaysEn = ["S", "M", "T", "W", "T", "F", "S"];
+          const sundayFirstDaysFr = ["D", "L", "M", "M", "J", "V", "S"];
+          const days = mondayFirst
+            ? pickByLocale(locale, mondayFirstDaysFr.join(","), mondayFirstDaysEn.join(","))
+            : pickByLocale(locale, sundayFirstDaysFr.join(","), sundayFirstDaysEn.join(","));
+          return days.split(",");
+        })().map((d, i) => (
           <div key={i} className="text-center text-[10px] font-medium text-gray-400 dark:text-gray-500">{d}</div>
         ))}
       </div>
@@ -271,14 +435,17 @@ function MiniCalendar({
           return (
             <button
               key={i}
-              onClick={() => onSelectDate(isSelected ? null : dayKey)}
-              className={`flex flex-col items-center rounded-md py-0.5 cursor-pointer transition-colors ${
+              onClick={() => {
+                setFeedbackDayKey(dayKey);
+                onSelectDate(isSelected ? null : dayKey);
+              }}
+              className={`flex flex-col items-center rounded-md py-0.5 cursor-pointer transition-all active:scale-95 ${
                 isSelected
                   ? "bg-indigo-500/20 dark:bg-indigo-700/40"
                   : shouldHighlightToday
                     ? "bg-indigo-100 dark:bg-indigo-900/40"
                     : "hover:bg-gray-100 dark:hover:bg-gray-700/40"
-              }`}
+              } ${feedbackDayKey === dayKey ? "scale-[0.97] shadow-[0_0_0_2px_rgba(99,102,241,0.2)]" : ""}`}
             >
               <span className={`text-[11px] leading-none ${
                 isSelected
@@ -308,6 +475,162 @@ function MiniCalendar({
   );
 }
 
+function DailyCompactTimeline({
+  tasks,
+  locale,
+}: {
+  tasks: MyTask[];
+  locale: "fr" | "en";
+}) {
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+  const toMinuteOfDay = (value: string): number => {
+    const [h, m] = value.split(":").map((part) => Number.parseInt(part, 10));
+    return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
+  };
+
+  const keyToComparable = (value: string): number => Number.parseInt(value.replaceAll("-", ""), 10);
+
+  const pickTimelineTimeForToday = (
+    startDate: string,
+    startTime: string,
+    startHasTime: boolean,
+    endDate: string,
+    endTime: string,
+    endHasTime: boolean
+  ): string | null => {
+    if (startDate === todayKey && startHasTime) return startTime;
+    if (endDate === todayKey && endHasTime) return endTime;
+    if (startHasTime) return startTime;
+    if (endHasTime) return endTime;
+    return null;
+  };
+
+  const rows = useMemo(() => {
+    const slotRows: Array<{
+      key: string;
+      task: MyTask;
+      minuteOfDay: number;
+      timeLabel: string;
+      late: boolean;
+    }> = [];
+    const noSlotRows: Array<{
+      key: string;
+      task: MyTask;
+      label: string;
+    }> = [];
+
+    for (const task of tasks) {
+      const timeline = parseTimelineValue(task.timeline ?? null);
+      const startParts = splitDateTimeValue(timeline?.start ?? null);
+      const endParts = splitDateTimeValue(timeline?.end ?? null);
+      const hasTimeline = Boolean(startParts.date || endParts.date);
+
+      if (hasTimeline) {
+        const startDate = startParts.date || endParts.date;
+        const endDate = endParts.date || startParts.date;
+        if (startDate && endDate) {
+          const todayComparable = keyToComparable(todayKey);
+          const startComparable = keyToComparable(startDate);
+          const endComparable = keyToComparable(endDate);
+          const periodIncludesToday = startComparable <= todayComparable && todayComparable <= endComparable;
+          if (periodIncludesToday) {
+            const chosenTime = pickTimelineTimeForToday(
+              startDate,
+              startParts.time,
+              startParts.hasTime,
+              endDate,
+              endParts.time,
+              endParts.hasTime
+            );
+            if (chosenTime) {
+              slotRows.push({
+                key: `${task.id}-period`,
+                task,
+                minuteOfDay: toMinuteOfDay(chosenTime),
+                timeLabel: chosenTime,
+                late: false,
+              });
+            } else {
+              noSlotRows.push({
+                key: `${task.id}-period-noslot`,
+                task,
+                label: trKey(locale, "calendar.periodWithoutTime"),
+              });
+            }
+            continue;
+          }
+        }
+      }
+
+      const dueParts = splitDateTimeValue(task.dueDate);
+      if (dueParts.date === todayKey) {
+        noSlotRows.push({
+          key: `${task.id}-due-noslot`,
+          task,
+          label: dueParts.hasTime
+            ? `${trKey(locale, "common.dueDate")} · ${dueParts.time}`
+            : trKey(locale, "calendar.dueDateWithoutTime"),
+        });
+      }
+    }
+
+    return {
+      slots: slotRows.sort((a, b) => a.minuteOfDay - b.minuteOfDay).slice(0, 8),
+      noSlots: noSlotRows.slice(0, 8),
+    };
+  }, [tasks, locale]);
+
+  if (rows.slots.length === 0 && rows.noSlots.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-gray-200 dark:border-gray-700 px-3 py-4 text-center text-xs text-gray-400 dark:text-gray-500">
+        {pickByLocale(locale, "Aucun créneau planifié aujourd’hui", "No scheduled slots for today")}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {rows.slots.map((row) => (
+        <div key={row.key} className="flex items-start gap-2.5">
+          <div className={`w-12 text-[11px] font-semibold tabular-nums ${row.late ? "text-red-500" : "text-indigo-600 dark:text-indigo-300"}`}>
+            {row.timeLabel}
+          </div>
+          <Link
+            href={`/projects/${row.task.projectId}?taskId=${row.task.id}`}
+            className="flex-1 min-w-0 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-700/40 px-2.5 py-1.5 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all hover:-translate-y-0.5 active:translate-y-0"
+          >
+            <p className="text-xs font-medium text-gray-800 dark:text-gray-100 truncate">{row.task.title}</p>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">{row.task.projectName}</p>
+          </Link>
+        </div>
+      ))}
+      {rows.noSlots.length > 0 && (
+        <div className="mt-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-800/40 px-3 py-2.5">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+            {pickByLocale(locale, "Sans créneau", "No time slot")}
+          </p>
+          <div className="space-y-2">
+            {rows.noSlots.map((row) => (
+              <Link
+                key={row.key}
+                href={`/projects/${row.task.projectId}?taskId=${row.task.id}`}
+                className="block rounded-lg border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/50 px-2.5 py-1.5 hover:border-indigo-300 dark:hover:border-indigo-600 transition-all hover:-translate-y-0.5 active:translate-y-0"
+              >
+                <p className="text-xs font-medium text-gray-800 dark:text-gray-100 truncate">{row.task.title}</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
+                  {row.task.projectName} · {row.label}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StatCard({
   label,
   value,
@@ -322,11 +645,21 @@ function StatCard({
   onClick: () => void;
 }) {
   const bg = {
-    indigo: active ? "bg-indigo-600 text-white" : "bg-white dark:bg-gray-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20",
-    red: active ? "bg-red-500 text-white" : "bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20",
-    amber: active ? "bg-amber-500 text-white" : "bg-white dark:bg-gray-800 hover:bg-amber-50 dark:hover:bg-amber-900/20",
-    green: active ? "bg-green-600 text-white" : "bg-white dark:bg-gray-800 hover:bg-green-50 dark:hover:bg-green-900/20",
-    gray: active ? "bg-gray-500 text-white" : "bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700",
+    indigo: active
+      ? "border-indigo-500 bg-indigo-600 text-white shadow-[0_18px_36px_-24px_rgba(79,70,229,0.95)]"
+      : "border-white/70 bg-white/85 hover:border-indigo-200 hover:bg-white dark:border-white/10 dark:bg-gray-900/75 dark:hover:border-indigo-500/30 dark:hover:bg-gray-900",
+    red: active
+      ? "border-red-400 bg-red-500 text-white shadow-[0_18px_36px_-24px_rgba(239,68,68,0.9)]"
+      : "border-white/70 bg-white/85 hover:border-red-200 hover:bg-white dark:border-white/10 dark:bg-gray-900/75 dark:hover:border-red-500/30 dark:hover:bg-gray-900",
+    amber: active
+      ? "border-amber-400 bg-amber-500 text-white shadow-[0_18px_36px_-24px_rgba(245,158,11,0.9)]"
+      : "border-white/70 bg-white/85 hover:border-amber-200 hover:bg-white dark:border-white/10 dark:bg-gray-900/75 dark:hover:border-amber-500/30 dark:hover:bg-gray-900",
+    green: active
+      ? "border-green-500 bg-green-600 text-white shadow-[0_18px_36px_-24px_rgba(34,197,94,0.9)]"
+      : "border-white/70 bg-white/85 hover:border-green-200 hover:bg-white dark:border-white/10 dark:bg-gray-900/75 dark:hover:border-green-500/30 dark:hover:bg-gray-900",
+    gray: active
+      ? "border-gray-400 bg-gray-500 text-white shadow-[0_18px_36px_-24px_rgba(107,114,128,0.85)]"
+      : "border-white/70 bg-white/85 hover:border-gray-200 hover:bg-white dark:border-white/10 dark:bg-gray-900/75 dark:hover:border-gray-600 dark:hover:bg-gray-900",
   }[color];
   const val = {
     indigo: active ? "text-white" : "text-indigo-600",
@@ -337,9 +670,55 @@ function StatCard({
   }[color];
 
   return (
-    <button onClick={onClick} className={`rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-left transition-all cursor-pointer ${bg}`}>
-      <p className={`text-2xl font-bold mb-1 ${val}`}>{value}</p>
+    <button
+      onClick={onClick}
+      className={`rounded-[18px] sm:rounded-[24px] border p-3 sm:p-4 text-left transition-all cursor-pointer ring-1 ring-black/5 hover:-translate-y-0.5 dark:ring-white/10 ${bg}`}
+    >
+      <p className={`mb-1 text-2xl sm:text-3xl font-semibold tracking-tight ${val}`}>{value}</p>
       <p className={`text-xs font-medium ${active ? "text-white/80" : "text-gray-500 dark:text-gray-400"}`}>{label}</p>
+    </button>
+  );
+}
+
+function MobileStatCard({
+  label,
+  value,
+  color,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  color: "indigo" | "red" | "amber" | "green" | "gray";
+  active: boolean;
+  onClick: () => void;
+}) {
+  const tone = {
+    indigo: active
+      ? "border-indigo-500 bg-indigo-600 text-white"
+      : "border-indigo-100 bg-white/90 text-indigo-600 dark:border-indigo-500/20 dark:bg-gray-900/70 dark:text-indigo-300",
+    red: active
+      ? "border-red-400 bg-red-500 text-white"
+      : "border-red-100 bg-white/90 text-red-500 dark:border-red-500/20 dark:bg-gray-900/70 dark:text-red-300",
+    amber: active
+      ? "border-amber-400 bg-amber-500 text-white"
+      : "border-amber-100 bg-white/90 text-amber-600 dark:border-amber-500/20 dark:bg-gray-900/70 dark:text-amber-300",
+    green: active
+      ? "border-green-500 bg-green-600 text-white"
+      : "border-green-100 bg-white/90 text-green-600 dark:border-green-500/20 dark:bg-gray-900/70 dark:text-green-300",
+    gray: active
+      ? "border-gray-400 bg-gray-500 text-white"
+      : "border-gray-200 bg-white/90 text-gray-500 dark:border-gray-600 dark:bg-gray-900/70 dark:text-gray-300",
+  }[color];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-2xl border px-3 py-2.5 text-left transition-all duration-150 cursor-pointer ${tone}`}
+    >
+      <p className="text-2xl font-semibold leading-tight tracking-tight">{value}</p>
+      <p className={`mt-0.5 text-xs font-medium ${active ? "text-white/85" : "text-current/85"}`}>{label}</p>
     </button>
   );
 }
@@ -355,7 +734,7 @@ export function HomeTasksModule({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const locale = localeFromPathname(pathname);
+  const locale = useClientLocale(pathname);
   const [filter, setFilter] = useState<Filter>("all");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -378,7 +757,7 @@ export function HomeTasksModule({
   const [quickError, setQuickError] = useState("");
   const [isQuickPending, startQuickTransition] = useTransition();
   const quickScheduleRef = useRef<HTMLDivElement>(null);
-  const personalProjectDisplayName = tr(locale, "Personnel", "Personnal");
+  const personalProjectDisplayName = trKey(locale, "home.personalProjectName");
 
   useEffect(() => {
     const loadPrefs = () => {
@@ -485,7 +864,7 @@ export function HomeTasksModule({
     return Array.from(map.values()).sort((a, b) => a.projectName.localeCompare(b.projectName));
   }, [filtered, personalProjectDisplayName, projects]);
 
-  const LIST_TASK_LIMIT = 8;
+  const LIST_TASK_LIMIT = 6;
   const shouldScrollTaskList = filtered.length > LIST_TASK_LIMIT;
   const expandedGroupCount = grouped.filter((g) => !collapsed.has(g.projectId)).length;
   const groupHeaderHeightPx = 48;
@@ -495,12 +874,12 @@ export function HomeTasksModule({
     Math.min(filtered.length, LIST_TASK_LIMIT) * taskRowHeightPx;
 
   const filterTabs: { key: Filter; label: string; count: number }[] = [
-    { key: "all", label: tr(locale, "En cours", "In progress"), count: stats.total },
-    { key: "today", label: tr(locale, "Aujourd'hui", "Today"), count: stats.today },
-    { key: "week", label: tr(locale, "Cette semaine", "This week"), count: stats.week },
-    { key: "late", label: tr(locale, "En retard", "Late"), count: stats.late },
-    { key: "done", label: tr(locale, "Terminées", "Completed"), count: stats.done },
-    { key: "all_tasks", label: tr(locale, "Toutes", "All"), count: tasks.length },
+    { key: "all", label: trKey(locale, "dashboard.inProgress"), count: stats.total },
+    { key: "today", label: trKey(locale, "dashboard.today"), count: stats.today },
+    { key: "week", label: trKey(locale, "home.thisWeek"), count: stats.week },
+    { key: "late", label: trKey(locale, "dashboard.late"), count: stats.late },
+    { key: "done", label: trKey(locale, "home.completed"), count: stats.done },
+    { key: "all_tasks", label: trKey(locale, "home.allFem"), count: tasks.length },
   ];
   const selectedQuickProject = useMemo(
     () => projects.find((project) => project.id === quickProjectId) ?? null,
@@ -511,13 +890,13 @@ export function HomeTasksModule({
       projects.map((project) => ({
         value: project.id,
         label: project.isPersonal ? personalProjectDisplayName : project.name,
-        hint: project.isPersonal ? tr(locale, "Projet personnel", "Personnal project") : undefined,
+        hint: project.isPersonal ? trKey(locale, "home.personalProjectHint") : undefined,
       })),
     [projects, locale, personalProjectDisplayName]
   );
   const groupOptions = useMemo<QuickSelectOption[]>(
     () => [
-      { value: "", label: tr(locale, "À trier (auto)", "Inbox (auto)") },
+      { value: "", label: trKey(locale, "home.inboxAuto") },
       ...(selectedQuickProject?.groups ?? []).map((group) => ({ value: group.id, label: group.name })),
     ],
     [selectedQuickProject, locale]
@@ -548,11 +927,11 @@ export function HomeTasksModule({
     const projectId = quickProjectId;
     const title = quickTitle.trim();
     if (!projectId) {
-      setQuickError(tr(locale, "Choisissez un projet.", "Select a project."));
+      setQuickError(trKey(locale, "home.selectProject"));
       return;
     }
     if (!title) {
-      setQuickError(tr(locale, "Le titre est requis.", "Title is required."));
+      setQuickError(trKey(locale, "home.titleRequired"));
       return;
     }
     setQuickError("");
@@ -563,7 +942,7 @@ export function HomeTasksModule({
           title,
           groupId: quickGroupId || undefined,
           dueDate: quickDueDate || undefined,
-          dueTime: quickDueTime || undefined,
+          dueTime: normalizeTimeInput(quickDueTime, quickDueTime) || undefined,
           reminderMinutes:
             quickDueTime
               ? quickReminder === "custom"
@@ -582,332 +961,511 @@ export function HomeTasksModule({
       } catch (error) {
         const message = error instanceof Error ? error.message : "";
         if (message.includes("INVALID_GROUP")) {
-          setQuickError(tr(locale, "Catégorie invalide pour ce projet.", "Invalid category for this project."));
+          setQuickError(trKey(locale, "home.invalidCategory"));
           return;
         }
-        setQuickError(tr(locale, "Impossible de créer la tâche.", "Unable to create task."));
+        setQuickError(trKey(locale, "home.createTaskFailed"));
       }
     });
   };
 
   return (
-    <section className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label={tr(locale, "En cours", "In progress")} value={stats.total} color="indigo" active={filter === "all"} onClick={() => setFilter("all")} />
-        <StatCard label={tr(locale, "En retard", "Late")} value={stats.late} color={stats.late > 0 ? "red" : "gray"} active={filter === "late"} onClick={() => setFilter("late")} />
-        <StatCard label={tr(locale, "Cette semaine", "This week")} value={stats.today + stats.week} color="amber" active={filter === "week"} onClick={() => setFilter("week")} />
-        <StatCard label={tr(locale, "Terminées", "Completed")} value={stats.done} color="green" active={filter === "done"} onClick={() => setFilter("done")} />
+    <section className="space-y-4 overflow-x-clip sm:space-y-5">
+      <div className="flex flex-col gap-2.5 sm:gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="mobile-kicker sm:text-[11px] sm:tracking-[0.28em]">
+            {pickByLocale(locale, "Aujourd’hui", "Today")}
+          </p>
+          <h2 className="mt-1 text-lg sm:text-2xl font-semibold tracking-tight text-gray-950 dark:text-white">
+            {trKey(locale, "dashboard.myTasks")}
+          </h2>
+          <p className="mt-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+            {selectedDate
+              ? trKey(locale, "dashboard.noTasksOnDate")
+              : pickByLocale(locale, "Vue unifiée des tâches, de la création rapide au suivi du jour.", "Unified task view from quick capture to daily follow-up.")}
+          </p>
+        </div>
+        <div className="hidden flex-wrap items-center gap-2 sm:flex">
+          <span className="rounded-full border border-white/70 bg-white/80 px-2.5 py-1 text-[11px] sm:text-xs font-medium text-gray-500 shadow-sm ring-1 ring-black/5 dark:border-white/10 dark:bg-gray-900/70 dark:text-gray-300 dark:ring-white/10">
+            {stats.total} {trKey(locale, "dashboard.inProgress").toLowerCase()}
+          </span>
+          <span className="rounded-full border border-white/70 bg-white/80 px-2.5 py-1 text-[11px] sm:text-xs font-medium text-gray-500 shadow-sm ring-1 ring-black/5 dark:border-white/10 dark:bg-gray-900/70 dark:text-gray-300 dark:ring-white/10">
+            {stats.done} {trKey(locale, "home.completed").toLowerCase()}
+          </span>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start">
-      <div>
-      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">{tr(locale, "Mes tâches", "My tasks")}</h3>
-      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-visible">
-        <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-700/20">
-          <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
-            <input
-              value={quickTitle}
-              onChange={(e) => setQuickTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  submitQuickTask();
-                }
-              }}
-              placeholder={tr(locale, "Nouvelle tâche rapide…", "Quick task title...")}
-              className="h-8 px-2.5 py-1 text-xs text-gray-900 dark:text-gray-50 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100"
-            />
-            <PrettySelect
-              value={quickProjectId}
-              onChange={(next) => {
-                setQuickProjectId(next);
-                setQuickGroupId("");
-              }}
-              options={projectOptions}
-              placeholder={tr(locale, "Choisir un projet", "Choose a project")}
-            />
-            <PrettySelect
-              value={quickGroupId}
-              onChange={setQuickGroupId}
-              options={groupOptions}
-              placeholder={tr(locale, "Choisir une catégorie", "Choose a category")}
-            />
-            <div className="relative flex items-center gap-1 justify-end" ref={quickScheduleRef}>
-              <button
-                type="button"
-                onClick={() => setShowQuickSchedule((prev) => !prev)}
-                className={`h-8 w-8 inline-flex items-center justify-center rounded-xl border transition-colors cursor-pointer ${
-                  quickDueDate || quickDueTime
-                    ? "border-indigo-400 text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30"
-                    : "border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 bg-white dark:bg-gray-700 hover:border-indigo-300 dark:hover:border-indigo-500"
-                }`}
-                title={tr(locale, "Date et heure", "Date and time")}
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 7V3m8 4V3M5 11h14M7 21h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v12a2 2 0 002 2z" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              {showQuickSchedule && (
-                <div className="absolute z-[80] top-full right-0 mt-1 w-[min(11.5rem,calc(100vw-1.5rem))] sm:w-[14.5rem] max-w-[calc(100vw-1.5rem)] max-h-[70vh] overflow-y-auto overflow-x-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl p-2.5 space-y-2">
-                  <label className="block">
-                    <span className="block text-[11px] text-gray-500 dark:text-gray-400 mb-1">{tr(locale, "Date", "Date")}</span>
-                    <input
-                      type="date"
-                      value={quickDueDate}
-                      onChange={(e) => setQuickDueDate(e.target.value)}
-                      className="datetime-field mx-auto block w-[9rem] max-w-full min-w-0"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="block text-[11px] text-gray-500 dark:text-gray-400 mb-1">{tr(locale, "Heure", "Time")}</span>
-                    <input
-                      type="time"
-                      value={quickDueTime}
-                      onChange={(e) => setQuickDueTime(e.target.value)}
-                      className="datetime-field mx-auto block w-[9rem] max-w-full min-w-0"
-                    />
-                  </label>
-                  {quickDueTime && (
-                    <label className="block">
-                      <span className="block text-[11px] text-gray-500 dark:text-gray-400 mb-1">{tr(locale, "Rappel", "Reminder")}</span>
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 min-w-0">
-                        <select
-                          value={quickReminder}
-                          onChange={(e) => setQuickReminder(e.target.value)}
-                          className="mx-auto block w-[9rem] max-w-full min-w-0 sm:w-full sm:flex-1 select-unified select-unified-sm"
-                        >
-                          <option value="0">{tr(locale, "À l'heure", "At time")}</option>
-                          <option value="2">{tr(locale, "2 min avant", "2 min before")}</option>
-                          <option value="5">{tr(locale, "5 min avant", "5 min before")}</option>
-                          <option value="15">{tr(locale, "15 min avant", "15 min before")}</option>
-                          <option value="30">{tr(locale, "30 min avant", "30 min before")}</option>
-                          <option value="custom">{tr(locale, "Personnalisé", "Custom")}</option>
-                        </select>
-                        {quickReminder === "custom" && (
-                          <input
-                            type="number"
-                            min={0}
-                            max={1440}
-                            value={quickReminderCustom}
-                            onChange={(e) => setQuickReminderCustom(e.target.value)}
-                            className="datetime-field mx-auto block w-[9rem] max-w-full min-w-0 sm:w-20"
-                            placeholder="min"
-                          />
-                        )}
-                      </div>
-                    </label>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setQuickDueDate("");
-                      setQuickDueTime("");
-                      setQuickReminder("0");
-                      setQuickReminderCustom("");
-                    }}
-                    className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
-                  >
-                    {tr(locale, "Effacer", "Clear")}
-                  </button>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={submitQuickTask}
-                disabled={isQuickPending || !quickProjectId || !quickTitle.trim()}
-                className="h-8 px-2.5 text-xs font-medium rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
-              >
-                {tr(locale, "Ajouter", "Add")}
-              </button>
-            </div>
-          </div>
-          {quickError && <p className="mt-2 text-xs text-red-500">{quickError}</p>}
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-3 border-b border-gray-100 dark:border-gray-700">
-          <div className="flex items-center gap-1 overflow-x-auto">
-            {filterTabs.map((f) => (
-              <button
-                key={f.key}
-                onClick={() => { setSelectedDate(null); setFilter(f.key); }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
-                  filter === f.key ? "bg-indigo-600 text-white" : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-                }`}
-              >
-                {f.label}
-                {f.count > 0 && (
-                  <span
-                    className={`text-[10px] font-semibold rounded-full px-1.5 py-0.5 leading-none ${
-                      filter === f.key
-                        ? "bg-white/20 text-white"
-                        : f.key === "late" && f.count > 0
-                          ? "bg-red-100 text-red-600"
-                          : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
-                    }`}
-                  >
-                    {f.count}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-          <div className="relative flex-shrink-0 w-full sm:w-auto">
-            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path d="M21 21l-4.35-4.35M17 11A6 6 0 111 11a6 6 0 0116 0z" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={tr(locale, "Rechercher...", "Search...")}
-              className="pl-8 pr-3 py-1.5 text-xs text-gray-900 dark:text-gray-50 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 w-full sm:w-36 bg-gray-50 dark:bg-gray-700 transition-colors placeholder-gray-400 dark:placeholder-gray-500"
-            />
-          </div>
-        </div>
-
-        {grouped.length === 0 ? (
-          <div className="py-14 text-center">
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-              {selectedDate
-                ? tr(locale, "Aucune tâche sur cette date", "No tasks on this date")
-                : filter === "done"
-                  ? tr(locale, "Aucune tâche terminée", "No completed tasks")
-                  : filter === "late"
-                    ? tr(locale, "Aucune tâche en retard", "No late tasks")
-                    : tr(locale, "Aucune tâche ici", "No tasks here")}
-            </p>
-            <p className="text-xs text-gray-400 dark:text-gray-500">
-              {selectedDate
-                ? tr(locale, "Sélectionnez une autre date dans le calendrier", "Select another date in the calendar")
-                : filter === "all"
-                  ? tr(locale, "Les tâches qui vous sont assignées apparaîtront ici", "Tasks assigned to you will appear here")
-                  : tr(locale, "Modifiez le filtre pour voir d'autres tâches", "Change the filter to see other tasks")}
-            </p>
-          </div>
-        ) : (
-          <div
-            className={shouldScrollTaskList ? "overflow-y-auto" : ""}
-            style={shouldScrollTaskList ? { maxHeight: `${listMaxHeightPx}px` } : undefined}
-          >
-            {grouped.map((group, gi) => {
-              const isCollapsed = collapsed.has(group.projectId);
-              return (
-                <div key={group.projectId} className={gi > 0 ? "border-t border-gray-100 dark:border-gray-700" : ""}>
-                  <button
-                    onClick={() =>
-                      setCollapsed((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(group.projectId)) next.delete(group.projectId);
-                        else next.add(group.projectId);
-                        return next;
-                      })
-                    }
-                    className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <svg className={`w-3 h-3 text-gray-400 transition-transform ${isCollapsed ? "-rotate-90" : ""}`} fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
-                      <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">{group.projectName}</span>
-                      <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 rounded-full px-2 py-0.5">{group.tasks.length}</span>
-                    </div>
-                    <Link
-                      href={`/projects/${group.projectId}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="opacity-0 group-hover:opacity-100 text-[11px] text-indigo-500 hover:text-indigo-700 flex items-center gap-1 transition-all"
-                    >
-                      {tr(locale, "Voir le projet", "Open project")}
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </Link>
-                  </button>
-
-                  {!isCollapsed &&
-                    group.tasks.map((task, ti) => {
-                      const late = isLate(task);
-                      const due = fmtDate(task.dueDate, displayPrefs.dateFormat);
-                      const done = isDone(task);
-                      const isCompleting = completingTaskIds.has(task.id);
-                      const displayDone = done || isCompleting;
-                      return (
-                        <div
-                          key={task.id}
-                          className={`flex items-center gap-3 px-5 ${displayPrefs.density === "compact" ? "py-2" : "py-3"} hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all duration-300 group/row ${
-                            isCompleting ? "opacity-50 bg-emerald-50/60 dark:bg-emerald-900/10" : ""
-                          } ${
-                            ti < group.tasks.length - 1 ? "border-b border-gray-50 dark:border-gray-700/50" : ""
-                          }`}
-                        >
-                          <button
-                            onClick={(e) => handleToggle(task, e)}
-                            className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all duration-300 cursor-pointer hover:scale-110 ${
-                              displayDone
-                                ? `bg-green-500 border-green-500 ${isCompleting ? "scale-125 shadow-[0_0_0_6px_rgba(34,197,94,0.18)]" : ""}`
-                                : late
-                                  ? "border-red-400 hover:border-red-500"
-                                  : "border-gray-300 hover:border-indigo-400"
-                            }`}
-                          >
-                            {displayDone && (
-                              <svg className={`w-2.5 h-2.5 text-white transition-transform duration-300 ${isCompleting ? "scale-110" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path d="M5 13l4 4L19 7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                            )}
-                          </button>
-
-                          <Link href={`/projects/${task.projectId}`} className="flex-1 min-w-0 flex items-center gap-3">
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-sm truncate ${displayDone ? "line-through text-gray-400 dark:text-gray-500" : "text-gray-800 dark:text-gray-100"}`}>{task.title}</p>
-                              <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 truncate">{task.groupName}</p>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              {task.priority && <span className={`text-[11px] font-medium ${PRIORITY_COLORS[task.priority] ?? "text-gray-400"}`}>{task.priority}</span>}
-                              {task.status && (
-                                <span
-                                  className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
-                                    STATUS_COLORS[toCanonicalStatus(task.status) ?? ""] ?? "bg-gray-100 text-gray-500"
-                                  }`}
-                                >
-                                  {getStatusLabel(task.status) ?? task.status}
-                                </span>
-                              )}
-                              {due && (
-                                <span className={`text-[11px] tabular-nums ${late ? "text-red-500 font-medium" : isToday(task.dueDate) ? "text-amber-600 font-medium" : "text-gray-400"}`}>
-                                  {due}
-                                </span>
-                              )}
-                            </div>
-                          </Link>
-                        </div>
-                      );
-                    })}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-      </div>
-      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-4 xl:mt-8">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">{tr(locale, "Calendrier", "Calendar")}</h3>
-          {selectedDate && (
-            <button
-              onClick={() => setSelectedDate(null)}
-              className="text-[11px] text-indigo-500 hover:text-indigo-700 transition-colors cursor-pointer"
-            >
-              {tr(locale, "Réinitialiser", "Reset")}
-            </button>
-          )}
-        </div>
-        <MiniCalendar
-          tasks={tasks}
-          selectedDate={selectedDate}
-          onSelectDate={setSelectedDate}
-          mondayFirst={displayPrefs.mondayFirst}
-          locale={locale}
+      <div className="grid grid-cols-2 gap-2 sm:hidden">
+        <MobileStatCard
+          label={trKey(locale, "dashboard.inProgress")}
+          value={stats.total}
+          color="indigo"
+          active={filter === "all"}
+          onClick={() => setFilter("all")}
+        />
+        <MobileStatCard
+          label={trKey(locale, "dashboard.late")}
+          value={stats.late}
+          color={stats.late > 0 ? "red" : "gray"}
+          active={filter === "late"}
+          onClick={() => setFilter("late")}
+        />
+        <MobileStatCard
+          label={trKey(locale, "home.thisWeek")}
+          value={stats.today + stats.week}
+          color="amber"
+          active={filter === "week"}
+          onClick={() => setFilter("week")}
+        />
+        <MobileStatCard
+          label={trKey(locale, "home.completed")}
+          value={stats.done}
+          color="green"
+          active={filter === "done"}
+          onClick={() => setFilter("done")}
         />
       </div>
+
+      <div className="hidden grid-cols-1 gap-2.5 sm:grid sm:gap-3 min-[430px]:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label={trKey(locale, "dashboard.inProgress")}
+          value={stats.total}
+          color="indigo"
+          active={filter === "all"}
+          onClick={() => setFilter("all")}
+        />
+        <StatCard
+          label={trKey(locale, "dashboard.late")}
+          value={stats.late}
+          color={stats.late > 0 ? "red" : "gray"}
+          active={filter === "late"}
+          onClick={() => setFilter("late")}
+        />
+        <StatCard
+          label={trKey(locale, "home.thisWeek")}
+          value={stats.today + stats.week}
+          color="amber"
+          active={filter === "week"}
+          onClick={() => setFilter("week")}
+        />
+        <StatCard
+          label={trKey(locale, "home.completed")}
+          value={stats.done}
+          color="green"
+          active={filter === "done"}
+          onClick={() => setFilter("done")}
+        />
+      </div>
+
+      <div className="grid items-start gap-4 sm:gap-5 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="mobile-surface overflow-x-hidden rounded-[22px] sm:rounded-[28px]">
+          <div className="overflow-visible rounded-t-[22px] sm:rounded-t-[28px] border-b border-gray-100/80 bg-[linear-gradient(135deg,rgba(99,102,241,0.08),rgba(255,255,255,0.88))] px-3.5 py-3.5 sm:px-5 sm:py-5 dark:border-white/10 dark:bg-[linear-gradient(135deg,rgba(99,102,241,0.14),rgba(17,24,39,0.55))]">
+            <div className="mb-4 flex flex-col gap-1">
+              <p className="mobile-kicker sm:text-[11px] sm:tracking-[0.24em]">
+                {pickByLocale(locale, "Capture rapide", "Quick capture")}
+              </p>
+              <h3 className="text-sm sm:text-lg font-semibold text-gray-950 dark:text-white">
+                {pickByLocale(locale, "Ajouter une tâche rapide", "Add a quick task")}
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+              <input
+                value={quickTitle}
+                onChange={(e) => setQuickTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    submitQuickTask();
+                  }
+                }}
+                placeholder={trKey(locale, "home.quickTaskPlaceholder")}
+                className="h-8 rounded-xl border border-white/80 bg-white/90 px-2.5 text-xs text-gray-900 outline-none ring-1 ring-black/5 transition-colors placeholder:text-gray-400 focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 dark:border-white/10 dark:bg-gray-950/40 dark:text-white dark:ring-white/10 dark:placeholder:text-gray-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500/20"
+              />
+              <PrettySelect
+                value={quickProjectId}
+                onChange={(next) => {
+                  setQuickProjectId(next);
+                  setQuickGroupId("");
+                }}
+                options={projectOptions}
+                placeholder={trKey(locale, "home.chooseProject")}
+              />
+              <PrettySelect
+                value={quickGroupId}
+                onChange={setQuickGroupId}
+                options={groupOptions}
+                placeholder={trKey(locale, "home.chooseCategory")}
+              />
+              <div className="relative flex min-w-0 items-center gap-2 sm:justify-end" ref={quickScheduleRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowQuickSchedule((prev) => !prev)}
+                  className={`inline-flex h-8 w-8 items-center justify-center rounded-xl border transition-colors cursor-pointer ${
+                    quickDueDate || quickDueTime
+                      ? "border-indigo-400 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30"
+                      : "border-white/80 bg-white/90 text-gray-500 ring-1 ring-black/5 hover:border-indigo-300 dark:border-white/10 dark:bg-gray-950/40 dark:text-gray-300 dark:ring-white/10 dark:hover:border-indigo-500"
+                  }`}
+                  title={trKey(locale, "home.dateAndTime")}
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 7V3m8 4V3M5 11h14M7 21h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v12a2 2 0 002 2z" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                {showQuickSchedule && (
+                  <div className="absolute left-1/2 top-full z-[80] mt-2 w-[calc(100vw-2rem)] max-w-[16.5rem] max-h-[62vh] -translate-x-1/2 overflow-y-auto rounded-[20px] border border-white/80 bg-white/95 p-3 shadow-[0_28px_60px_-30px_rgba(15,23,42,0.6)] ring-1 ring-black/5 backdrop-blur sm:left-auto sm:right-0 sm:w-[15rem] sm:max-w-none sm:translate-x-0 dark:border-white/10 dark:bg-gray-900/95 dark:ring-white/10">
+                    <div className="space-y-3">
+                      <label className="block">
+                        <span className="mb-1 block text-[11px] font-medium text-gray-500 dark:text-gray-400">{trKey(locale, "home.date")}</span>
+                        <input
+                          type="date"
+                          value={quickDueDate}
+                          onChange={(e) => setQuickDueDate(e.target.value)}
+                          className="datetime-field mx-auto block w-full min-w-0"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1 block text-[11px] font-medium text-gray-500 dark:text-gray-400">{trKey(locale, "home.time")}</span>
+                        <input
+                          type="time"
+                          value={quickDueTime}
+                          onChange={(e) => setQuickDueTime(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              setQuickDueTime(normalizeTimeInput((e.currentTarget as HTMLInputElement).value || quickDueTime, quickDueTime));
+                              submitQuickTask();
+                            }
+                          }}
+                          className="datetime-field mx-auto block w-full min-w-0"
+                        />
+                      </label>
+                      {quickDueTime && (
+                        <label className="block">
+                          <span className="mb-1 block text-[11px] font-medium text-gray-500 dark:text-gray-400">{trKey(locale, "home.reminder")}</span>
+                          <div className="flex flex-col gap-1.5 min-w-0">
+                            <select
+                              value={quickReminder}
+                              onChange={(e) => setQuickReminder(e.target.value)}
+                              className="mx-auto block w-full min-w-0 select-unified select-unified-sm"
+                            >
+                              <option value="0">{trKey(locale, "home.atTime")}</option>
+                              <option value="2">{trKey(locale, "home.minutesBefore2")}</option>
+                              <option value="5">{trKey(locale, "home.minutesBefore5")}</option>
+                              <option value="15">{trKey(locale, "home.minutesBefore15")}</option>
+                              <option value="30">{trKey(locale, "home.minutesBefore30")}</option>
+                              <option value="custom">{trKey(locale, "home.custom")}</option>
+                            </select>
+                            {quickReminder === "custom" && (
+                              <input
+                                type="number"
+                                min={0}
+                                max={1440}
+                                value={quickReminderCustom}
+                                onChange={(e) => setQuickReminderCustom(e.target.value)}
+                                className="datetime-field mx-auto block w-full min-w-0"
+                                placeholder={pickByLocale(locale, "min", "min")}
+                              />
+                            )}
+                          </div>
+                        </label>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickDueDate("");
+                          setQuickDueTime("");
+                          setQuickReminder("0");
+                          setQuickReminderCustom("");
+                        }}
+                        className="text-xs text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                      >
+                        {trKey(locale, "project.reset")}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={submitQuickTask}
+                  disabled={isQuickPending || !quickProjectId || !quickTitle.trim()}
+                  className="inline-flex h-8 min-w-[5.5rem] flex-1 items-center justify-center rounded-xl bg-indigo-600 px-3 text-xs font-medium text-white shadow-[0_18px_40px_-24px_rgba(79,70,229,0.95)] transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+                >
+                  {trKey(locale, "common.add")}
+                </button>
+              </div>
+            </div>
+            {quickError && <p className="mt-3 text-sm text-red-500">{quickError}</p>}
+          </div>
+
+          <div className="border-b border-gray-100/80 px-3.5 py-3 sm:px-5 sm:py-4 dark:border-white/10">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="hidden sm:flex sm:flex-wrap sm:gap-2.5">
+                {filterTabs.map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => {
+                      setSelectedDate(null);
+                      setFilter(f.key);
+                    }}
+                    className={`flex flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
+                      filter === f.key
+                        ? "bg-indigo-600 text-white shadow-[0_14px_28px_-20px_rgba(79,70,229,0.95)]"
+                        : "bg-gray-50 text-gray-500 hover:bg-gray-100 dark:bg-gray-800/80 dark:text-gray-400 dark:hover:bg-gray-800"
+                    }`}
+                  >
+                    {f.label}
+                    {f.count > 0 && (
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
+                          filter === f.key
+                            ? "bg-white/20 text-white"
+                            : f.key === "late" && f.count > 0
+                              ? "bg-red-100 text-red-600"
+                              : "bg-white text-gray-500 shadow-sm dark:bg-gray-700 dark:text-gray-300"
+                        }`}
+                      >
+                        {f.count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:hidden">
+                {filterTabs.map((f) => (
+                  <button
+                    key={f.key}
+                    onClick={() => {
+                      setSelectedDate(null);
+                      setFilter(f.key);
+                    }}
+                    className={`flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-medium transition-colors cursor-pointer ${
+                      filter === f.key
+                        ? "bg-indigo-600 text-white shadow-[0_14px_28px_-20px_rgba(79,70,229,0.95)]"
+                        : "bg-gray-50 text-gray-600 hover:bg-gray-100 dark:bg-gray-800/80 dark:text-gray-300 dark:hover:bg-gray-800"
+                    }`}
+                  >
+                    <span className="truncate">{f.label}</span>
+                    {f.count > 0 && (
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
+                          filter === f.key
+                            ? "bg-white/20 text-white"
+                            : f.key === "late" && f.count > 0
+                              ? "bg-red-100 text-red-600"
+                              : "bg-white text-gray-500 shadow-sm dark:bg-gray-700 dark:text-gray-300"
+                        }`}
+                      >
+                        {f.count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative w-full flex-shrink-0 sm:w-auto">
+                <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M21 21l-4.35-4.35M17 11A6 6 0 111 11a6 6 0 0116 0z" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={trKey(locale, "home.search")}
+                  className="h-11 w-full rounded-2xl border border-gray-200 bg-gray-50 pl-10 pr-4 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-indigo-300 focus:bg-white focus:ring-2 focus:ring-indigo-100 sm:w-56 dark:border-white/10 dark:bg-gray-950/40 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500/20"
+                />
+              </div>
+            </div>
+          </div>
+
+          {grouped.length === 0 ? (
+            <div className="px-5 py-16 text-center sm:px-6">
+              <p className="mb-1 text-sm font-medium text-gray-500 dark:text-gray-400">
+                {selectedDate
+                  ? trKey(locale, "dashboard.noTasksOnDate")
+                  : filter === "done"
+                    ? trKey(locale, "home.noCompletedTasks")
+                    : filter === "late"
+                      ? trKey(locale, "home.noLateTasks")
+                      : trKey(locale, "home.noTasksHere")}
+              </p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                {selectedDate
+                  ? trKey(locale, "home.selectAnotherDate")
+                  : filter === "all"
+                    ? trKey(locale, "home.assignedTasksAppearHere")
+                    : trKey(locale, "home.changeFilterToSeeTasks")}
+              </p>
+            </div>
+          ) : (
+            <div
+              className={shouldScrollTaskList ? "overflow-y-auto overflow-x-hidden" : "overflow-x-hidden"}
+              style={shouldScrollTaskList ? { maxHeight: `${listMaxHeightPx}px` } : undefined}
+            >
+              {grouped.map((group, gi) => {
+                const isCollapsed = collapsed.has(group.projectId);
+                return (
+                  <div key={group.projectId} className={gi > 0 ? "border-t border-gray-100/80 dark:border-white/10" : ""}>
+                    <button
+                      onClick={() =>
+                        setCollapsed((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(group.projectId)) next.delete(group.projectId);
+                          else next.add(group.projectId);
+                          return next;
+                        })
+                      }
+                      className="group flex w-full min-w-0 items-center justify-between px-4 sm:px-5 py-3.5 sm:py-4 transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-800/40"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <svg className={`h-3 w-3 text-gray-400 transition-transform ${isCollapsed ? "-rotate-90" : ""}`} fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white">{group.projectName}</span>
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-gray-800 dark:text-gray-400">{group.tasks.length}</span>
+                      </div>
+                      <Link
+                        href={`/projects/${group.projectId}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="hidden items-center gap-1 text-[11px] text-indigo-500 transition-all group-hover:text-indigo-700 sm:inline-flex"
+                      >
+                        {trKey(locale, "home.openProject")}
+                        <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </Link>
+                    </button>
+
+                    {!isCollapsed &&
+                      buildHierarchicalTaskRows(group.tasks).map(({ task, depth, hasChildren }, ti, rows) => {
+                        const late = isLate(task);
+                        const due = fmtDate(task.dueDate, displayPrefs.dateFormat);
+                        const done = isDone(task);
+                        const isCompleting = completingTaskIds.has(task.id);
+                        const displayDone = done || isCompleting;
+                        const clampedDepth = Math.min(depth, 6);
+                        const indentPx = clampedDepth * 18;
+                        return (
+                          <div
+                            key={task.id}
+                            className={`flex min-w-0 items-center gap-2.5 sm:gap-3 px-4 sm:px-5 overflow-hidden ${displayPrefs.density === "compact" ? "py-2.5" : "py-3.5"} transition-all duration-300 hover:bg-gray-50/80 dark:hover:bg-gray-800/35 ${
+                              isCompleting ? "bg-emerald-50/70 opacity-50 dark:bg-emerald-900/10" : ""
+                            } ${ti < rows.length - 1 ? "border-b border-gray-100/60 dark:border-white/10" : ""}`}
+                            style={indentPx > 0 ? { paddingLeft: `calc(1rem + ${indentPx}px)` } : undefined}
+                          >
+                            <div className="flex flex-shrink-0 items-center gap-2">
+                              {depth > 0 && (
+                                <span
+                                  className="hidden h-px w-3 rounded-full bg-gray-200 sm:block dark:bg-gray-700"
+                                  aria-hidden="true"
+                                />
+                              )}
+                              <button
+                                onClick={(e) => handleToggle(task, e)}
+                                className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 transition-all duration-300 hover:scale-110 ${
+                                  displayDone
+                                    ? `border-green-500 bg-green-500 ${isCompleting ? "scale-125 shadow-[0_0_0_6px_rgba(34,197,94,0.18)]" : ""}`
+                                    : late
+                                      ? "border-red-400 hover:border-red-500"
+                                      : depth > 0
+                                        ? "border-indigo-200 hover:border-indigo-400 dark:border-indigo-500/40"
+                                        : "border-gray-300 hover:border-indigo-400"
+                                }`}
+                              >
+                                {displayDone && (
+                                  <svg className={`h-2.5 w-2.5 text-white transition-transform duration-300 ${isCompleting ? "scale-110" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path d="M5 13l4 4L19 7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                )}
+                              </button>
+                            </div>
+
+                            <Link
+                              href={`/projects/${task.projectId}?taskId=${task.id}`}
+                              className="flex w-full min-w-0 flex-1 flex-col items-stretch gap-1.5 sm:flex-row sm:items-center sm:gap-3"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex min-w-0 items-center gap-1.5">
+                                  <p className={`truncate text-sm ${displayDone ? "text-gray-400 line-through dark:text-gray-500" : depth > 0 ? "text-gray-700 dark:text-gray-200" : "text-gray-900 dark:text-white"}`}>{task.title}</p>
+                                  {hasChildren && (
+                                    <span className="hidden h-1.5 w-1.5 flex-shrink-0 rounded-full bg-indigo-300 dark:bg-indigo-500 sm:inline-block" />
+                                  )}
+                                </div>
+                                <p className="mt-0.5 truncate text-[11px] text-gray-400 dark:text-gray-500">
+                                  {depth > 0 && <span className="mr-1 text-indigo-400 dark:text-indigo-300">↳</span>}
+                                  {task.groupName}
+                                </p>
+                              </div>
+                              <div className="flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:w-auto sm:flex-shrink-0 sm:justify-end sm:gap-2">
+                                {task.priority && (
+                                  <span className={`text-[11px] font-medium ${PRIORITY_COLORS[task.priority] ?? "text-gray-400"}`}>
+                                    {getPriorityLabelByLocale(task.priority, locale)}
+                                  </span>
+                                )}
+                                {task.status && (
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                      STATUS_COLORS[toCanonicalStatus(task.status) ?? ""] ?? "bg-gray-100 text-gray-500"
+                                    }`}
+                                  >
+                                    {getStatusLabel(task.status, locale) ?? task.status}
+                                  </span>
+                                )}
+                                {due && (
+                                  <span className={`text-[11px] tabular-nums ${late ? "font-medium text-red-500" : isToday(task.dueDate) ? "font-medium text-amber-600" : "text-gray-400"}`}>
+                                    {due}
+                                  </span>
+                                )}
+                              </div>
+                            </Link>
+                          </div>
+                        );
+                      })}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-4 sm:space-y-5 xl:sticky xl:top-28">
+          <div className="mobile-surface rounded-[22px] sm:rounded-[28px] p-3.5 sm:p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">{trKey(locale, "home.calendar")}</h3>
+              {selectedDate && (
+                <button
+                  onClick={() => setSelectedDate(null)}
+                  className="text-[11px] text-indigo-500 transition-colors hover:text-indigo-700"
+                >
+                  {trKey(locale, "project.reset")}
+                </button>
+              )}
+            </div>
+            <MiniCalendar
+              tasks={tasks}
+              selectedDate={selectedDate}
+              onSelectDate={setSelectedDate}
+              mondayFirst={displayPrefs.mondayFirst}
+              locale={locale}
+            />
+          </div>
+
+          <div className="mobile-surface rounded-[22px] sm:rounded-[28px] p-3.5 sm:p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-indigo-600 dark:text-indigo-300">
+                  {pickByLocale(locale, "Aujourd’hui", "Today")}
+                </p>
+                <h3 className="mt-1 text-sm font-semibold text-gray-700 dark:text-gray-200">
+                  {pickByLocale(locale, "Planning du jour", "Today timeline")}
+                </h3>
+              </div>
+              <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                {tasks.filter((task) => !isDone(task) && isTaskInTodayPlan(task)).length}
+              </span>
+            </div>
+            <DailyCompactTimeline tasks={tasks.filter((task) => !isDone(task))} locale={locale} />
+          </div>
+        </div>
       </div>
     </section>
   );

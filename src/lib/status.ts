@@ -1,3 +1,6 @@
+import type { AppLocale } from "@/i18n/config";
+import { getStatusLabelByLocale } from "@/lib/constants";
+
 export function toCanonicalStatus(value: string | null | undefined): string | null {
   if (!value) return null;
   const normalized = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
@@ -16,14 +19,13 @@ export function isDoneStatus(value: string | null | undefined): boolean {
   return toCanonicalStatus(value) === "DONE";
 }
 
-export function getStatusLabel(value: string | null | undefined): string | null {
+export function getStatusLabel(value: string | null | undefined, locale: AppLocale = "en"): string | null {
   const canonical = toCanonicalStatus(value);
   if (!canonical) return null;
 
-  if (canonical === "NOT_STARTED") return "Not started";
-  if (canonical === "WORKING") return "Working on it";
-  if (canonical === "DONE") return "Done";
-  if (canonical === "STUCK") return "Stuck";
+  if (canonical === "NOT_STARTED" || canonical === "WORKING" || canonical === "DONE" || canonical === "STUCK") {
+    return getStatusLabelByLocale(canonical, locale);
+  }
   if (canonical === "IN_REVIEW") return "In review";
   if (canonical === "WAITING") return "Waiting";
 

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { removePushSubscription } from "@/lib/push";
 import { getRequestLocale } from "@/lib/i18n/server";
 import { publishRealtimeEvent } from "@/lib/realtime";
+import { pickByIsEn, pickByLocale } from "@/lib/i18n/pick";
 
 export async function POST(req: Request) {
   const locale = getRequestLocale(req);
@@ -10,11 +11,11 @@ export async function POST(req: Request) {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) {
-    return Response.json({ ok: false, error: isEn ? "Not authenticated." : "Non authentifié" }, { status: 401 });
+    return Response.json({ ok: false, error: pickByIsEn(isEn, "Non authentifié", "Not authenticated.") }, { status: 401 });
   }
   const body = (await req.json().catch(() => ({}))) as { endpoint?: string };
   const endpoint = body.endpoint?.trim();
-  if (!endpoint) return Response.json({ ok: false, error: isEn ? "Missing endpoint." : "Endpoint manquant" }, { status: 400 });
+  if (!endpoint) return Response.json({ ok: false, error: pickByIsEn(isEn, "Endpoint manquant", "Missing endpoint.") }, { status: 400 });
 
   await removePushSubscription(endpoint);
 

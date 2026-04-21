@@ -6,6 +6,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { DEFAULT_LOCALE, isLocale } from "@/i18n/config";
+import { pickByLocale } from "@/lib/i18n/pick";
 
 export default async function PortfolioPage() {
   const session = await auth();
@@ -13,7 +14,7 @@ export default async function PortfolioPage() {
   const headerStore = await headers();
   const headerLocale = headerStore.get("x-taskapp-locale") ?? "";
   const locale = isLocale(headerLocale) ? headerLocale : DEFAULT_LOCALE;
-  const t = (fr: string, en: string) => (locale === "en" ? en : fr);
+  const t = (fr: string, en: string) => pickByLocale(locale, fr, en);
 
   const projects = await listProjects();
 
@@ -131,7 +132,7 @@ export default async function PortfolioPage() {
                     </div>
                   </td>
                   <td className="text-right px-5 py-3 text-[11px] text-gray-400 dark:text-gray-500">
-                    {new Date(lastUpdated).toLocaleDateString(locale === "en" ? "en-US" : "fr-FR", { day: "numeric", month: "short" })}
+                    {new Date(lastUpdated).toLocaleDateString(pickByLocale(locale, "fr-FR", "en-US"), { day: "numeric", month: "short" })}
                   </td>
                 </tr>
               ))}

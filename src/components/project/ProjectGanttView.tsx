@@ -8,13 +8,18 @@ import { upsertTaskField, updateTaskTitle } from "@/lib/actions";
 import { TaskDetailPanel } from "./TaskDetailPanel";
 import { useProjectContext } from "./ProjectContext";
 import { toCanonicalStatus } from "@/lib/status";
-import { localeFromPathname, tr } from "@/lib/i18n/client";
+import { trKey } from "@/lib/i18n/client";
+import { useClientLocale } from "@/lib/i18n/useClientLocale";
 import type { AppLocale } from "@/i18n/config";
 import { parseDateTimeToDate, parseTimelineValue } from "@/lib/task-schedule";
+import { buildGroupHierarchyMeta, sortGroupsByHierarchy } from "@/lib/group-tree";
 
 const DAY_PX = 32; // pixels per day
 const ROW_H = 36; // px per task row
 const LABEL_W = 220; // px for left label column
+const MIN_LABEL_W = 180;
+const MAX_LABEL_W = 520;
+const TASK_INDENT_STEP = 16;
 const MONTH_HEADER_H = 30; // px
 const DAY_HEADER_H = 26; // px
 const HEADER_BORDER_PX = 1; // px, aligns left/right header stacks
@@ -30,17 +35,17 @@ function recurrenceLabel(recurrence: string | null, locale: AppLocale): string |
       endDate?: string | null;
     };
     const labels: Record<string, string> = {
-      daily: tr(locale, "jour", "day"),
-      weekly: tr(locale, "semaine", "week"),
-      monthly: tr(locale, "mois", "month"),
+      daily: trKey(locale, "recurrence.unit.day"),
+      weekly: trKey(locale, "recurrence.unit.week"),
+      monthly: trKey(locale, "recurrence.unit.month"),
     };
     const unit = labels[frequency] ?? frequency;
     const base = interval === 1
-      ? `${tr(locale, "Récurrent", "Recurring")} · ${tr(locale, "chaque", "every")} ${unit}`
-      : `${tr(locale, "Récurrent", "Recurring")} · ${tr(locale, "tous les", "every")} ${interval} ${unit}s`;
+      ? `${trKey(locale, "recurrence.label")} · ${trKey(locale, "recurrence.everyEach")} ${unit}`
+      : `${trKey(locale, "recurrence.label")} · ${trKey(locale, "recurrence.everyPlural")} ${interval} ${unit}s`;
     if (!endDate) return base;
-    return `${base} (${tr(locale, "jusqu'au", "until")} ${new Date(`${endDate}T00:00:00`).toLocaleDateString(getUiLocale())})`;
-  } catch { return tr(locale, "Récurrent", "Recurring"); }
+    return `${base} (${trKey(locale, "recurrence.until")} ${new Date(`${endDate}T00:00:00`).toLocaleDateString(getUiLocale())})`;
+  } catch { return trKey(locale, "recurrence.label"); }
 }
 
 /** Safe local-date serializer — avoids UTC offset shifting YYYY-MM-DD by 1 day */
@@ -141,12 +146,59 @@ const PERIOD_OPTIONS = [14, 30, 90, 180, 365] as const;
 
 export function ProjectGanttView({ project }: { project: ProjectWithRelations }) {
   const pathname = usePathname();
-  const locale = localeFromPathname(pathname);
+  const locale = useClientLocale(pathname);
+  const t = (key: Parameters<typeof trKey>[1]) => trKey(locale, key);
   const { allColumns } = useProjectContext();
   const [selectedTask, setSelectedTask] = useState<{ task: TaskWithFields; groupName: string; groupColor: string } | null>(null);
   const [showCompleted, setShowCompleted] = useState(true);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [labelColWidth, setLabelColWidth] = useState(LABEL_W);
+  const ganttLabelWidthKey = useMemo(() => `gantt-label-width:${project.id}`, [project.id]);
+  const labelResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const [, startTransition] = useTransition();
   const router = useRouter();
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(ganttLabelWidthKey);
+      if (!raw) return;
+      const parsed = Number.parseInt(raw, 10);
+      if (Number.isFinite(parsed)) {
+        setLabelColWidth(Math.max(MIN_LABEL_W, Math.min(MAX_LABEL_W, parsed)));
+      }
+    } catch {
+      // ignore local storage read errors
+    }
+  }, [ganttLabelWidthKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ganttLabelWidthKey, String(Math.round(labelColWidth)));
+    } catch {
+      // ignore local storage write errors
+    }
+  }, [ganttLabelWidthKey, labelColWidth]);
+
+  useEffect(() => {
+    const onMove = (event: MouseEvent) => {
+      const active = labelResizeRef.current;
+      if (!active) return;
+      const next = Math.max(MIN_LABEL_W, Math.min(MAX_LABEL_W, active.startWidth + (event.clientX - active.startX)));
+      setLabelColWidth(next);
+    };
+    const onUp = () => {
+      if (!labelResizeRef.current) return;
+      labelResizeRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, []);
 
   // ---- Drag state ----
   const dragRef = useRef<{
@@ -193,6 +245,91 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
       })),
     [project, showCompleted, statusCol]
   );
+  const orderedDisplayGroups = useMemo(() => sortGroupsByHierarchy(displayGroups), [displayGroups]);
+  const hierarchyMeta = useMemo(() => buildGroupHierarchyMeta(orderedDisplayGroups), [orderedDisplayGroups]);
+  const groupsById = useMemo(
+    () => new Map(orderedDisplayGroups.map((group) => [group.id, group])),
+    [orderedDisplayGroups]
+  );
+  const descendantIdsByGroup = useMemo(() => {
+    const childrenByParent = new Map<string | null, string[]>();
+    for (const group of orderedDisplayGroups) {
+      const parentKey = group.parentId ?? null;
+      const children = childrenByParent.get(parentKey) ?? [];
+      children.push(group.id);
+      childrenByParent.set(parentKey, children);
+    }
+    const out = new Map<string, Set<string>>();
+    const collect = (groupId: string): Set<string> => {
+      if (out.has(groupId)) return out.get(groupId)!;
+      const result = new Set<string>();
+      const stack = [...(childrenByParent.get(groupId) ?? [])];
+      while (stack.length) {
+        const current = stack.pop()!;
+        if (result.has(current)) continue;
+        result.add(current);
+        const kids = childrenByParent.get(current) ?? [];
+        kids.forEach((kid) => stack.push(kid));
+      }
+      out.set(groupId, result);
+      return result;
+    };
+    orderedDisplayGroups.forEach((group) => collect(group.id));
+    return out;
+  }, [orderedDisplayGroups]);
+  const visibleDisplayGroups = useMemo(() => {
+    const isHiddenByAncestor = (group: (typeof orderedDisplayGroups)[number]) => {
+      let parentId = group.parentId;
+      const seen = new Set<string>();
+      while (parentId) {
+        if (seen.has(parentId)) break;
+        seen.add(parentId);
+        if (collapsedGroups.has(parentId)) return true;
+        parentId = groupsById.get(parentId)?.parentId ?? null;
+      }
+      return false;
+    };
+    return orderedDisplayGroups.filter((group) => !isHiddenByAncestor(group));
+  }, [collapsedGroups, groupsById, orderedDisplayGroups]);
+  const taskGroupIdByTaskId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const group of orderedDisplayGroups) {
+      for (const task of group.tasks) map.set(task.id, group.id);
+    }
+    return map;
+  }, [orderedDisplayGroups]);
+  const collapsedAggregateTasksByGroup = useMemo(() => {
+    const map = new Map<string, TaskWithFields[]>();
+    for (const group of visibleDisplayGroups) {
+      if (!collapsedGroups.has(group.id)) continue;
+      const ids = new Set<string>([group.id, ...(descendantIdsByGroup.get(group.id) ?? new Set<string>())]);
+      const tasks: TaskWithFields[] = [];
+      ids.forEach((groupId) => {
+        const scopeGroup = groupsById.get(groupId);
+        if (!scopeGroup) return;
+        scopeGroup.tasks.forEach((task) => tasks.push(task as TaskWithFields));
+      });
+      map.set(group.id, tasks);
+    }
+    return map;
+  }, [collapsedGroups, descendantIdsByGroup, groupsById, visibleDisplayGroups]);
+  const importantCollapsedTaskIdsByGroup = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const group of visibleDisplayGroups) {
+      if (!collapsedGroups.has(group.id)) continue;
+      const scope = new Set<string>([group.id, ...(descendantIdsByGroup.get(group.id) ?? new Set<string>())]);
+      const important = new Set<string>();
+      for (const task of collapsedAggregateTasksByGroup.get(group.id) ?? []) {
+        const hasOutsideDependent = (task.blockerDeps ?? []).some((dep) => {
+          const blockedTaskGroupId = taskGroupIdByTaskId.get(dep.blockedId);
+          return !!blockedTaskGroupId && !scope.has(blockedTaskGroupId);
+        });
+        if (hasOutsideDependent) important.add(task.id);
+      }
+      map.set(group.id, important);
+    }
+    return map;
+  }, [collapsedAggregateTasksByGroup, collapsedGroups, descendantIdsByGroup, taskGroupIdByTaskId, visibleDisplayGroups]);
 
   // Flatten all tasks
   const allTasks = useMemo(
@@ -272,13 +409,35 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
     });
   }, [selectedTask, router]);
 
+  const startLabelResize = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    labelResizeRef.current = { startX: event.clientX, startWidth: labelColWidth };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, [labelColWidth]);
+
   // ---- Dependency arrows ----
   const { ganttArrows, ganttTotalH } = useMemo(() => {
     const meta = new Map<string, { x1: number; x2: number; yMid: number }>();
     let y = 0;
-    for (const group of displayGroups) {
+    for (const group of visibleDisplayGroups) {
       y += ROW_H; // group header row
-      for (const task of group.tasks) {
+      const tasksForRows = collapsedGroups.has(group.id)
+        ? (collapsedAggregateTasksByGroup.get(group.id) ?? [])
+        : group.tasks;
+      const rowMidByTaskId = new Map<string, number>();
+      if (collapsedGroups.has(group.id)) {
+        const aggregateRowMid = y + ROW_H / 2;
+        tasksForRows.forEach((task) => rowMidByTaskId.set(task.id, aggregateRowMid));
+        y += ROW_H;
+      } else {
+        for (const task of tasksForRows) {
+          rowMidByTaskId.set(task.id, y + ROW_H / 2);
+          y += ROW_H;
+        }
+      }
+      for (const task of tasksForRows) {
         const tField = timelineCol
           ? task.fieldValues.find((f) => f.columnId === timelineCol.id)?.value ?? null
           : null;
@@ -298,12 +457,11 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
           x1 = s * DAY_PX + 2;
           x2 = x1 + 12;
         }
-        meta.set(task.id, { x1, x2, yMid: y + ROW_H / 2 });
-        y += ROW_H;
+        meta.set(task.id, { x1, x2, yMid: rowMidByTaskId.get(task.id) ?? y + ROW_H / 2 });
       }
     }
     const arrows: { x1: number; y1: number; x2: number; y2: number }[] = [];
-    for (const group of displayGroups) {
+    for (const group of visibleDisplayGroups) {
       for (const task of group.tasks as TaskWithFields[]) {
         const from = meta.get(task.id);
         if (!from || from.x2 < 0) continue;
@@ -315,19 +473,19 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
       }
     }
     return { ganttArrows: arrows, ganttTotalH: y };
-  }, [displayGroups, viewStart, timelineCol, dueDateCol]);
+  }, [collapsedAggregateTasksByGroup, collapsedGroups, visibleDisplayGroups, viewStart, timelineCol, dueDateCol]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-white dark:bg-gray-900">
       {/* ── Toolbar ── */}
       <div className="hidden sm:flex items-center gap-1 px-4 py-2 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
-        <button onClick={handlePrev} title={tr(locale, "Période précédente", "Previous period")} className="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
+        <button onClick={handlePrev} title={t("gantt.previousPeriod")} className="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
         <button onClick={handleGoToday} className="text-xs text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-md px-2.5 py-1 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer mx-0.5">
-          {tr(locale, "Aujourd'hui", "Today")}
+          {t("common.today")}
         </button>
-        <button onClick={handleNext} title={tr(locale, "Période suivante", "Next period")} className="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
+        <button onClick={handleNext} title={t("gantt.nextPeriod")} className="p-1.5 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
         <div className="w-px h-4 bg-gray-200 dark:bg-gray-600 mx-2 flex-shrink-0" />
@@ -337,16 +495,16 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
             onClick={() => handlePeriod(days)}
             className={`text-xs px-2.5 py-1 rounded-md transition-colors cursor-pointer ${activePeriodDays === days ? "bg-indigo-600 text-white" : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
           >
-            {days === 14 ? tr(locale, "2 sem.", "2 weeks")
-              : days === 30 ? tr(locale, "1 mois", "1 month")
-              : days === 90 ? tr(locale, "3 mois", "3 months")
-              : days === 180 ? tr(locale, "6 mois", "6 months")
-              : tr(locale, "1 an", "1 year")}
+            {days === 14 ? t("period.2weeks")
+              : days === 30 ? t("period.1month")
+              : days === 90 ? t("period.3months")
+              : days === 180 ? t("period.6months")
+              : t("period.1year")}
           </button>
         ))}
         <button
           onClick={() => setManualView(null)}
-          title={tr(locale, "Ajuster à l'étendue des tâches", "Fit to task range")}
+          title={t("gantt.fitToTaskRange")}
           className={`text-xs px-2.5 py-1 rounded-md transition-colors cursor-pointer ml-1 ${!manualView ? "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 font-medium" : "text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
         >
           Auto
@@ -359,7 +517,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
               : "text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
           }`}
         >
-          {showCompleted ? tr(locale, "Masquer cochées", "Hide completed") : tr(locale, "Afficher cochées", "Show completed")}
+          {showCompleted ? t("common.hideCompleted") : t("common.showCompleted")}
         </button>
       </div>
       <div className="sm:hidden px-3 py-2 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
@@ -367,7 +525,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
           <button onClick={handlePrev} className="p-2 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
-          <button onClick={handleGoToday} className="text-xs px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300">{tr(locale, "Aujourd'hui", "Today")}</button>
+          <button onClick={handleGoToday} className="text-xs px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300">{t("common.today")}</button>
           <button onClick={handleNext} className="p-2 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
@@ -379,23 +537,45 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                 : "text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600"
             }`}
           >
-            {showCompleted ? tr(locale, "Masquer cochées", "Hide completed") : tr(locale, "Afficher cochées", "Show completed")}
+            {showCompleted ? t("common.hideCompleted") : t("common.showCompleted")}
           </button>
         </div>
       </div>
       <div className="sm:hidden flex-1 overflow-y-auto p-3 space-y-3">
-        {displayGroups.map((group) => (
+        {visibleDisplayGroups.map((group) => (
           <section key={group.id} className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <header className="px-3 py-2 text-xs font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2" style={{ background: getGroupBg(group.color) }}>
+            <header className="px-3 py-2 text-xs font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2" style={{ background: getGroupBg(group.color), paddingLeft: `${12 + Math.min(hierarchyMeta.depthById.get(group.id) ?? 0, 6) * 12}px` }}>
+              <button
+                onClick={() =>
+                  setCollapsedGroups((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(group.id)) next.delete(group.id);
+                    else next.add(group.id);
+                    return next;
+                  })
+                }
+                className="text-gray-500 dark:text-gray-300"
+              >
+                <svg className={`w-3 h-3 transition-transform ${collapsedGroups.has(group.id) ? "-rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
               <span className="w-2 h-2 rounded-full" style={{ background: group.color }} />
               <span className="truncate">{group.name}</span>
               <span className="ml-auto text-[10px] text-gray-500 dark:text-gray-400">{group.tasks.length}</span>
             </header>
             <div className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-900">
-              {group.tasks.length === 0 && (
-                <div className="px-3 py-4 text-xs text-gray-400">{tr(locale, "Aucune tâche", "No tasks")}</div>
+              {collapsedGroups.has(group.id) && (
+                <div className="px-3 py-3 text-xs text-gray-500 dark:text-gray-400">
+                  {collapsedAggregateTasksByGroup.get(group.id)?.length ?? 0} {locale === "fr" ? "tâches masquées" : "hidden tasks"}
+                  {" · "}
+                  {(importantCollapsedTaskIdsByGroup.get(group.id)?.size ?? 0)} {locale === "fr" ? "dépendances externes" : "external dependencies"}
+                </div>
               )}
-              {group.tasks.map((task) => {
+              {group.tasks.length === 0 && (
+                <div className="px-3 py-4 text-xs text-gray-400">{t("common.noTasksPlural")}</div>
+              )}
+              {!collapsedGroups.has(group.id) && group.tasks.map((task) => {
                 const tl = timelineCol
                   ? parseTimeline(task.fieldValues.find((f) => f.columnId === timelineCol.id)?.value ?? null)
                   : null;
@@ -411,16 +591,17 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                     key={task.id}
                     onClick={() => setSelectedTask({ task: task as TaskWithFields, groupName: group.name, groupColor: group.color })}
                     className={`w-full text-left px-3 py-3 space-y-1.5 ${isDone ? "opacity-50" : ""}`}
+                    style={{ paddingLeft: `${12 + Math.min((hierarchyMeta.depthById.get(group.id) ?? 0) + 1, 7) * 10}px` }}
                   >
                     <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{task.title}</p>
                     {tl && (
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {tr(locale, "Période", "Period")}: {tl.start.toLocaleDateString(getUiLocale())} - {tl.end.toLocaleDateString(getUiLocale())}
+                        {t("common.period")}: {tl.start.toLocaleDateString(getUiLocale())} - {tl.end.toLocaleDateString(getUiLocale())}
                       </p>
                     )}
                     {dd && (
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {tr(locale, "Échéance", "Due date")}: {dd.toLocaleDateString(getUiLocale())}
+                        {t("common.dueDate")}: {dd.toLocaleDateString(getUiLocale())}
                       </p>
                     )}
                     {task.recurrence && (
@@ -437,21 +618,36 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
       <div className="hidden sm:flex flex-1 overflow-hidden">
       {/* ── Left label column (fixed) ── */}
       <div
-        className="flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-10"
-        style={{ width: LABEL_W }}
+        className="relative group/label flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-10"
+        style={{ width: labelColWidth }}
       >
         {/* Header spacers aligned with timeline headers */}
         <div className="border-b border-gray-200 dark:border-gray-700" style={{ height: MONTH_HEADER_H }} />
         <div className="border-b border-gray-200 dark:border-gray-700" style={{ height: DAY_HEADER_H }} />
 
         {/* Group rows */}
-        {displayGroups.map((group) => (
+        {visibleDisplayGroups.map((group) => (
           <div key={group.id}>
             {/* Group header */}
             <div
               className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 dark:border-gray-700"
-              style={{ height: ROW_H, background: getGroupBg(group.color) }}
+              style={{ height: ROW_H, background: getGroupBg(group.color), paddingLeft: `${16 + Math.min(hierarchyMeta.depthById.get(group.id) ?? 0, 6) * 12}px` }}
             >
+              <button
+                onClick={() =>
+                  setCollapsedGroups((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(group.id)) next.delete(group.id);
+                    else next.add(group.id);
+                    return next;
+                  })
+                }
+                className="text-gray-500 dark:text-gray-300"
+              >
+                <svg className={`w-3 h-3 transition-transform ${collapsedGroups.has(group.id) ? "-rotate-90" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M19 9l-7 7-7-7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
               <div
                 className="w-2 h-2 rounded-full flex-shrink-0"
                 style={{ background: group.color }}
@@ -461,7 +657,22 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
             </div>
 
             {/* Task rows */}
-            {group.tasks.map((task) => {
+            {collapsedGroups.has(group.id) && (
+              <div
+                className="flex items-center px-4 border-b border-gray-50 dark:border-gray-700/50 bg-gray-50/40 dark:bg-gray-800/40"
+                style={{
+                  height: ROW_H,
+                  paddingLeft: `${16 + Math.min((hierarchyMeta.depthById.get(group.id) ?? 0) + 1, 7) * TASK_INDENT_STEP}px`,
+                }}
+              >
+                <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  {(collapsedAggregateTasksByGroup.get(group.id)?.length ?? 0)} {locale === "fr" ? "tâches masquées" : "hidden tasks"}
+                  {" · "}
+                  {(importantCollapsedTaskIdsByGroup.get(group.id)?.size ?? 0)} {locale === "fr" ? "liens externes" : "external links"}
+                </span>
+              </div>
+            )}
+            {!collapsedGroups.has(group.id) && group.tasks.map((task) => {
               const rawStatus = statusCol
                 ? task.fieldValues.find((f) => f.columnId === statusCol.id)?.value ?? null
                 : null;
@@ -471,7 +682,10 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                 key={task.id}
                 onClick={() => setSelectedTask({ task: task as TaskWithFields, groupName: group.name, groupColor: group.color })}
                 className={`flex items-center px-4 border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors group ${isDone ? "opacity-50" : ""}`}
-                style={{ height: ROW_H }}
+                style={{
+                  height: ROW_H,
+                  paddingLeft: `${16 + Math.min((hierarchyMeta.depthById.get(group.id) ?? 0) + 1, 7) * TASK_INDENT_STEP}px`,
+                }}
               >
                 <span className="text-xs text-gray-700 dark:text-gray-300 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                   {task.title}
@@ -480,6 +694,12 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
             )})}
           </div>
         ))}
+        <div
+          onMouseDown={startLabelResize}
+          className="absolute top-0 right-0 h-full w-2 cursor-col-resize opacity-0 group-hover/label:opacity-100 hover:opacity-100 transition-opacity"
+        >
+          <div className="mx-auto h-full w-px bg-indigo-200 dark:bg-indigo-700" />
+        </div>
       </div>
 
       {/* ── Scrollable timeline ── */}
@@ -533,7 +753,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
 
           {/* Rows */}
           <div className="relative">
-          {displayGroups.map((group) => (
+          {visibleDisplayGroups.map((group) => (
             <div key={group.id}>
               {/* Group header row */}
               <div
@@ -553,7 +773,63 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
               </div>
 
               {/* Task rows */}
-              {group.tasks.map((task) => {
+              {collapsedGroups.has(group.id) && (
+                <div
+                  className="border-b border-gray-50 dark:border-gray-700/30 relative hover:bg-indigo-50/20 dark:hover:bg-indigo-900/10 transition-colors"
+                  style={{ height: ROW_H }}
+                >
+                  {days.map((d, i) =>
+                    d.getDay() === 0 || d.getDay() === 6 ? (
+                      <div
+                        key={i}
+                        className="absolute top-0 bottom-0 bg-gray-100/60 dark:bg-gray-700/30"
+                        style={{ left: i * DAY_PX, width: DAY_PX }}
+                      />
+                    ) : null
+                  )}
+                  {todayOffset >= 0 && todayOffset < totalDays && (
+                    <div
+                      className="absolute top-0 bottom-0 w-px bg-indigo-400/60 z-10"
+                      style={{ left: todayOffset * DAY_PX + DAY_PX / 2 }}
+                    />
+                  )}
+                  {(collapsedAggregateTasksByGroup.get(group.id) ?? []).map((task, idx) => {
+                    const tField = timelineCol
+                      ? task.fieldValues.find((f) => f.columnId === timelineCol.id)?.value ?? null
+                      : null;
+                    const ddField = dueDateCol
+                      ? task.fieldValues.find((f) => f.columnId === dueDateCol.id)?.value ?? null
+                      : null;
+                    const tl = parseTimeline(tField);
+                    const dd = parseDueDate(ddField);
+                    const important = importantCollapsedTaskIdsByGroup.get(group.id)?.has(task.id) ?? false;
+                    if (!tl && !dd) return null;
+                    const left = tl ? diffDays(viewStart, tl.start) * DAY_PX + 2 : diffDays(viewStart, dd!) * DAY_PX + 2;
+                    const width = tl ? Math.max(diffDays(tl.start, tl.end) * DAY_PX - 4, 10) : 10;
+                    const verticalOffset = ((idx % 3) - 1) * 5;
+                    return (
+                      <div
+                        key={`collapsed-${group.id}-${task.id}`}
+                        title={task.title}
+                        onClick={() => setSelectedTask({ task, groupName: group.name, groupColor: group.color })}
+                        className="absolute -translate-y-1/2 z-20 cursor-pointer"
+                        style={{
+                          left,
+                          top: `calc(50% + ${verticalOffset}px)`,
+                          width,
+                          height: tl ? (important ? 12 : 9) : (important ? 11 : 8),
+                          backgroundColor: tl ? group.color : "#f59e0b",
+                          opacity: important ? 0.95 : 0.45,
+                          border: important ? "1px solid rgba(239,68,68,0.9)" : "1px solid rgba(0,0,0,0.08)",
+                          borderRadius: tl ? 6 : 2,
+                          transform: tl ? undefined : "translateY(-50%) rotate(45deg)",
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+              {!collapsedGroups.has(group.id) && group.tasks.map((task) => {
                 const rawStatus = statusCol
                   ? task.fieldValues.find((f) => f.columnId === statusCol.id)?.value ?? null
                   : null;
@@ -791,7 +1067,7 @@ export function ProjectGanttView({ project }: { project: ProjectWithRelations })
                             cursor: isDraggingDd ? "grabbing" : "grab",
                             userSelect: "none",
                           }}
-                          title={`${tr(locale, "Échéance", "Due date")}: ${dd.toLocaleDateString(getUiLocale())}`}
+                          title={`${t("common.dueDate")}: ${dd.toLocaleDateString(getUiLocale())}`}
                           onPointerDown={(e) => {
                             if (e.button !== 0) return;
                             e.stopPropagation();

@@ -144,7 +144,7 @@ export function ProjectTimelineView({
 }) {
   const pathname = usePathname();
   const locale = localeFromPathname(pathname);
-  const { memberAvatars } = useProjectContext();
+  const { resolveOwnerName, resolveOwnerAvatar } = useProjectContext();
   const [selectedTask, setSelectedTask] = useState<{
     task: TaskWithFields;
     groupName: string;
@@ -260,7 +260,8 @@ export function ProjectTimelineView({
     const map = new Map<string, typeof allTasks>();
 
     for (const entry of allTasks) {
-      const owner = fv(entry.task, ownerCol?.id) || `— ${tr(locale, "Sans responsable", "No owner")}`;
+      const ownerRaw = fv(entry.task, ownerCol?.id);
+      const owner = ownerRaw ? (resolveOwnerName(ownerRaw) ?? ownerRaw) : `— ${tr(locale, "Sans responsable", "No owner")}`;
       if (!map.has(owner)) map.set(owner, []);
       map.get(owner)!.push(entry);
     }
@@ -273,7 +274,7 @@ export function ProjectTimelineView({
     });
 
     return sorted;
-  }, [allTasks, locale, ownerCol, fv]);
+  }, [allTasks, locale, ownerCol, fv, resolveOwnerName]);
 
   // Today offset
   const todayOffset = diffDays(viewStart, startOfDay(new Date()));
@@ -472,8 +473,8 @@ export function ProjectTimelineView({
             <section key={owner} className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
               <header className="px-3 py-2 flex items-center gap-2 bg-gray-50 dark:bg-gray-800/60">
                 <div className="w-6 h-6 rounded-full overflow-hidden">
-                  {!isNoOwner && memberAvatars[owner] ? (
-                    <img src={memberAvatars[owner]!} alt={owner} className="w-full h-full object-cover rounded-full" />
+                  {!isNoOwner && resolveOwnerAvatar(owner) ? (
+                    <img src={resolveOwnerAvatar(owner)!} alt={owner} className="w-full h-full object-cover rounded-full" />
                   ) : (
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isNoOwner ? "bg-gray-200 dark:bg-gray-600" : colorSet.bg}`}>
                       <span className={`text-[9px] font-bold ${isNoOwner ? "text-gray-500 dark:text-gray-300" : colorSet.text}`}>
@@ -551,8 +552,8 @@ export function ProjectTimelineView({
                 style={{ height: rowH }}
               >
                 <div className="w-6 h-6 rounded-full flex-shrink-0 mt-1 overflow-hidden">
-                  {!isNoOwner && memberAvatars[owner] ? (
-                    <img src={memberAvatars[owner]!} alt={owner} className="w-full h-full object-cover rounded-full" />
+                  {!isNoOwner && resolveOwnerAvatar(owner) ? (
+                    <img src={resolveOwnerAvatar(owner)!} alt={owner} className="w-full h-full object-cover rounded-full" />
                   ) : (
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isNoOwner ? "bg-gray-200 dark:bg-gray-600" : colorSet.bg}`}>
                       <span className={`text-[9px] font-bold ${isNoOwner ? "text-gray-500 dark:text-gray-300" : colorSet.text}`}>

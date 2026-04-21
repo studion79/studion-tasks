@@ -70,6 +70,36 @@ function isIOSDevice(): boolean {
   return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
+type BadgeCapableNavigator = Navigator & {
+  setAppBadge?: (count?: number) => Promise<void>;
+  clearAppBadge?: () => Promise<void>;
+};
+
+async function applyBadgeCountOnClient(count: number): Promise<void> {
+  const safeCount = Math.max(0, Math.floor(Number(count) || 0));
+  try {
+    const nav = navigator as BadgeCapableNavigator;
+    if (typeof nav.setAppBadge === "function") {
+      if (safeCount > 0) await nav.setAppBadge(safeCount);
+      else if (typeof nav.clearAppBadge === "function") await nav.clearAppBadge();
+      else await nav.setAppBadge(0);
+    }
+  } catch {
+    // ignore unsupported platform/runtime
+  }
+
+  try {
+    if ("serviceWorker" in navigator) {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (registration?.active) {
+        registration.active.postMessage({ type: "TASKAPP_BADGE_SYNC", count: safeCount });
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export default function PwaRegister() {
   const { status } = useSession();
   const [lang, setLang] = useState<UILang>("fr");
@@ -151,6 +181,18 @@ export default function PwaRegister() {
     }
   }, [lang, publicKey]);
 
+  const syncAppBadgeFromServer = useCallback(async () => {
+    try {
+      const response = await fetch("/api/push/badge", { cache: "no-store" });
+      if (!response.ok) return;
+      const json = (await response.json()) as { ok?: boolean; unreadCount?: number };
+      if (!json.ok) return;
+      await applyBadgeCountOnClient(Number(json.unreadCount ?? 0));
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     const onUpdate = () => setLang(detectLanguage());
     setLang(detectLanguage());
@@ -205,6 +247,32 @@ export default function PwaRegister() {
       void registerAndSubscribe(false);
     }
   }, [status, pushEnabledPref, registerAndSubscribe]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    void syncAppBadgeFromServer();
+
+    const handleBadgeSync = () => {
+      void syncAppBadgeFromServer();
+    };
+    const handleVisibilitySync = () => {
+      if (document.visibilityState === "visible") void syncAppBadgeFromServer();
+    };
+
+    window.addEventListener("taskapp:badge-sync", handleBadgeSync);
+    document.addEventListener("visibilitychange", handleVisibilitySync);
+    window.addEventListener("focus", handleBadgeSync);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void syncAppBadgeFromServer();
+    }, 60000);
+
+    return () => {
+      window.removeEventListener("taskapp:badge-sync", handleBadgeSync);
+      document.removeEventListener("visibilitychange", handleVisibilitySync);
+      window.removeEventListener("focus", handleBadgeSync);
+      window.clearInterval(interval);
+    };
+  }, [status, syncAppBadgeFromServer]);
 
   const showBanner = useMemo(() => {
     if (status !== "authenticated") return false;

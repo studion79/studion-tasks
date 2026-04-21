@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo, useTransition } from "react";
+import { useState, useRef, useEffect, useMemo, useTransition, useCallback } from "react";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { getUiLocale } from "@/lib/ui-locale";
 import type {
@@ -10,7 +10,7 @@ import type {
   SpreadsheetSort,
   SpreadsheetSortColumn,
 } from "@/lib/types";
-import { STATUS_OPTIONS, PRIORITY_OPTIONS, NOTIF_TYPES, getNotifTypeLabel } from "@/lib/constants";
+import { NOTIF_TYPES, getNotifTypeLabel, getPriorityOptions, getStatusOptions } from "@/lib/constants";
 import { setColumnActive, addProjectColumn, updateProjectDescription, createSavedView, listSavedViews, deleteSavedView, markNotificationRead, markAllNotificationsRead, getProjectLinks, addProjectLink, removeProjectLink, listProjects, getNotifPreferences, setNotifPreference } from "@/lib/actions";
 import { InviteModal } from "./InviteModal";
 import { SaveTemplateModal } from "./SaveTemplateModal";
@@ -28,7 +28,8 @@ import { ProjectProvider } from "./ProjectContext";
 import { CommandPalette } from "./CommandPalette";
 import { TaskDetailPanel } from "./TaskDetailPanel";
 import { AutomationsPanel } from "./AutomationsPanel";
-import { localeFromPathname, tr } from "@/lib/i18n/client";
+import { trKey } from "@/lib/i18n/client";
+import { useClientLocale } from "@/lib/i18n/useClientLocale";
 import { getDisplayColumnLabel, getSystemColumnLabel } from "@/lib/i18n/columns";
 import { useRealtimeSync } from "@/lib/useRealtimeSync";
 import type { RealtimeScope } from "@/lib/realtime";
@@ -41,6 +42,7 @@ type DisplayPrefs = {
   mondayFirst?: boolean;
   dateFormat?: "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD";
   language?: "fr" | "en";
+  themeMode?: "system" | "light" | "dark";
 };
 type ServerDisplaySettings = {
   syncAcrossDevices: boolean;
@@ -49,6 +51,7 @@ type ServerDisplaySettings = {
   mondayFirst: boolean;
   dateFormat: "DD/MM/YYYY" | "MM/DD/YYYY" | "YYYY-MM-DD";
   language: "fr" | "en";
+  themeMode: "system" | "light" | "dark";
 };
 
 type Member = { id: string; userId: string; role: string; user: { id: string; name: string; email: string; avatar: string | null } };
@@ -133,7 +136,9 @@ export function ProjectPageClient({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const locale = localeFromPathname(pathname);
+  const locale = useClientLocale(pathname);
+  const statusOptions = useMemo(() => getStatusOptions(locale), [locale]);
+  const priorityOptions = useMemo(() => getPriorityOptions(locale), [locale]);
   const realtimeScopes = useMemo<RealtimeScope[]>(() => {
     const scopes = new Set<RealtimeScope>();
     scopes.add(`project:${project.id}`);
@@ -175,6 +180,7 @@ export function ProjectPageClient({
         mondayFirst: initialDisplaySettings.mondayFirst,
         dateFormat: initialDisplaySettings.dateFormat,
         language: initialDisplaySettings.language,
+        themeMode: initialDisplaySettings.themeMode,
       };
       try {
         localStorage.setItem("taskapp:display-prefs", JSON.stringify(normalizedPrefs));
@@ -222,6 +228,7 @@ export function ProjectPageClient({
       mondayFirst: initialDisplaySettings.mondayFirst,
       dateFormat: initialDisplaySettings.dateFormat,
       language: initialDisplaySettings.language,
+      themeMode: initialDisplaySettings.themeMode,
     };
     try {
       localStorage.setItem("taskapp:display-prefs", JSON.stringify(normalizedPrefs));
@@ -424,6 +431,20 @@ export function ProjectPageClient({
   const viewsBtnRef = useRef<HTMLDivElement>(null);
   const [panelPos, setPanelPos] = useState({ top: 0, left: 0 });
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const closeSpreadsheetPanels = useCallback(() => {
+    setShowFilterPanel(false);
+    setShowSortPanel(false);
+    setShowColumnsPanel(false);
+    setShowViewsPanel(false);
+  }, []);
+
+  useEffect(() => {
+    setNotifications(initialNotifications);
+  }, [initialNotifications]);
+
+  useEffect(() => {
+    setUnreadCount(initialUnreadCount);
+  }, [initialUnreadCount]);
   const getPanelPos = (rect: DOMRect, panelWidth: number) => {
     const margin = 8;
     const maxLeft = window.innerWidth - panelWidth - margin;
@@ -447,10 +468,7 @@ export function ProjectPageClient({
       // Toolbar dropdowns: use single toolbarRef (covers buttons + panels)
       if ((showFilterPanel || showSortPanel || showColumnsPanel || showViewsPanel) &&
           toolbarRef.current && !toolbarRef.current.contains(e.target as Node)) {
-        setShowFilterPanel(false);
-        setShowSortPanel(false);
-        setShowColumnsPanel(false);
-        setShowViewsPanel(false);
+        closeSpreadsheetPanels();
       }
       if (showNotifPanel && notifRef.current && !notifRef.current.contains(e.target as Node))
         setShowNotifPanel(false);
@@ -459,7 +477,7 @@ export function ProjectPageClient({
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [showFilterPanel, showSortPanel, showColumnsPanel, showViewsPanel, showNotifPanel, showLinksPanel]);
+  }, [closeSpreadsheetPanels, showFilterPanel, showSortPanel, showColumnsPanel, showViewsPanel, showNotifPanel, showLinksPanel]);
 
   // Effective active columns: DB active + locally toggled
   const effectiveColumns = useMemo(
@@ -564,17 +582,38 @@ export function ProjectPageClient({
 
   // Unique owners across all tasks (for filter panel)
   const ownerCol = project.columns.find((c) => c.type === "OWNER");
+  const ownerIdByName = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const member of members) {
+      map.set(member.user.name.trim().toLowerCase(), member.user.id);
+    }
+    return map;
+  }, [members]);
+  const ownerNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const member of members) {
+      map.set(member.user.id, member.user.name);
+    }
+    return map;
+  }, [members]);
+  const normalizeOwnerFilterValue = useCallback((value: string | null | undefined) => {
+    const raw = value?.trim();
+    if (!raw) return "";
+    return ownerNameById.has(raw) ? raw : ownerIdByName.get(raw.toLowerCase()) ?? raw;
+  }, [ownerIdByName, ownerNameById]);
+  const ownerFilterLabel = useCallback((value: string) => ownerNameById.get(value) ?? value, [ownerNameById]);
   const uniqueOwners = useMemo(() => {
     if (!ownerCol) return [];
     const set = new Set<string>();
     project.groups.forEach((g) =>
       g.tasks.forEach((t) => {
         const v = t.fieldValues.find((f) => f.columnId === ownerCol.id)?.value;
-        if (v) set.add(v);
+        const normalized = normalizeOwnerFilterValue(v);
+        if (normalized) set.add(normalized);
       })
     );
-    return Array.from(set).sort();
-  }, [project, ownerCol]);
+    return Array.from(set).sort((a, b) => ownerFilterLabel(a).localeCompare(ownerFilterLabel(b), locale));
+  }, [project, ownerCol, normalizeOwnerFilterValue, ownerFilterLabel, locale]);
 
   const activeFilterCount =
     filters.status.length + filters.priority.length + filters.owner.length;
@@ -601,17 +640,17 @@ export function ProjectPageClient({
   };
 
   const viewLabels: Record<string, string> = {
-    SPREADSHEET: tr(locale, "Tableur", "Spreadsheet"),
-    CARDS: tr(locale, "Fiches", "Cards"),
+    SPREADSHEET: trKey(locale, "project.spreadsheet"),
+    CARDS: trKey(locale, "project.cards"),
     KANBAN: "Kanban",
-    CALENDAR: tr(locale, "Calendrier", "Calendar"),
+    CALENDAR: trKey(locale, "project.calendar"),
   };
 
   const sortOptions: { key: SpreadsheetSortColumn; label: string }[] = [
-    { key: "TITLE", label: tr(locale, "Tâche (A→Z)", "Task (A→Z)") },
+    { key: "TITLE", label: trKey(locale, "project.taskAZ") },
     { key: "STATUS", label: "Status" },
-    { key: "PRIORITY", label: tr(locale, "Priorité", "Priority") },
-    { key: "DUE_DATE", label: tr(locale, "Date d'échéance", "Due date") },
+    { key: "PRIORITY", label: trKey(locale, "project.priority") },
+    { key: "DUE_DATE", label: trKey(locale, "project.dueDate") },
   ];
 
   const sortLabel = sort
@@ -621,7 +660,7 @@ export function ProjectPageClient({
 
   const exportCSV = () => {
     const cols = project.columns;
-    const headers = [tr(locale, "Groupe", "Group"), tr(locale, "Tâche", "Task"), ...cols.map((c) => getDisplayColumnLabel(c, locale))];
+    const headers = [trKey(locale, "project.group"), trKey(locale, "project.task"), ...cols.map((c) => getDisplayColumnLabel(c, locale))];
     const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const rows: string[] = [headers.map(escape).join(",")];
     for (const group of project.groups) {
@@ -648,7 +687,7 @@ export function ProjectPageClient({
   if (!activeTab) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-sm text-gray-500 dark:text-gray-400">{tr(locale, "Chargement de la vue…", "Loading view...")}</div>
+        <div className="text-sm text-gray-500 dark:text-gray-400">{trKey(locale, "project.loadingView")}</div>
       </div>
     );
   }
@@ -656,7 +695,8 @@ export function ProjectPageClient({
   return (
     <ProjectProvider
       memberNames={members.map((m) => m.user.name)}
-      memberAvatars={Object.fromEntries(members.map((m) => [m.user.name, m.user.avatar]))}
+      memberAvatars={Object.fromEntries(members.flatMap((m) => [[m.user.name, m.user.avatar], [m.user.id, m.user.avatar]]))}
+      memberOptions={members.map((m) => ({ id: m.user.id, name: m.user.name, avatar: m.user.avatar }))}
       allColumns={allColumns}
     >
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
@@ -671,17 +711,17 @@ export function ProjectPageClient({
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M15 19l-7-7 7-7" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              {tr(locale, "Projets", "Projects")}
+              {trKey(locale, "project.projects")}
             </a>
             <a
               href="/me"
               className="hidden sm:flex items-center gap-1 text-gray-400 dark:text-gray-500 hover:text-indigo-500 transition-colors text-xs border border-gray-200 dark:border-gray-700 hover:border-indigo-200 rounded-md px-2 py-1 flex-shrink-0"
-              title={tr(locale, "Mon espace", "My Space")}
+              title={trKey(locale, "nav.mySpace")}
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              {tr(locale, "Mon espace", "My Space")}
+              {trKey(locale, "nav.mySpace")}
             </a>
             <span className="text-gray-200 dark:text-gray-700">/</span>
             <div className="relative flex-shrink-0">
@@ -722,9 +762,9 @@ export function ProjectPageClient({
                   />
                   <button
                     onClick={() => projectAvatarInputRef.current?.click()}
-                    aria-label={tr(locale, "Modifier la photo du projet", "Edit project picture")}
+                    aria-label={trKey(locale, "project.editPicture")}
                     className="absolute -right-1 -bottom-1 w-4.5 h-4.5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-400 hover:text-indigo-500 flex items-center justify-center cursor-pointer"
-                    title="Modifier la photo du projet"
+                    title={trKey(locale, "project.editPicture")}
                   >
                     <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path d="M15.232 5.232l3.536 3.536M9 17l6.768-6.768a2.5 2.5 0 10-3.536-3.536L5.464 13.464A4 4 0 004 16.293V20h3.707A4 4 0 0010.536 18.536z" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -753,14 +793,14 @@ export function ProjectPageClient({
                   if (e.key === "Escape") { setDescription(project.description ?? ""); setEditingDesc(false); }
                 }}
                 className="hidden sm:block text-xs text-gray-500 dark:text-gray-400 bg-transparent border-b border-indigo-400 outline-none w-48"
-                placeholder={tr(locale, "Ajouter une description…", "Add a description...")}
+                placeholder={trKey(locale, "project.addDescription")}
               />
             ) : isAdmin ? (
               <button
                 onClick={() => setEditingDesc(true)}
                 className="hidden sm:block text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors cursor-pointer truncate max-w-[200px]"
               >
-                {description || <span className="italic text-gray-300 dark:text-gray-600">{tr(locale, "Ajouter une description…", "Add a description...")}</span>}
+                {description || <span className="italic text-gray-300 dark:text-gray-600">{trKey(locale, "project.addDescription")}</span>}
               </button>
             ) : (
               <span className="hidden sm:block text-xs text-gray-400 dark:text-gray-500 truncate max-w-[200px]">
@@ -785,9 +825,9 @@ export function ProjectPageClient({
                       getNotifPreferences().then(setNotifPrefs);
                     }
                   }}
-                  aria-label={tr(locale, "Notifications", "Notifications")}
+                  aria-label={trKey(locale, "project.notifications")}
                   className="relative p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
-                  title={tr(locale, "Notifications", "Notifications")}
+                  title={trKey(locale, "project.notifications")}
                 >
                   <svg className="w-4.5 h-4.5 w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -808,7 +848,7 @@ export function ProjectPageClient({
                     ].join(" ")}
                   >
                     <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-                      <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">{tr(locale, "Notifications", "Notifications")}</h3>
+                      <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">{trKey(locale, "project.notifications")}</h3>
                       <div className="flex items-center gap-2">
                         {unreadCount > 0 && !showNotifPrefs && (
                           <button
@@ -816,16 +856,17 @@ export function ProjectPageClient({
                               setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
                               setUnreadCount(0);
                               await markAllNotificationsRead(currentUserId);
+                              window.dispatchEvent(new CustomEvent("taskapp:badge-sync"));
                             }}
                             className="text-xs text-indigo-500 hover:text-indigo-700 transition-colors cursor-pointer"
                           >
-                            {tr(locale, "Tout marquer lu", "Mark all as read")}
+                            {trKey(locale, "project.markAllRead")}
                           </button>
                         )}
                         <button
                           onClick={() => setShowNotifPrefs((v) => !v)}
-                          aria-label={tr(locale, "Préférences de notifications", "Notification preferences")}
-                          title={tr(locale, "Préférences de notifications", "Notification preferences")}
+                          aria-label={trKey(locale, "project.notificationPreferences")}
+                          title={trKey(locale, "project.notificationPreferences")}
                           className={`p-1 rounded-md transition-colors cursor-pointer ${showNotifPrefs ? "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200" : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"}`}
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -838,7 +879,7 @@ export function ProjectPageClient({
 
                     {showNotifPrefs ? (
                       <div className="px-4 py-3 space-y-3">
-                        <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{tr(locale, "Recevoir des notifications pour", "Receive notifications for")}</p>
+                        <p className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{trKey(locale, "project.receiveNotificationsFor")}</p>
                         {NOTIF_TYPES.map(({ type }) => {
                           const pref = notifPrefs.find((p) => p.type === type);
                           const enabled = pref?.enabled ?? true;
@@ -872,7 +913,7 @@ export function ProjectPageClient({
                           <svg className="w-8 h-8 text-gray-200 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" strokeWidth="1.5" strokeLinecap="round" />
                           </svg>
-                          <p className="text-xs text-gray-400">{tr(locale, "Aucune notification", "No notification")}</p>
+                          <p className="text-xs text-gray-400">{trKey(locale, "project.noNotification")}</p>
                         </div>
                       ) : (
                         notifications.map((notif) => (
@@ -886,6 +927,7 @@ export function ProjectPageClient({
                                 );
                                 setUnreadCount((c) => Math.max(0, c - 1));
                                 await markNotificationRead(notif.id);
+                                window.dispatchEvent(new CustomEvent("taskapp:badge-sync"));
                               }
                               if (notif.taskId) {
                                 setShowNotifPanel(false);
@@ -945,13 +987,13 @@ export function ProjectPageClient({
             {isAdmin && (
               <button
                 onClick={() => setShowAutomationsPanel(true)}
-                className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 sm:px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
-                title={tr(locale, "Automatisations", "Automations")}
+                className="hidden sm:flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 sm:px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                title={trKey(locale, "project.automations")}
               >
                 <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M13 10V3L4 14h7v7l9-11h-7z" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                <span className="hidden sm:inline">{tr(locale, "Règles", "Rules")}</span>
+                <span className="hidden sm:inline">{trKey(locale, "project.rules")}</span>
               </button>
             )}
             <button
@@ -965,28 +1007,28 @@ export function ProjectPageClient({
                   ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
                   : "text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
               }`}
-              title={isPersonalProject ? tr(locale, "Les projets personnels n'acceptent pas de membres", "Personal projects do not accept members") : (canInviteMembers ? tr(locale, "Inviter des membres", "Invite members") : tr(locale, "Voir les membres", "View members"))}
+              title={isPersonalProject ? trKey(locale, "project.personalNoMembers") : (canInviteMembers ? trKey(locale, "project.inviteMembers") : trKey(locale, "project.viewMembers"))}
             >
               <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M12 4v16m8-8H4" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
-              <span className="hidden sm:inline">{canInviteMembers ? tr(locale, "Inviter", "Invite") : tr(locale, "Membres", "Members")}</span>
+              <span className="hidden sm:inline">{canInviteMembers ? trKey(locale, "project.invite") : trKey(locale, "project.members")}</span>
             </button>
             {isAdmin && (
               <button
                 onClick={() => setShowSaveTemplate(true)}
-                className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 sm:px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
-                title={tr(locale, "Sauvegarder comme template", "Save as template")}
+                className="hidden sm:flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 sm:px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                title={trKey(locale, "project.saveAsTemplate")}
               >
                 <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-              <span className="hidden sm:inline">{tr(locale, "Template", "Template")}</span>
+              <span className="hidden sm:inline">{trKey(locale, "project.template")}</span>
               </button>
             )}
 
             {/* Project links */}
-            <div className="relative" ref={linksRef}>
+            <div className="relative hidden sm:block" ref={linksRef}>
               <button
                 onClick={async () => {
                   if (isPersonalProject) return;
@@ -1010,12 +1052,12 @@ export function ProjectPageClient({
                     ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
                     : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
                 }`}
-                title={isPersonalProject ? tr(locale, "Les projets personnels ne peuvent pas être liés", "Personal projects cannot be linked") : tr(locale, "Lier des projets", "Link projects")}
+                title={isPersonalProject ? trKey(locale, "project.personalNoLinks") : trKey(locale, "project.linkProjects")}
               >
                 <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                <span className="hidden sm:inline">{tr(locale, "Lier", "Link")}</span>
+                <span className="hidden sm:inline">{trKey(locale, "project.link")}</span>
                 {linkedProjects.length > 0 && (
                   <span className="ml-0.5 text-[10px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-full px-1.5 py-0.5 leading-none">
                     {linkedProjects.length}
@@ -1026,9 +1068,9 @@ export function ProjectPageClient({
               {showLinksPanel && (
                 <div className="absolute top-full mt-1.5 right-0 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-30 w-[min(18rem,calc(100vw-1rem))] overflow-hidden">
                   <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
-                    <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">{tr(locale, "Projets liés", "Linked projects")}</h3>
+                    <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">{trKey(locale, "project.linkedProjects")}</h3>
                     <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
-                      {tr(locale, "Un lien crée un raccourci entre projets, sans fusionner les données.", "A link creates a shortcut between projects, without merging data.")}
+                      {trKey(locale, "project.linkedProjectsHint")}
                     </p>
                   </div>
                   {linksError && (
@@ -1036,7 +1078,7 @@ export function ProjectPageClient({
                   )}
                   <div className="max-h-64 overflow-y-auto">
                     {linkedProjects.length === 0 ? (
-                      <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-6">{tr(locale, "Aucun projet lié", "No linked project")}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 text-center py-6">{trKey(locale, "project.noLinkedProject")}</p>
                     ) : (
                       linkedProjects.map((lp) => (
                         <div key={lp.id} className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50/50 dark:hover:bg-gray-700/40">
@@ -1051,10 +1093,10 @@ export function ProjectPageClient({
                               } catch (e) {
                                 const message = e instanceof Error ? e.message : "";
                                 if (message.includes("FORBIDDEN_LINK_PERSONAL_PROJECT")) {
-                                  setLinksError(tr(locale, "Un projet personnel ne peut pas être lié.", "A personal project cannot be linked."));
+                                  setLinksError(trKey(locale, "project.personalCannotBeLinked"));
                                   return;
                                 }
-                                setLinksError(tr(locale, "Impossible de dissocier ce projet.", "Unable to unlink this project."));
+                                setLinksError(trKey(locale, "project.unlinkFailed"));
                               }
                             }}
                             className="ml-2 text-gray-300 dark:text-gray-600 hover:text-red-400 transition-colors cursor-pointer flex-shrink-0"
@@ -1070,7 +1112,7 @@ export function ProjectPageClient({
                   </div>
                   {allProjects.filter((p) => !linkedProjects.some((lp) => lp.project.id === p.id)).length > 0 && (
                     <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700">
-                      <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-2 font-medium uppercase tracking-wider">{tr(locale, "Lier un projet", "Link a project")}</p>
+                      <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-2 font-medium uppercase tracking-wider">{trKey(locale, "project.linkAProject")}</p>
                       <div className="space-y-1 max-h-40 overflow-y-auto">
                         {allProjects
                           .filter((p) => !linkedProjects.some((lp) => lp.project.id === p.id))
@@ -1085,10 +1127,10 @@ export function ProjectPageClient({
                                 } catch (e) {
                                   const message = e instanceof Error ? e.message : "";
                                   if (message.includes("FORBIDDEN_LINK_PERSONAL_PROJECT")) {
-                                    setLinksError(tr(locale, "Un projet personnel ne peut pas être lié.", "A personal project cannot be linked."));
+                                    setLinksError(trKey(locale, "project.personalCannotBeLinked"));
                                     return;
                                   }
-                                  setLinksError(tr(locale, "Impossible de lier ce projet.", "Unable to link this project."));
+                                  setLinksError(trKey(locale, "project.linkFailed"));
                                 }
                               }}
                               className="w-full text-left text-sm text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 px-2 py-1.5 rounded-lg transition-colors cursor-pointer"
@@ -1112,7 +1154,7 @@ export function ProjectPageClient({
             onClick={() => switchTab("spreadsheet")}
             icon={VIEW_ICONS[defaultView?.type ?? "SPREADSHEET"]}
           >
-            {viewLabels[defaultView?.type ?? "SPREADSHEET"] ?? tr(locale, "Tableur", "Spreadsheet")}
+            {viewLabels[defaultView?.type ?? "SPREADSHEET"] ?? trKey(locale, "project.spreadsheet")}
           </TabButton>
 
           <TabButton
@@ -1120,7 +1162,7 @@ export function ProjectPageClient({
             onClick={() => switchTab("cards")}
             icon={VIEW_ICONS["CARDS"]}
           >
-            {tr(locale, "Fiches", "Cards")}
+            {trKey(locale, "project.cards")}
           </TabButton>
 
           <TabButton
@@ -1136,7 +1178,7 @@ export function ProjectPageClient({
             onClick={() => switchTab("calendar")}
             icon={VIEW_ICONS["CALENDAR"]}
           >
-            {tr(locale, "Calendrier", "Calendar")}
+            {trKey(locale, "project.calendar")}
           </TabButton>
 
           <TabButton
@@ -1152,7 +1194,7 @@ export function ProjectPageClient({
             onClick={() => switchTab("timeline")}
             icon={VIEW_ICONS["TIMELINE"]}
           >
-            {tr(locale, "Échéancier", "Timeline")}
+            {trKey(locale, "project.timeline")}
           </TabButton>
 
           <div className="mx-2 h-4 w-px bg-gray-200 dark:bg-gray-700" />
@@ -1169,7 +1211,7 @@ export function ProjectPageClient({
               </svg>
             }
           >
-            {tr(locale, "Dashboard", "Dashboard")}
+            {trKey(locale, "project.dashboard")}
           </TabButton>
 
           <TabButton
@@ -1181,7 +1223,7 @@ export function ProjectPageClient({
               </svg>
             }
           >
-            {tr(locale, "Activité", "Activity")}
+            {trKey(locale, "project.activity")}
           </TabButton>
         </div>
       </header>
@@ -1201,7 +1243,7 @@ export function ProjectPageClient({
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={tr(locale, "Rechercher… (/)", "Search... (/)")}
+              placeholder={trKey(locale, "project.searchSlash")}
               className="pl-8 pr-3 py-1.5 text-xs text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg outline-none focus:border-indigo-400 focus:bg-white dark:focus:bg-gray-600 transition-colors w-28 sm:w-44"
             />
             {search && (
@@ -1223,12 +1265,12 @@ export function ProjectPageClient({
             <button
               onClick={() => { clearFilters(); setSort(null); setHiddenColumnIds([]); setSearch(""); }}
               className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-red-500 transition-colors cursor-pointer flex-shrink-0"
-              title={tr(locale, "Réinitialiser la vue", "Reset view")}
+              title={trKey(locale, "project.resetView")}
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              {tr(locale, "Réinitialiser", "Reset")}
+              {trKey(locale, "project.reset")}
             </button>
           )}
 
@@ -1253,7 +1295,7 @@ export function ProjectPageClient({
               <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M3 6h18M3 12h12M3 18h6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <span className="hidden sm:inline">{tr(locale, "Filtrer", "Filter")}</span>
+              <span className="hidden sm:inline">{trKey(locale, "project.filter")}</span>
               {activeFilterCount > 0 && (
                 <span className="ml-0.5 bg-indigo-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
                   {activeFilterCount}
@@ -1284,7 +1326,7 @@ export function ProjectPageClient({
               <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <span className="hidden sm:inline">{sortLabel ?? tr(locale, "Trier", "Sort")}</span>
+              <span className="hidden sm:inline">{sortLabel ?? trKey(locale, "project.sort")}</span>
               <span className="sm:hidden">{sort ? "↕" : ""}</span>
               {sort && (
                 <span
@@ -1293,7 +1335,7 @@ export function ProjectPageClient({
                     setSort(null);
                   }}
                   className="ml-0.5 text-indigo-400 hover:text-indigo-700 leading-none"
-                  title={tr(locale, "Supprimer le tri", "Clear sorting")}
+                  title={trKey(locale, "project.clearSorting")}
                 >
                   ×
                 </span>
@@ -1323,7 +1365,7 @@ export function ProjectPageClient({
               <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
-              <span className="hidden sm:inline">{tr(locale, "Colonnes", "Columns")}</span>
+              <span className="hidden sm:inline">{trKey(locale, "project.columns")}</span>
               {hiddenColumnIds.length > 0 && (
                 <span className="ml-0.5 bg-indigo-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
                   {hiddenColumnIds.length}
@@ -1355,7 +1397,7 @@ export function ProjectPageClient({
               <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <span className="hidden sm:inline">{tr(locale, "Vues", "Views")}</span>
+              <span className="hidden sm:inline">{trKey(locale, "project.views")}</span>
               {savedViews.length > 0 && (
                 <span className="ml-0.5 text-[10px] bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-full px-1.5 py-0.5 font-medium">
                   {savedViews.length}
@@ -1387,7 +1429,7 @@ export function ProjectPageClient({
             <button
               onClick={() => setShowKeyboardHelp(true)}
               className="hidden sm:flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 px-2 py-1.5 rounded-md transition-colors cursor-pointer"
-              title={tr(locale, "Raccourcis clavier (?)", "Keyboard shortcuts (?)")}
+              title={trKey(locale, "project.keyboardShortcutsHint")}
             >
               <kbd className="text-[10px] border border-gray-200 dark:border-gray-600 rounded px-1 font-mono">?</kbd>
             </button>
@@ -1397,7 +1439,7 @@ export function ProjectPageClient({
           {activeFilterCount > 0 && (
             <div className="flex items-center gap-1 ml-2">
               {filters.status.map((v) => {
-                const opt = STATUS_OPTIONS.find((o) => o.value === v);
+                const opt = statusOptions.find((o) => o.value === v);
                 return (
                   <span
                     key={v}
@@ -1414,7 +1456,7 @@ export function ProjectPageClient({
                 );
               })}
               {filters.priority.map((v) => {
-                const opt = PRIORITY_OPTIONS.find((o) => o.value === v);
+                const opt = priorityOptions.find((o) => o.value === v);
                 return (
                   <span
                     key={v}
@@ -1435,7 +1477,7 @@ export function ProjectPageClient({
                   key={v}
                   className="inline-flex items-center gap-1 text-[11px] bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700 rounded-full px-2 py-0.5"
                 >
-                  {v}
+                  {ownerFilterLabel(v)}
                   <button
                     onClick={() => toggleFilter("owner", v)}
                     className="text-indigo-400 hover:text-indigo-700 cursor-pointer leading-none"
@@ -1459,7 +1501,7 @@ export function ProjectPageClient({
                 setShowViewsPanel(false);
               }}
               className="fixed inset-0 z-40 bg-black/20"
-              aria-label={tr(locale, "Fermer les panneaux", "Close panels")}
+              aria-label={trKey(locale, "project.closePanels")}
             />
           )}
           {showFilterPanel && (
@@ -1471,15 +1513,15 @@ export function ProjectPageClient({
             >
               <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Status</p>
               <div className="flex flex-wrap gap-1.5 mb-3">
-                {STATUS_OPTIONS.map((opt) => (
+                {statusOptions.map((opt) => (
                   <button key={opt.value} onClick={() => toggleFilter("status", opt.value)}
                     className={["text-xs px-2 py-0.5 rounded-full border transition-colors cursor-pointer", filters.status.includes(opt.value) ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400" : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500"].join(" ")}
                   >{opt.label}</button>
                 ))}
               </div>
-              <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">{tr(locale, "Priorité", "Priority")}</p>
+              <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">{trKey(locale, "project.priority")}</p>
               <div className="flex flex-wrap gap-1.5 mb-3">
-                {PRIORITY_OPTIONS.map((opt) => (
+                {priorityOptions.map((opt) => (
                   <button key={opt.value} onClick={() => toggleFilter("priority", opt.value)}
                     className={["text-xs px-2 py-0.5 rounded-full border transition-colors cursor-pointer", filters.priority.includes(opt.value) ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400" : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500"].join(" ")}
                   >{opt.label}</button>
@@ -1487,18 +1529,18 @@ export function ProjectPageClient({
               </div>
               {uniqueOwners.length > 0 && (
                 <>
-                  <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">{tr(locale, "Responsable", "Owner")}</p>
+                  <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">{trKey(locale, "project.owner")}</p>
                   <div className="flex flex-wrap gap-1.5 mb-3">
                     {uniqueOwners.map((name) => (
                       <button key={name} onClick={() => toggleFilter("owner", name)}
                         className={["text-xs px-2 py-0.5 rounded-full border transition-colors cursor-pointer", filters.owner.includes(name) ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400" : "border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-500"].join(" ")}
-                      >{name}</button>
+                      >{ownerFilterLabel(name)}</button>
                     ))}
                   </div>
                 </>
               )}
               {activeFilterCount > 0 && (
-                <button onClick={clearFilters} className="text-xs text-red-500 hover:text-red-700 transition-colors cursor-pointer">{tr(locale, "Tout effacer", "Clear all")}</button>
+                <button onClick={clearFilters} className="text-xs text-red-500 hover:text-red-700 transition-colors cursor-pointer">{trKey(locale, "project.clearAll")}</button>
               )}
             </div>
           )}
@@ -1531,7 +1573,7 @@ export function ProjectPageClient({
                 ? "fixed inset-x-3 bottom-3 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-lg p-4 max-h-[72vh] overflow-y-auto"
                 : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-4 w-60"}
             >
-              <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">{tr(locale, "Colonnes actives", "Active columns")}</p>
+              <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">{trKey(locale, "project.activeColumns")}</p>
               <div className="space-y-0.5 mb-3">
                 {effectiveColumns.map((col) => {
                   const visible = !hiddenColumnIds.includes(col.id);
@@ -1555,7 +1597,7 @@ export function ProjectPageClient({
                 return (
                   <>
                     <div className="border-t border-gray-100 dark:border-gray-700 my-2" />
-                    <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">{tr(locale, "Ajouter une colonne", "Add a column")}</p>
+                    <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">{trKey(locale, "project.addColumn")}</p>
                     <div className="space-y-0.5">
                       {inactiveDbCols.map((col) => (
                         <button key={col.id} onClick={() => toggleColumnActive(col.id)}
@@ -1595,9 +1637,9 @@ export function ProjectPageClient({
                 : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl w-72 py-2"}
             >
               <div className="px-3 pb-2 border-b border-gray-100 dark:border-gray-700">
-                <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{tr(locale, "Sauvegarder la vue actuelle", "Save current view")}</p>
+                <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{trKey(locale, "project.saveCurrentView")}</p>
                 <div className="flex flex-col gap-2">
-                  <input type="text" value={saveViewName} onChange={(e) => setSaveViewName(e.target.value)} placeholder={tr(locale, "Nom de la vue…", "View name...")}
+                  <input type="text" value={saveViewName} onChange={(e) => setSaveViewName(e.target.value)} placeholder={trKey(locale, "project.viewName")}
                     className="w-full text-xs text-gray-900 dark:text-gray-50 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-2.5 py-1.5 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 placeholder-gray-400 dark:placeholder-gray-500"
                     onKeyDown={(e) => { if (e.key === "Enter") document.getElementById("save-view-btn")?.click(); }}
                   />
@@ -1613,14 +1655,14 @@ export function ProjectPageClient({
                       } finally { setSavingView(false); }
                     }}
                     className="w-full text-xs bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 text-white rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer disabled:cursor-default"
-                  >{savingView ? "…" : tr(locale, "Sauvegarder la vue", "Save view")}</button>
+                  >{savingView ? "…" : trKey(locale, "project.saveView")}</button>
                 </div>
               </div>
               <div className="px-3 pt-2">
                 {!viewsLoaded ? (
-                  <p className="text-xs text-gray-400 dark:text-gray-500 py-1">{tr(locale, "Chargement…", "Loading...")}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 py-1">{trKey(locale, "project.loading")}</p>
                 ) : savedViews.length === 0 ? (
-                  <p className="text-xs text-gray-400 dark:text-gray-500 italic py-1">{tr(locale, "Aucune vue sauvegardée.", "No saved view.")}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 italic py-1">{trKey(locale, "project.noSavedView")}</p>
                 ) : (
                   <div className="space-y-0.5">
                     {savedViews.map((sv) => {
@@ -1645,7 +1687,7 @@ export function ProjectPageClient({
                           <button
                             onClick={async () => { setSavedViews((prev) => prev.filter((v) => v.id !== sv.id)); await deleteSavedView(sv.id); }}
                             className="opacity-0 group-hover/sv:opacity-100 p-1 rounded text-gray-400 hover:text-red-500 transition-all cursor-pointer"
-                            title={tr(locale, "Supprimer cette vue", "Delete this view")}
+                            title={trKey(locale, "project.deleteThisView")}
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="2" strokeLinecap="round" /></svg>
                           </button>
@@ -1664,10 +1706,10 @@ export function ProjectPageClient({
       <main
         ref={mainRef}
         className={[
-          "flex-1 mx-2 sm:mx-6 mt-3 sm:mt-4 mb-3 sm:mb-6 pb-20 sm:pb-0 mobile-safe-nav-pad touch-pan-y",
+          "flex-1 mx-0 sm:mx-6 mt-2 sm:mt-4 mb-3 sm:mb-6 pb-20 sm:pb-0 mobile-safe-nav-pad touch-pan-y",
           isFramelessTab
             ? "bg-transparent border-0 shadow-none rounded-none overflow-visible"
-            : "bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden",
+            : "mobile-surface sm:bg-white sm:dark:bg-gray-800 rounded-none sm:rounded-xl overflow-hidden",
         ].join(" ")}
         onTouchStart={handleMainTouchStart}
         onTouchMove={handleMainTouchMove}
@@ -1686,10 +1728,10 @@ export function ProjectPageClient({
               style={{ transform: `translateY(${Math.min(pullDistance / 3, 10)}px)` }}
             >
               {isPullRefreshing
-                ? tr(locale, "Actualisation...", "Refreshing...")
+                ? trKey(locale, "project.refreshing")
                 : pullDistance > 56
-                ? tr(locale, "Relâchez pour actualiser", "Release to refresh")
-                : tr(locale, "Tirez pour actualiser", "Pull to refresh")}
+                ? trKey(locale, "project.releaseToRefresh")
+                : trKey(locale, "project.pullToRefresh")}
             </div>
           </div>
         )}
@@ -1736,16 +1778,16 @@ export function ProjectPageClient({
       </main>
 
       {isMobileViewport && (
-        <nav className="sm:hidden fixed left-1/2 -translate-x-1/2 w-[min(93vw,27rem)] mobile-safe-bottom z-40 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 bg-white/95 dark:bg-gray-900/95 backdrop-blur shadow-lg">
+        <nav className="sm:hidden fixed left-1/2 -translate-x-1/2 w-[min(90vw,22rem)] mobile-safe-bottom z-40 rounded-2xl border border-gray-200/80 dark:border-gray-700/80 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl shadow-[0_18px_40px_-24px_rgba(15,23,42,0.5)]">
           <div className="flex overflow-x-auto scrollbar-none px-1 py-1 gap-0.5">
             {([
-              { key: "spreadsheet", label: tr(locale, "Tableur", "Spreadsheet"), icon: VIEW_ICONS["SPREADSHEET"] },
-              { key: "cards", label: tr(locale, "Fiches", "Cards"), icon: VIEW_ICONS["CARDS"] },
+              { key: "spreadsheet", label: trKey(locale, "project.spreadsheet"), icon: VIEW_ICONS["SPREADSHEET"] },
+              { key: "cards", label: trKey(locale, "project.cards"), icon: VIEW_ICONS["CARDS"] },
               { key: "kanban", label: "Kanban", icon: VIEW_ICONS["KANBAN"] },
-              { key: "calendar", label: tr(locale, "Calendrier", "Calendar"), icon: VIEW_ICONS["CALENDAR"] },
+              { key: "calendar", label: trKey(locale, "project.calendar"), icon: VIEW_ICONS["CALENDAR"] },
               { key: "gantt", label: "Gantt", icon: VIEW_ICONS["GANTT"] },
-              { key: "timeline", label: tr(locale, "Échéancier", "Timeline"), icon: VIEW_ICONS["TIMELINE"] },
-              { key: "dashboard", label: tr(locale, "Dashboard", "Dashboard"), icon: (
+              { key: "timeline", label: trKey(locale, "project.timeline"), icon: VIEW_ICONS["TIMELINE"] },
+              { key: "dashboard", label: trKey(locale, "project.dashboard"), icon: (
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <rect x="3" y="3" width="8" height="5" rx="1" strokeWidth="1.5" />
                   <rect x="13" y="3" width="8" height="9" rx="1" strokeWidth="1.5" />
@@ -1753,7 +1795,7 @@ export function ProjectPageClient({
                   <rect x="13" y="14" width="8" height="7" rx="1" strokeWidth="1.5" />
                 </svg>
               ) },
-              { key: "activity", label: tr(locale, "Activité", "Activity"), icon: (
+              { key: "activity", label: trKey(locale, "project.activity"), icon: (
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -1765,7 +1807,7 @@ export function ProjectPageClient({
                   key={tab.key}
                   onClick={() => switchTab(tab.key)}
                   className={[
-                    "min-w-[66px] min-h-10 px-1.5 rounded-xl flex flex-col items-center justify-center text-[9.5px] font-medium",
+                    "min-w-[62px] min-h-10 px-1.5 rounded-xl flex flex-col items-center justify-center text-[9px] font-medium",
                     active
                       ? "bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300"
                       : "text-gray-500 dark:text-gray-400",
@@ -1856,19 +1898,19 @@ function KeyboardShortcutsModal({ onClose, locale }: { onClose: () => void; loca
     {
       title: "Navigation",
       shortcuts: [
-        { keys: ["⌘K"], label: tr(locale, "Ouvrir la palette de commandes", "Open command palette") },
-        { keys: ["?"], label: tr(locale, "Afficher les raccourcis clavier", "Show keyboard shortcuts") },
-        { keys: ["/", "⌘F"], label: tr(locale, "Rechercher (vue tableur)", "Search (spreadsheet view)") },
-        { keys: [tr(locale, "Échap", "Esc")], label: tr(locale, "Fermer / annuler", "Close / cancel") },
+        { keys: ["⌘K"], label: trKey(locale, "project.openCommandPalette") },
+        { keys: ["?"], label: trKey(locale, "project.showKeyboardShortcuts") },
+        { keys: ["/", "⌘F"], label: trKey(locale, "project.searchSpreadsheetView") },
+        { keys: [trKey(locale, "project.esc")], label: trKey(locale, "project.closeCancel") },
       ],
     },
     {
-      title: tr(locale, "Vues", "Views"),
+      title: trKey(locale, "project.views"),
       shortcuts: [
-        { keys: ["⌘K", tr(locale, "puis", "then"), "T"], label: tr(locale, "Tableur", "Spreadsheet") },
-        { keys: ["⌘K", tr(locale, "puis", "then"), "K"], label: "Kanban" },
-        { keys: ["⌘K", tr(locale, "puis", "then"), "C"], label: tr(locale, "Fiches", "Cards") },
-        { keys: ["⌘K", tr(locale, "puis", "then"), "G"], label: "Gantt" },
+        { keys: ["⌘K", trKey(locale, "project.then"), "T"], label: trKey(locale, "project.spreadsheet") },
+        { keys: ["⌘K", trKey(locale, "project.then"), "K"], label: "Kanban" },
+        { keys: ["⌘K", trKey(locale, "project.then"), "C"], label: trKey(locale, "project.cards") },
+        { keys: ["⌘K", trKey(locale, "project.then"), "G"], label: "Gantt" },
       ],
     },
   ];
@@ -1879,7 +1921,7 @@ function KeyboardShortcutsModal({ onClose, locale }: { onClose: () => void; loca
       <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pointer-events-none">
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-md pointer-events-auto">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-50">{tr(locale, "Raccourcis clavier", "Keyboard shortcuts")}</h2>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-50">{trKey(locale, "project.keyboardShortcuts")}</h2>
             <button onClick={onClose} className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-pointer transition-colors">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="2" strokeLinecap="round" /></svg>
             </button>
@@ -1895,7 +1937,7 @@ function KeyboardShortcutsModal({ onClose, locale }: { onClose: () => void; loca
                       <div className="flex items-center gap-1 flex-shrink-0">
                         {s.keys.map((k, ki) => (
                           (k === "puis" || k === "then") ? (
-                            <span key={ki} className="text-[10px] text-gray-400 dark:text-gray-500">{tr(locale, "puis", "then")}</span>
+                            <span key={ki} className="text-[10px] text-gray-400 dark:text-gray-500">{trKey(locale, "project.then")}</span>
                           ) : (
                             <kbd key={ki} className="text-[10px] font-mono border border-gray-200 dark:border-gray-600 rounded px-1.5 py-0.5 text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700">{k}</kbd>
                           )
@@ -1908,7 +1950,7 @@ function KeyboardShortcutsModal({ onClose, locale }: { onClose: () => void; loca
             ))}
           </div>
           <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700 text-center">
-            <span className="text-[11px] text-gray-400 dark:text-gray-500">{tr(locale, "Appuyer sur", "Press")} <kbd className="font-mono border border-gray-200 dark:border-gray-600 rounded px-1 text-[10px]">?</kbd> {tr(locale, "ou", "or")} <kbd className="font-mono border border-gray-200 dark:border-gray-600 rounded px-1 text-[10px]">{tr(locale, "Échap", "Esc")}</kbd> {tr(locale, "pour fermer", "to close")}</span>
+            <span className="text-[11px] text-gray-400 dark:text-gray-500">{trKey(locale, "project.press")} <kbd className="font-mono border border-gray-200 dark:border-gray-600 rounded px-1 text-[10px]">?</kbd> {trKey(locale, "project.or")} <kbd className="font-mono border border-gray-200 dark:border-gray-600 rounded px-1 text-[10px]">{trKey(locale, "project.esc")}</kbd> {trKey(locale, "project.toClose")}</span>
           </div>
         </div>
       </div>
